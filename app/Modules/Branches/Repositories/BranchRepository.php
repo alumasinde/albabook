@@ -66,6 +66,18 @@ final class BranchRepository
     }
 
     /** @param array<string, mixed> $data */
+    /** Live branch count for the max_branches plan gate. */
+    public function countActive(int $tenantId): int
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT COUNT(*) FROM branches WHERE tenant_id = ? AND is_active = 1',
+        );
+        $stmt->execute([$tenantId]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
+    /** @param array<string, mixed> $data */
     public function insert(array $data): int
     {
         $columns = array_keys($data);

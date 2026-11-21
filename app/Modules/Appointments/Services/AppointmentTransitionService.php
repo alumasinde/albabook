@@ -42,12 +42,12 @@ final class AppointmentTransitionService
     ) {}
 
     /** @return list<string> */
-    public function allowed(string $status): array
+    public static function allowed(string $status): array
     {
         return self::GRAPH[$status] ?? [];
     }
 
-    public function permissionFor(string $to): ?string
+    public static function permissionFor(string $to): ?string
     {
         return self::PERMISSION[$to] ?? null;
     }

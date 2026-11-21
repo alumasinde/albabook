@@ -86,6 +86,7 @@ final class DemoSeedCommand implements Command
             $output->line('  services         4 bookable services, KES pricing');
             $output->line('  staff            Amina Otieno (login), Brian Mwangi');
             $output->line('  booking page     enabled at book host /' . self::TENANT_SLUG);
+            $this->seedSubscription($tenantId);
             $this->seedAppointments($tenantId);
             $output->line('  appointments     sample bookings today/tomorrow');
         }
@@ -341,6 +342,19 @@ final class DemoSeedCommand implements Command
      * and appointment list have live data. Skipped silently if a slot is
      * already taken.
      */
+    private function seedSubscription(int $tenantId): void
+    {
+        $this->db->pdo()->prepare(
+            "INSERT INTO tenant_subscriptions (uuid, tenant_id, plan_id, status, starts_at, current_period_start, current_period_end)
+             SELECT :uuid, :t, p.id, 'trialing', UTC_TIMESTAMP(), UTC_TIMESTAMP(),
+                    UTC_TIMESTAMP() + INTERVAL 14 DAY
+             FROM plans p WHERE p.code = 'trial'
+             AND NOT EXISTS (
+                 SELECT 1 FROM tenant_subscriptions s
+                 WHERE s.tenant_id = :t2 AND s.status IN ('trialing','active'))",
+        )->execute(['uuid' => $this->uuids->generate(), 't' => $tenantId, 't2' => $tenantId]);
+    }
+
     private function seedAppointments(int $tenantId): void
     {
         $branchId = (int) $this->column('SELECT id FROM branches WHERE tenant_id = :t LIMIT 1', $tenantId);

@@ -172,6 +172,18 @@ final class StaffRepository
     }
 
     /** @param array<string, mixed> $data */
+    /** Live staff count for the max_staff plan gate. */
+    public function countActive(int $tenantId): int
+    {
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT COUNT(*) FROM staff WHERE tenant_id = ? AND status = 'active'",
+        );
+        $stmt->execute([$tenantId]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
+    /** @param array<string, mixed> $data */
     public function insert(array $data): int
     {
         $this->db->pdo()->prepare(

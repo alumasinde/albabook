@@ -38,4 +38,6 @@ final class AuditAction
 
     public const SUPPORT_STARTED = 'support.started';
     public const SUPPORT_ENDED = 'support.ended';
+
+    public const PLAN_ASSIGNED = 'platform.plan_assigned';
 }

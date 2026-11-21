@@ -12,6 +12,7 @@ use App\Modules\Platform\Controllers\LoginController;
 use App\Modules\Platform\Controllers\LogoutController;
 use App\Modules\Platform\Controllers\MfaEnrollmentController;
 use App\Modules\Platform\Controllers\SupportSessionController;
+use App\Modules\Platform\Controllers\TenantsController;
 use App\Modules\Platform\Controllers\TwoFactorController;
 use App\Modules\System\Controllers\HomeController;
 
@@ -35,4 +36,6 @@ return static function (RouteRegistrar $r): void {
 
     $r->post('/support-sessions', [SupportSessionController::class, 'start'], [...$admin, PlatformPermissionMiddleware::class], name: 'admin.support.start', options: ['platform_permission' => PlatformPermission::SupportRead->value]);
     $r->post('/support-sessions/{session}/end', [SupportSessionController::class, 'end'], $admin, name: 'admin.support.end');
+
+    $r->post('/tenants/{uuid}/plan', [TenantsController::class, 'assignPlan'], [...$admin, PlatformPermissionMiddleware::class], name: 'admin.tenants.plan', options: ['platform_permission' => PlatformPermission::BillingManage->value]);
 };

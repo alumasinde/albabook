@@ -8,6 +8,7 @@ use App\Core\Database\Database;
 use App\Core\Http\Request;
 use App\Core\Http\Response;
 use App\Modules\Auth\Context\MembershipContext;
+use App\Modules\Billing\Services\FeatureGate;
 use App\Modules\Branches\Repositories\BranchRepository;
 use App\Shared\Http\ApiResponse;
 use App\Shared\Support\UuidFactory;
@@ -24,6 +25,7 @@ final class BranchesApiController
         private readonly BranchRepository $branches,
         private readonly Database $db,
         private readonly UuidFactory $uuids,
+        private readonly FeatureGate $features,
     ) {}
 
     /** @param array<string, string> $params */
@@ -74,6 +76,10 @@ final class BranchesApiController
         [$data, $hours, $fields] = $this->validated($request->body());
         if ($fields !== []) {
             return ApiResponse::error('VALIDATION', 'Fix the highlighted fields.', 422, $fields);
+        }
+
+        if (!$this->features->underLimit($tenant->tenantId, 'max_branches', $this->branches->countActive($tenant->tenantId))) {
+            return ApiResponse::error('PLAN_LIMIT', 'Your plan limit for branches is reached. Upgrade to add more.', 403);
         }
 
         $uuid = $this->uuids->generate();

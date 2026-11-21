@@ -20,6 +20,14 @@
   <div class="mt-6">
     {% include 'components/feedback/alert.twig' with { tone: 'success', message: t('admin.support_ended_status'), dismissible: true } only %}
   </div>
+{% elseif status == 'plan_assigned' %}
+  <div class="mt-6">
+    {% include 'components/feedback/alert.twig' with { tone: 'success', message: 'Plan assigned.', dismissible: true } only %}
+  </div>
+{% elseif status == 'plan_invalid' or status == 'tenant_not_found' %}
+  <div class="mt-6">
+    {% include 'components/feedback/alert.twig' with { tone: 'danger', message: 'Could not assign that plan.', dismissible: true } only %}
+  </div>
 {% endif %}
 
 <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -99,7 +107,9 @@
             <th scope="col" class="text-left">{{ t('admin.tenant_name') }}</th>
             <th scope="col" class="text-left">{{ t('admin.tenant_slug') }}</th>
             <th scope="col" class="text-left">{{ t('admin.tenant_status') }}</th>
+            <th scope="col" class="text-left">{{ t('admin.tenant_plan')|default('Plan') }}</th>
             <th scope="col" class="text-left">{{ t('admin.tenant_created') }}</th>
+            {% if canBilling %}<th scope="col" class="text-left">{{ t('admin.tenant_actions')|default('Actions') }}</th>{% endif %}
           </tr>
         </thead>
         <tbody>
@@ -112,7 +122,28 @@
                   <span class="badge-dot" aria-hidden="true"></span>{{ tenant.status|capitalize }}
                 </span>
               </td>
+              <td data-label="{{ t('admin.tenant_plan')|default('Plan') }}">
+                {% if tenant.plan_code %}
+                  <span class="badge badge-info"><span class="badge-dot" aria-hidden="true"></span>{{ tenant.plan_name }}</span>
+                  <span class="text-xs text-muted">{{ tenant.subscription_status }}</span>
+                {% else %}
+                  <span class="text-sm text-muted">—</span>
+                {% endif %}
+              </td>
               <td data-label="{{ t('admin.tenant_created') }}">{{ tenant.created_at|date('d M Y', 'UTC') }}</td>
+              {% if canBilling %}
+              <td data-label="{{ t('admin.tenant_actions')|default('Actions') }}">
+                <form method="post" action="/tenants/{{ tenant.uuid }}/plan" class="flex items-center gap-2">
+                  {{ csrf_field() }}
+                  <select name="plan" class="input w-auto py-1 text-xs">
+                    {% for plan in plans %}
+                      <option value="{{ plan.code }}"{% if plan.code == tenant.plan_code %} selected{% endif %}>{{ plan.name }}</option>
+                    {% endfor %}
+                  </select>
+                  <button type="submit" class="btn btn-ghost btn-sm">Assign</button>
+                </form>
+              </td>
+              {% endif %}
             </tr>
           {% endfor %}
         </tbody>

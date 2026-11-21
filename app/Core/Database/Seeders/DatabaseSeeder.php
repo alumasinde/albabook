@@ -17,15 +17,17 @@ final class DatabaseSeeder
         private readonly PermissionSeeder $permissions,
         private readonly RoleTemplateSeeder $roles,
         private readonly TenantStatusPolicySeeder $policies,
+        private readonly PlanSeeder $plans,
     ) {}
 
-    /** @return array{permissions: int, roles: int, policies: int, providers: int} */
+    /** @return array{permissions: int, roles: int, policies: int, plans: int, providers: int} */
     public function run(): array
     {
         return $this->db->transaction(fn(): array => [
             'permissions' => $this->permissions->run(),
             'roles' => $this->roles->run(),
             'policies' => $this->policies->run(),
+            'plans' => $this->plans->run(),
             'providers' => $this->notificationProviders(),
         ]);
     }

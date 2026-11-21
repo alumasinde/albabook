@@ -129,6 +129,27 @@ final class TenantRepository
         return array_values($stmt->fetchAll());
     }
 
+    /** Admin directory with the tenant's live plan (admin host only).
+     * @return list<array<string, mixed>>
+     */
+    public function listAllWithSubscription(int $limit = 100, int $offset = 0): array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT t.id, t.uuid, t.name, t.slug, t.status, t.timezone, t.currency, t.default_locale, t.created_at,
+                    s.status AS subscription_status, p.code AS plan_code, p.name AS plan_name
+             FROM tenants t
+             LEFT JOIN tenant_subscriptions s
+               ON s.tenant_id = t.id AND s.status IN ('trialing','active','past_due')
+             LEFT JOIN plans p ON p.id = s.plan_id
+             ORDER BY t.created_at DESC, t.id DESC LIMIT :limit OFFSET :offset",
+        );
+        $stmt->bindValue('limit', max(1, $limit), \PDO::PARAM_INT);
+        $stmt->bindValue('offset', max(0, $offset), \PDO::PARAM_INT);
+        $stmt->execute();
+
+        return array_values($stmt->fetchAll());
+    }
+
     /** @return array<string, int> status => count */
     public function countsByStatus(): array
     {

@@ -8,6 +8,7 @@ use App\Core\Database\Database;
 use App\Core\Http\Request;
 use App\Core\Http\Response;
 use App\Modules\Auth\Context\MembershipContext;
+use App\Modules\Billing\Services\FeatureGate;
 use App\Modules\Staff\Repositories\StaffRepository;
 use App\Shared\Http\ApiResponse;
 use App\Shared\Support\UuidFactory;
@@ -25,6 +26,7 @@ final class StaffApiController
         private readonly StaffRepository $staff,
         private readonly Database $db,
         private readonly UuidFactory $uuids,
+        private readonly FeatureGate $features,
     ) {}
 
     /** @param array<string, string> $params */
@@ -107,6 +109,10 @@ final class StaffApiController
         [$data, $branchIds, $serviceIds, $schedule, $fields] = $this->validated($request->body(), $tenant, $membership);
         if ($fields !== []) {
             return ApiResponse::error('VALIDATION', 'Fix the highlighted fields.', 422, $fields);
+        }
+
+        if (!$this->features->underLimit($tenant->tenantId, 'max_staff', $this->staff->countActive($tenant->tenantId))) {
+            return ApiResponse::error('PLAN_LIMIT', 'Your plan limit for staff is reached. Upgrade to add more.', 403);
         }
 
         $uuid = $this->uuids->generate();
