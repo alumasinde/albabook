@@ -65,7 +65,91 @@ final class BookingPageController
             'services' => $services,
             'opening_hours' => $openingHours,
             'business_name' => $tenant['name'],
+            'theme_css' => $this->themeCss($branding),
+            'sections' => $this->pages->sections((int) $tenant['id']),
+            'faqs' => $this->pages->faqs((int) $tenant['id']),
         ]);
+    }
+
+    /**
+     * Tenant theme rendered inside `.booking-page` scope (plan.md §8.8 —
+     * CSP requires a nonce'd style block; dashboards are never re-themed).
+     * Returns null when branding is absent so the view can skip the tag.
+     *
+     * @param array<string, mixed>|null $branding
+     */
+    private function themeCss(?array $branding): ?string
+    {
+        if ($branding === null) {
+            return null;
+        }
+
+        $primary = $this->hexChannels((string) ($branding['primary_color'] ?? '#6D5CE8'));
+        $secondary = $this->hexChannels((string) ($branding['secondary_color'] ?? '#171A2C'));
+        $accent = $this->hexChannels((string) ($branding['accent_color'] ?? '#16A085'));
+        $text = $this->hexChannels((string) ($branding['text_color'] ?? '#202124'));
+        $background = $this->hexChannels((string) ($branding['background_color'] ?? '#FFFFFF'));
+
+        $channels = static fn(array $c): string => implode(' ', $c);
+        $vars = [
+            '--color-primary' => $channels($primary),
+            '--color-primary-strong' => $this->mix($primary, [0, 0, 0], 0.15),
+            '--color-primary-soft' => $this->mix($primary, [255, 255, 255], 0.93),
+            '--color-navy' => $channels($secondary),
+            '--color-success' => $channels($accent),
+            '--color-success-strong' => $this->mix($accent, [0, 0, 0], 0.15),
+            '--color-success-soft' => $this->mix($accent, [255, 255, 255], 0.92),
+            '--color-ink' => $channels($text),
+            '--color-surface' => $channels($background),
+        ];
+
+        if (($branding['appearance'] ?? 'light') === 'dark') {
+            $vars += [
+                '--color-muted' => '148 156 180',
+                '--color-line' => '45 50 68',
+                '--brand-card' => $this->mix($background, [255, 255, 255], 0.08),
+            ];
+        }
+
+        $declarations = '';
+        foreach ($vars as $name => $value) {
+            $declarations .= "{$name}:{$value};";
+        }
+
+        $css = ".booking-page{{$declarations}}";
+        if (($branding['appearance'] ?? 'light') === 'dark') {
+            $css .= '.booking-page .bg-white{background-color:rgb(var(--brand-card));}';
+        }
+
+        return $css;
+    }
+
+    /** Hex (#RRGGBB) → "R G B" channels for Tailwind token vars.
+     * @return array{0: int, 1: int, 2: int}
+     */
+    private function hexChannels(string $hex): array
+    {
+        $hex = ltrim($hex, '#');
+        if (strlen($hex) !== 6) {
+            return [109, 92, 232];
+        }
+
+        return [
+            (int) hexdec(substr($hex, 0, 2)),
+            (int) hexdec(substr($hex, 2, 2)),
+            (int) hexdec(substr($hex, 4, 2)),
+        ];
+    }
+
+    /** Linear mix of two RGB channel sets; `$weight` = share of `$b`.
+     * @param array{0: int, 1: int, 2: int} $a
+     * @param array{0: int, 1: int, 2: int} $b
+     */
+    private function mix(array $a, array $b, float $weight): string
+    {
+        $channel = static fn(int $x, int $y): int => (int) round($x + ($y - $x) * $weight);
+
+        return sprintf('%d %d %d', $channel($a[0], $b[0]), $channel($a[1], $b[1]), $channel($a[2], $b[2]));
     }
 
     /**

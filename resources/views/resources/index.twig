@@ -1,0 +1,74 @@
+{#
+  Resource directory (rooms, chairs, equipment). Shell renders the filter bar
+  and table skeleton; rows hydrate from /api/resources.
+#}
+{% extends 'layouts/dashboard.twig' %}
+
+{% set page_title = t('nav.resources') %}
+{% set active_nav = 'resources' %}
+{% set workspace = tenant.name %}
+
+{% block title %}{{ t('nav.resources') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<div data-page="resources"{% if membership.can('resources.manage') %} data-can-manage="1"{% endif %}>
+  <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h2 class="text-2xl font-semibold text-ink">{{ t('resources.title') }}</h2>
+      <p class="mt-1 text-sm text-muted">{{ t('resources.subtitle') }}</p>
+    </div>
+    {% if membership.can('resources.manage') %}
+      <button type="button" class="btn btn-primary btn-md" data-resources-new>
+        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+        <span>{{ t('resources.new') }}</span>
+      </button>
+    {% endif %}
+  </div>
+
+  <div class="card p-4">
+    <div class="grid gap-3 md:grid-cols-3">
+      <div>
+        <label for="resources-q" class="field-label">{{ t('resources.search_label') }}</label>
+        <input id="resources-q" type="search" class="input" placeholder="{{ t('resources.search_placeholder') }}" data-resources-filter="q">
+      </div>
+      <div>
+        <label for="resources-branch" class="field-label">{{ t('resources.filter_branch') }}</label>
+        <select id="resources-branch" class="input select" data-resources-filter="branch" data-resources-branch-select>
+          <option value="">{{ t('resources.all_branches') }}</option>
+        </select>
+      </div>
+      <div>
+        <label for="resources-status" class="field-label">{{ t('resources.filter_status') }}</label>
+        <select id="resources-status" class="input select" data-resources-filter="status">
+          <option value="">{{ t('resources.all_statuses') }}</option>
+          <option value="active">{{ t('resources.status_active') }}</option>
+          <option value="maintenance">{{ t('resources.status_maintenance') }}</option>
+          <option value="inactive">{{ t('resources.status_inactive') }}</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt-4 overflow-hidden">
+    <table class="data-table">
+      <caption class="sr-only">{{ t('resources.table_caption') }}</caption>
+      <thead>
+        <tr>
+          <th scope="col">{{ t('resources.col_name') }}</th>
+          <th scope="col">{{ t('resources.col_type') }}</th>
+          <th scope="col">{{ t('resources.col_branch') }}</th>
+          <th scope="col">{{ t('resources.col_capacity') }}</th>
+          <th scope="col">{{ t('resources.col_status') }}</th>
+          <th scope="col">{{ t('resources.col_actions') }}</th>
+        </tr>
+      </thead>
+      <tbody data-resources-body></tbody>
+    </table>
+  </div>
+
+  <div class="mt-4 flex items-center justify-between gap-2">
+    <p data-resources-info class="text-sm text-muted"></p>
+    <div data-resources-pager class="flex items-center gap-2"></div>
+  </div>
+</div>
+{% endblock %}

@@ -19,13 +19,40 @@ final class DatabaseSeeder
         private readonly TenantStatusPolicySeeder $policies,
     ) {}
 
-    /** @return array{permissions: int, roles: int, policies: int} */
+    /** @return array{permissions: int, roles: int, policies: int, providers: int} */
     public function run(): array
     {
         return $this->db->transaction(fn(): array => [
             'permissions' => $this->permissions->run(),
             'roles' => $this->roles->run(),
             'policies' => $this->policies->run(),
+            'providers' => $this->notificationProviders(),
         ]);
+    }
+
+    /**
+     * Reference notification providers (SMS/WhatsApp). Idempotent — safe to
+     * re-run against a seeded database.
+     */
+    private function notificationProviders(): int
+    {
+        $providers = [
+            ['africastalking_sms', "Africa's Talking", 'sms'],
+            ['twilio_sms', 'Twilio SMS', 'sms'],
+            ['whatsapp_cloud', 'WhatsApp Cloud API (Meta)', 'whatsapp'],
+            ['twilio_whatsapp', 'Twilio WhatsApp', 'whatsapp'],
+        ];
+
+        $stmt = $this->db->pdo()->prepare(
+            'INSERT IGNORE INTO notification_providers (code, name, channel, is_active, created_at)
+             VALUES (:code, :name, :channel, 1, NOW())',
+        );
+        $count = 0;
+        foreach ($providers as [$code, $name, $channel]) {
+            $stmt->execute(['code' => $code, 'name' => $name, 'channel' => $channel]);
+            $count += $stmt->rowCount();
+        }
+
+        return $count;
     }
 }

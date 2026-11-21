@@ -87,7 +87,7 @@
 
   /* ---------------------------------------------------------- Shell */
   .sidebar {
-    @apply fixed inset-y-0 left-0 z-40 flex w-72 -translate-x-full flex-col bg-navy transition-transform duration-200 lg:static lg:translate-x-0;
+    @apply fixed inset-y-0 left-0 z-40 flex w-72 -translate-x-full flex-col bg-navy transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0;
   }
   .sidebar.is-open {
     @apply translate-x-0;
@@ -350,6 +350,14 @@
     @apply bg-primary text-white hover:bg-primary-strong;
   }
 
+  /* --------------------------------------------------------- Settings tabs */
+  .tab-btn {
+    @apply shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface hover:text-ink;
+  }
+  .tab-btn.is-active {
+    @apply bg-primary-soft text-primary-strong;
+  }
+
   /* ----------------------------------------------------- Quick actions */
   .quick-action {
     @apply flex flex-col items-center gap-2 rounded-xl border border-line bg-white px-3 py-4 text-center transition-colors hover:border-primary hover:bg-primary-soft;
@@ -425,5 +433,102 @@
   }
   .booking-panel-body {
     @apply space-y-4 p-5;
+  }
+}
+
+/* ------------------------------------------------------------ receipts */
+@layer components {
+  .receipt {
+    @apply mx-auto w-full max-w-sm rounded-xl border border-line bg-white p-6 font-mono text-sm text-ink shadow-sm;
+  }
+  .receipt-header {
+    @apply text-center;
+  }
+  .receipt-logo {
+    @apply mx-auto mb-2 flex h-12 w-12 items-center justify-center text-2xl text-ink;
+  }
+  .receipt-business {
+    @apply text-xl font-bold uppercase tracking-wide;
+  }
+  .receipt-tagline {
+    @apply mt-1 text-xs uppercase tracking-widest text-muted;
+  }
+  .receipt-meta {
+    @apply mt-1 text-xs text-muted;
+  }
+  .receipt-rule {
+    @apply my-4 border-t border-dashed border-ink/30;
+  }
+  .receipt-title {
+    @apply text-center text-lg font-bold uppercase tracking-widest;
+  }
+  .receipt-sub {
+    @apply mt-1 text-center text-xs text-muted;
+  }
+  .receipt-facts {
+    @apply space-y-1 text-xs;
+  }
+  .receipt-facts > div {
+    @apply flex justify-between gap-4;
+  }
+  .receipt-facts dt {
+    @apply font-semibold;
+  }
+  .receipt-facts dd {
+    @apply text-right;
+  }
+  .receipt-table {
+    @apply mt-4 w-full border-collapse text-xs;
+  }
+  .receipt-table thead th {
+    @apply border-y border-ink/40 py-2 text-left font-semibold;
+  }
+  .receipt-table tbody td {
+    @apply border-b border-line py-2 align-top;
+  }
+  .receipt-totals {
+    @apply mt-4 space-y-1 text-xs;
+  }
+  .receipt-totals > div {
+    @apply flex justify-between gap-4;
+  }
+  .receipt-totals dt {
+    @apply text-muted;
+  }
+  .receipt-totals dd {
+    @apply font-semibold;
+  }
+  .receipt-grand {
+    @apply mt-2 rounded-lg bg-surface px-3 py-2 text-sm font-bold;
+  }
+  .receipt-grand dt,
+  .receipt-grand dd {
+    @apply text-ink;
+  }
+  .receipt-thanks {
+    @apply mt-2 text-center text-xs font-semibold uppercase tracking-wide;
+  }
+  .receipt-qr {
+    @apply mx-auto mt-4 flex w-40 items-center justify-center;
+  }
+  .receipt-qr svg {
+    @apply h-40 w-40;
+  }
+  .receipt-brand {
+    @apply text-center text-xs font-semibold uppercase tracking-widest text-muted;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff !important;
+  }
+  .receipt {
+    border: none !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
   }
 }

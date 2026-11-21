@@ -90,6 +90,7 @@ final class AppointmentsApiController
 
         $items = $this->appointments->itemsFor($tenant->tenantId, (int) $row['id']);
         $events = $this->appointments->eventsFor($tenant->tenantId, (int) $row['id']);
+        $resourceNames = $this->appointments->resourceNamesForAppointment($tenant->tenantId, (int) $row['id']);
 
         $allowed = array_values(array_filter(
             $this->transitions->allowed((string) $row['status']),
@@ -116,6 +117,7 @@ final class AppointmentsApiController
                 'service' => $item['service_name_snapshot'],
                 'variant' => $item['variant_name_snapshot'],
                 'staff' => $item['staff_name'],
+                'resources' => $resourceNames[(int) $item['id']] ?? null,
                 'duration_minutes' => (int) $item['duration_minutes'],
                 'price_label' => $item['unit_amount_minor'] !== null ? $this->money((int) $item['unit_amount_minor'] * (int) $item['quantity'], (string) $item['currency']) : null,
             ], $items),

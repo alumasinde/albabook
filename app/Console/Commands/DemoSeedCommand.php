@@ -261,6 +261,24 @@ final class DemoSeedCommand implements Command
                 $linkStmt->execute(['t' => $tenantId, 's' => $serviceId, 'b' => $branchId]);
             }
 
+            $productStmt = $pdo->prepare(
+                'INSERT INTO products (uuid, tenant_id, name, sku, price_minor, tax_rate_bp,
+                    currency, stock_quantity, is_active, created_at, updated_at)
+                 VALUES (:uuid, :t, :name, :sku, :price, 0, :cur, :stock, 1, NOW(), NOW())',
+            );
+            foreach ([
+                ['Argan Hair Oil 100ml', 'OIL-ARG-100', 120000, 24],
+                ['Edge Control Gel', 'GEL-EDG-50', 85000, 18],
+                ['Nail Polish Remover', 'RMV-NPL-200', 65000, 30],
+                ['Massage Candle', 'CND-MSG-01', 150000, null],
+            ] as [$name, $sku, $price, $stock]) {
+                $productStmt->execute([
+                    'uuid' => $this->uuids->generate(), 't' => $tenantId,
+                    'name' => $name, 'sku' => $sku, 'price' => $price,
+                    'cur' => 'KES', 'stock' => $stock,
+                ]);
+            }
+
             $staffStmt = $pdo->prepare(
                 'INSERT INTO staff (uuid, tenant_id, tenant_user_id, first_name, last_name, display_name,
                     booking_priority, is_bookable_online, status, created_at, updated_at)

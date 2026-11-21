@@ -10,6 +10,7 @@
         "ext-openssl": "*",
         "ext-pdo": "*",
         "ext-pdo_mysql": "*",
+        "endroid/qr-code": "^5",
         "monolog/monolog": "^3.8",
         "nikic/fast-route": "^1.3",
         "ramsey/uuid": "^4.7",

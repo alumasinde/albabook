@@ -1,0 +1,68 @@
+{#
+  Customer directory. Shell renders the filter bar and table skeleton; rows
+  and pagination hydrate from /api/customers.
+#}
+{% extends 'layouts/dashboard.twig' %}
+
+{% set page_title = t('nav.customers') %}
+{% set active_nav = 'customers' %}
+{% set workspace = tenant.name %}
+
+{% block title %}{{ t('nav.customers') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<div data-page="customers"{% if membership.can('customers.create') %} data-can-create="1"{% endif %}{% if membership.can('customers.update') %} data-can-update="1"{% endif %}{% if membership.can('customers.delete') %} data-can-delete="1"{% endif %}{% if membership.can('customers.view_notes') %} data-can-notes="1"{% endif %}>
+  <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h2 class="text-2xl font-semibold text-ink">{{ t('customers.title') }}</h2>
+      <p class="mt-1 text-sm text-muted">{{ t('customers.subtitle') }}</p>
+    </div>
+    {% if membership.can('customers.create') %}
+      <button type="button" class="btn btn-primary btn-md" data-customers-new>
+        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+        <span>{{ t('customers.new') }}</span>
+      </button>
+    {% endif %}
+  </div>
+
+  <div class="card p-4">
+    <div class="grid gap-3 md:grid-cols-3">
+      <div class="md:col-span-2">
+        <label for="customers-q" class="field-label">{{ t('customers.search_label') }}</label>
+        <input id="customers-q" type="search" class="input" placeholder="{{ t('customers.search_placeholder') }}" data-customers-filter="q">
+      </div>
+      <div>
+        <label for="customers-status" class="field-label">{{ t('customers.filter_status') }}</label>
+        <select id="customers-status" class="input select" data-customers-filter="status">
+          <option value="">{{ t('customers.all_statuses') }}</option>
+          <option value="active">{{ t('customers.status_active') }}</option>
+          <option value="merged">{{ t('customers.status_merged') }}</option>
+          <option value="anonymised">{{ t('customers.status_anonymised') }}</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt-4 overflow-hidden">
+    <table class="data-table">
+      <caption class="sr-only">{{ t('customers.table_caption') }}</caption>
+      <thead>
+        <tr>
+          <th scope="col">{{ t('customers.col_name') }}</th>
+          <th scope="col">{{ t('customers.col_phone') }}</th>
+          <th scope="col">{{ t('customers.col_email') }}</th>
+          <th scope="col">{{ t('customers.col_visits') }}</th>
+          <th scope="col">{{ t('customers.col_status') }}</th>
+          <th scope="col">{{ t('customers.col_actions') }}</th>
+        </tr>
+      </thead>
+      <tbody data-customers-body></tbody>
+    </table>
+  </div>
+
+  <div class="mt-4 flex items-center justify-between gap-2">
+    <p data-customers-info class="text-sm text-muted"></p>
+    <div data-customers-pager class="flex items-center gap-2"></div>
+  </div>
+</div>
+{% endblock %}

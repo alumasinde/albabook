@@ -43,6 +43,43 @@ final class BookingPageRepository
         return $row ?: null;
     }
 
+    /** Section-key => enabled map (tenant override or type default).
+     * @return array<string, bool>
+     */
+    public function sections(int $tenantId): array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT t.code,
+                    COALESCE(s.is_enabled, t.enabled_by_default) AS is_enabled
+             FROM booking_page_section_types t
+             LEFT JOIN booking_page_sections s
+               ON s.tenant_id = :t AND s.section_key = t.code
+             WHERE t.is_active = 1',
+        );
+        $stmt->execute(['t' => $tenantId]);
+
+        $map = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $map[(string) $row['code']] = (bool) $row['is_enabled'];
+        }
+
+        return $map;
+    }
+
+    /** Published FAQs, shown when the `faqs` section is enabled.
+     * @return list<array<string, mixed>>
+     */
+    public function faqs(int $tenantId): array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT question, answer FROM booking_page_faqs
+             WHERE tenant_id = :t ORDER BY sort_position, id',
+        );
+        $stmt->execute(['t' => $tenantId]);
+
+        return array_values($stmt->fetchAll());
+    }
+
     /** @return list<array<string, mixed>> */
     public function branches(int $tenantId): array
     {
@@ -205,7 +242,7 @@ final class BookingPageRepository
              JOIN appointments a ON a.tenant_id = ai.tenant_id AND a.id = ai.appointment_id
              WHERE ai.tenant_id = :t AND ai.staff_id IN ({$in})
                AND ai.occupied_start_at < :to AND ai.occupied_end_at > :from
-               AND a.status IN ('pending', 'confirmed', 'checked_in')",
+               AND a.status IN ('pending', 'confirmed', 'checked_in', 'in_service')",
         );
         $stmt->execute(['t' => $tenantId, 'from' => $fromUtc, 'to' => $toUtc]);
 

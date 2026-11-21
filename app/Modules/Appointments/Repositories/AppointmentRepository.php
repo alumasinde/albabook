@@ -186,7 +186,7 @@ final class AppointmentRepository
     public function itemsFor(int $tenantId, int $appointmentId): array
     {
         $stmt = $this->db->pdo()->prepare(
-            'SELECT ai.service_name_snapshot, ai.variant_name_snapshot, ai.duration_minutes,
+            'SELECT ai.id, ai.service_name_snapshot, ai.variant_name_snapshot, ai.duration_minutes,
                     ai.start_at, ai.end_at, ai.unit_amount_minor, ai.quantity, ai.currency,
                     s.display_name AS staff_name
                FROM appointment_items ai
@@ -266,7 +266,7 @@ final class AppointmentRepository
               JOIN appointments a ON a.tenant_id = ai.tenant_id AND a.id = ai.appointment_id
               WHERE ai.tenant_id = :t AND ai.staff_id = :s
                 AND ai.occupied_start_at < :to AND ai.occupied_end_at > :from
-                AND a.status IN ('pending', 'confirmed', 'checked_in')",
+                AND a.status IN ('pending', 'confirmed', 'checked_in', 'in_service')",
         );
         $stmt->execute(['t' => $tenantId, 's' => $staffId, 'from' => $fromUtc, 'to' => $toUtc]);
 
@@ -410,10 +410,116 @@ final class AppointmentRepository
     }
 
     /** @param array<string, mixed> $row */
-    public function insertItem(array $row): void
+    public function insertItem(array $row): int
     {
         $columns = array_keys($row);
         $sql = 'INSERT INTO appointment_items (' . implode(',', $columns) . ') VALUES (' . implode(',', array_map(static fn($c) => ':' . $c, $columns)) . ')';
         $this->db->pdo()->prepare($sql)->execute($row);
+
+        return (int) $this->db->pdo()->lastInsertId();
+    }
+
+    /**
+     * Resource types a service requires (service_resource_requirements).
+     * @return list<array{resource_type_id: int, quantity: int, occupancy: string}>
+     */
+    public function serviceRequirements(int $tenantId, int $serviceId): array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT resource_type_id, quantity, occupancy FROM service_resource_requirements
+             WHERE tenant_id = :t AND service_id = :s',
+        );
+        $stmt->execute(['t' => $tenantId, 's' => $serviceId]);
+
+        /** @var list<array{resource_type_id: int, quantity: int, occupancy: string}> */
+        return array_values($stmt->fetchAll());
+    }
+
+    /**
+     * First active resource of a type at a branch that is free for
+     * [fromUtc, toUtc): no overlapping appointment allocation on a
+     * time-blocking status, no overlapping unexpired booking hold, and —
+     * when the resource defines availability windows — a schedule row
+     * covering [localStart, localEnd] on $weekday (ISO, 1=Mon).
+     */
+    public function freeResourceForType(
+        int $tenantId,
+        int $branchId,
+        int $typeId,
+        string $fromUtc,
+        string $toUtc,
+        int $weekday,
+        string $localStart,
+        string $localEnd,
+    ): ?int {
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT r.id FROM resources r
+             WHERE r.tenant_id = :t AND r.branch_id = :b AND r.resource_type_id = :rt
+               AND r.status = 'active'
+               AND (
+                   NOT EXISTS (SELECT 1 FROM resource_schedules rs0
+                                WHERE rs0.tenant_id = :t3 AND rs0.resource_id = r.id)
+                   OR EXISTS (SELECT 1 FROM resource_schedules rs
+                               WHERE rs.tenant_id = :t4 AND rs.resource_id = r.id
+                                 AND rs.weekday = :wd
+                                 AND rs.starts_at <= :lstart AND rs.ends_at >= :lend)
+               )
+               AND NOT EXISTS (
+                   SELECT 1 FROM appointment_resources ar
+                     JOIN appointment_items ai ON ai.tenant_id = ar.tenant_id AND ai.id = ar.appointment_item_id
+                     JOIN appointments a ON a.tenant_id = ar.tenant_id AND a.id = ai.appointment_id
+                    WHERE ar.tenant_id = :t1 AND ar.resource_id = r.id
+                      AND ar.occupied_start_at < :to1 AND ar.occupied_end_at > :from1
+                      AND a.status IN ('pending', 'confirmed', 'checked_in', 'in_service'))
+               AND NOT EXISTS (
+                   SELECT 1 FROM booking_hold_resources hr
+                     JOIN booking_holds h ON h.tenant_id = hr.tenant_id AND h.id = hr.hold_id
+                    WHERE hr.tenant_id = :t2 AND hr.resource_id = r.id
+                      AND hr.occupied_start_at < :to2 AND hr.occupied_end_at > :from2
+                      AND h.status = 'active' AND h.expires_at > UTC_TIMESTAMP())
+             ORDER BY r.id LIMIT 1",
+        );
+        $stmt->execute([
+            't' => $tenantId, 'b' => $branchId, 'rt' => $typeId,
+            't3' => $tenantId, 't4' => $tenantId,
+            'wd' => $weekday, 'lstart' => $localStart, 'lend' => $localEnd,
+            't1' => $tenantId, 'from1' => $fromUtc, 'to1' => $toUtc,
+            't2' => $tenantId, 'from2' => $fromUtc, 'to2' => $toUtc,
+        ]);
+        $id = $stmt->fetchColumn();
+
+        return $id === false ? null : (int) $id;
+    }
+
+    /** @param array<string, mixed> $row */
+    public function insertResourceAllocation(array $row): void
+    {
+        $columns = array_keys($row);
+        $sql = 'INSERT INTO appointment_resources (' . implode(',', $columns) . ') VALUES (' . implode(',', array_map(static fn($c) => ':' . $c, $columns)) . ')';
+        $this->db->pdo()->prepare($sql)->execute($row);
+    }
+
+    /**
+     * Resource names allocated to an appointment's items (for detail UIs).
+     * @return array<int, string> appointment_item_id => comma-joined names
+     */
+    public function resourceNamesForAppointment(int $tenantId, int $appointmentId): array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT ar.appointment_item_id, GROUP_CONCAT(r.name ORDER BY r.name SEPARATOR \', \') AS names
+               FROM appointment_resources ar
+               JOIN resources r ON r.tenant_id = ar.tenant_id AND r.id = ar.resource_id
+              WHERE ar.tenant_id = :t
+                AND ar.appointment_item_id IN (
+                    SELECT id FROM appointment_items WHERE tenant_id = :t2 AND appointment_id = :a)
+              GROUP BY ar.appointment_item_id',
+        );
+        $stmt->execute(['t' => $tenantId, 't2' => $tenantId, 'a' => $appointmentId]);
+        $names = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $names[(int) $row['appointment_item_id']] = (string) $row['names'];
+        }
+
+        return $names;
     }
 }

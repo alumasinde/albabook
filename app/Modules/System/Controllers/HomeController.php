@@ -9,6 +9,7 @@ use App\Core\Http\Response;
 use App\Core\View\View;
 use App\Modules\Auth\Context\AuthContext;
 use App\Modules\Platform\Context\PlatformAuthContext;
+use App\Tenancy\TenantSettingsService;
 
 /**
  * Placeholder landing pages per host until Phase 2 (login), Phase 6 (booking
@@ -21,16 +22,36 @@ final class HomeController
         private readonly View $view,
         private readonly AuthContext $auth,
         private readonly PlatformAuthContext $platformAuth,
+        private readonly TenantSettingsService $settings,
     ) {}
 
     /** @param array<string, string> $params */
     public function tenant(Request $request, array $params): Response
     {
         if ($this->auth->user !== null) {
-            return Response::redirect($this->auth->mfaPending ? '/two-factor' : '/dashboard');
+            if ($this->auth->mfaPending) {
+                return Response::redirect('/two-factor');
+            }
+
+            return Response::redirect($this->defaultView());
         }
 
         return Response::redirect('/login');
+    }
+
+    /** Landing route honouring the tenant's "default dashboard view" setting. */
+    private function defaultView(): string
+    {
+        $tenantId = $this->auth->user?->activeTenantId;
+        if ($tenantId === null) {
+            return '/dashboard';
+        }
+
+        return match ($this->settings->find($tenantId)['default_dashboard_view'] ?? 'overview') {
+            'calendar' => '/calendar',
+            'appointments' => '/appointments',
+            default => '/dashboard',
+        };
     }
 
     /** @param array<string, string> $params */

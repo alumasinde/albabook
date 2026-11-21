@@ -119,7 +119,7 @@ final class DashboardRepository
         $scope = $this->scopeSql($branchIds, $params);
         $stmt = $this->db->pdo()->prepare(
             "SELECT COALESCE(SUM(total_amount_minor), 0) FROM appointments
-              WHERE tenant_id = :t AND status IN ('confirmed', 'checked_in', 'completed')
+              WHERE tenant_id = :t AND status IN ('confirmed', 'checked_in', 'in_service', 'completed')
                 AND start_at >= :f AND start_at < :to{$scope}",
         );
         $stmt->execute($params);
@@ -169,7 +169,7 @@ final class DashboardRepository
           LEFT JOIN staff s ON s.tenant_id = a.tenant_id AND s.id = a.staff_id
                JOIN branches b ON b.tenant_id = a.tenant_id AND b.id = a.branch_id
               WHERE a.tenant_id = :t AND a.start_at >= :f AND a.start_at < :to
-                AND a.status IN ('pending', 'confirmed', 'checked_in'){$scope}
+                AND a.status IN ('pending', 'confirmed', 'checked_in', 'in_service'){$scope}
            ORDER BY a.start_at
               LIMIT " . max(1, $limit),
         );

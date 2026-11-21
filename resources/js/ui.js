@@ -11,7 +11,7 @@
   const ui = (AlbaBook.ui = AlbaBook.ui || {});
 
   const STATUS_TONES = {
-    pending: 'warning', confirmed: 'info', checked_in: 'info', completed: 'success',
+    pending: 'warning', confirmed: 'info', checked_in: 'info', in_service: 'info', completed: 'success',
     no_show: 'danger', cancelled: 'neutral', rejected: 'neutral', expired: 'neutral',
   };
   const PAYMENT_TONES = {

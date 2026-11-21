@@ -1,0 +1,54 @@
+{#
+  Notifications center: queue stats, channel/status filters and a
+  paginated outbound queue. Hydrates via /api/notifications.
+#}
+{% extends 'layouts/dashboard.twig' %}
+
+{% set page_title = t('nav.notifications') %}
+{% set active_nav = 'notifications' %}
+{% set workspace = tenant.name %}
+
+{% block title %}{{ t('nav.notifications') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<div data-page="notifications"{% if membership.can('notifications.manage') %} data-can-manage="1"{% endif %}>
+  <div class="mb-6">
+    <h2 class="text-2xl font-semibold text-ink">{{ t('notifications.title') }}</h2>
+    <p class="mt-1 text-sm text-muted">{{ t('notifications.subtitle') }}</p>
+  </div>
+
+  <div class="mb-6 grid gap-4 sm:grid-cols-3" data-ntf-stats></div>
+
+  <div class="mb-4 flex flex-wrap items-center gap-3">
+    <div class="relative min-w-56 flex-1">
+      <i class="fa-solid fa-magnifying-glass pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" aria-hidden="true"></i>
+      <input type="search" class="input w-full pl-9" placeholder="{{ t('notifications.search_placeholder') }}" data-ntf-search>
+    </div>
+    <select class="input select" data-ntf-channel><option value="">{{ t('notifications.all_channels') }}</option></select>
+    <select class="input select" data-ntf-status><option value="">{{ t('notifications.all_statuses') }}</option></select>
+  </div>
+
+  <div class="overflow-hidden rounded-xl border border-line bg-white">
+    <table class="data-table">
+      <caption class="sr-only">{{ t('notifications.table_caption') }}</caption>
+      <thead>
+        <tr>
+          <th scope="col">{{ t('notifications.col_event') }}</th>
+          <th scope="col">{{ t('notifications.col_channel') }}</th>
+          <th scope="col">{{ t('notifications.col_recipient') }}</th>
+          <th scope="col">{{ t('notifications.col_status') }}</th>
+          <th scope="col">{{ t('notifications.col_scheduled') }}</th>
+          <th scope="col">{{ t('notifications.col_sent') }}</th>
+          <th scope="col">{{ t('notifications.col_actions') }}</th>
+        </tr>
+      </thead>
+      <tbody data-ntf-body></tbody>
+    </table>
+  </div>
+
+  <div class="mt-4 flex items-center justify-between gap-2">
+    <p data-ntf-info class="text-sm text-muted"></p>
+    <div data-ntf-pager class="flex items-center gap-2"></div>
+  </div>
+</div>
+{% endblock %}

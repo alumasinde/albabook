@@ -1,0 +1,120 @@
+{#
+  Reports: tabbed workspace over a shared date range. Each tab renders
+  server-computed tabular data hydrated via /api/reports. The selected
+  tab is kept in the URL (?tab=) for browser navigation.
+#}
+{% extends 'layouts/dashboard.twig' %}
+
+{% set page_title = t('nav.reports') %}
+{% set active_nav = 'reports' %}
+{% set workspace = tenant.name %}
+
+{% block title %}{{ t('nav.reports') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<div data-page="reports"{% if membership.can('reports.export') %} data-can-export="1"{% endif %}{% if membership.can('reports.view_financial') %} data-can-financial="1"{% endif %}>
+  <div class="mb-6">
+    <h2 class="text-2xl font-semibold text-ink">{{ t('reports.title') }}</h2>
+    <p class="mt-1 text-sm text-muted">{{ t('reports.subtitle') }}</p>
+  </div>
+
+  <div class="card mb-6 flex flex-wrap items-end gap-3 p-4">
+    <div class="field">
+      <label class="field-label" for="rep-from">{{ t('reports.from') }}</label>
+      <input id="rep-from" type="date" class="input" data-rep-from>
+    </div>
+    <div class="field">
+      <label class="field-label" for="rep-to">{{ t('reports.to') }}</label>
+      <input id="rep-to" type="date" class="input" data-rep-to>
+    </div>
+    <div class="flex gap-2">
+      <button type="button" class="btn btn-ghost btn-sm" data-rep-range="7">{{ t('reports.range_7d') }}</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-rep-range="30">{{ t('reports.range_30d') }}</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-rep-range="90">{{ t('reports.range_90d') }}</button>
+    </div>
+    <button type="button" class="btn btn-primary btn-md" data-rep-apply>{{ t('reports.apply') }}</button>
+  </div>
+
+  <div class="mb-6 -mx-4 flex gap-1 overflow-x-auto border-b border-border px-4 sm:mx-0 sm:px-0" role="tablist" aria-label="{{ t('reports.title') }}">
+    <button type="button" class="tab-btn is-active" data-rep-tab="overview" role="tab">{{ t('reports.tab_overview') }}</button>
+    <button type="button" class="tab-btn" data-rep-tab="appointments" role="tab">{{ t('reports.tab_appointments') }}</button>
+    {% if membership.can('reports.view_financial') %}
+    <button type="button" class="tab-btn" data-rep-tab="sales" role="tab">{{ t('reports.tab_sales') }}</button>
+    {% endif %}
+    <button type="button" class="tab-btn" data-rep-tab="noshows" role="tab">{{ t('reports.tab_noshows') }}</button>
+    <button type="button" class="tab-btn" data-rep-tab="resources" role="tab">{{ t('reports.tab_resources') }}</button>
+  </div>
+
+  <div data-rep-panel="overview">
+    <div class="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-rep-cards></div>
+    <div class="grid gap-6 xl:grid-cols-2">
+      <div class="card p-6">
+        <h3 class="text-lg font-semibold text-ink">{{ t('reports.daily_heading') }}</h3>
+        <div data-rep-daily class="mt-5"></div>
+      </div>
+      <div class="card p-6">
+        <h3 class="text-lg font-semibold text-ink">{{ t('reports.services_heading') }}</h3>
+        <div data-rep-services class="mt-5"></div>
+      </div>
+    </div>
+    {% if membership.can('reports.view_financial') %}
+    <div class="card mt-6 p-6">
+      <h3 class="text-lg font-semibold text-ink">{{ t('reports.financial_heading') }}</h3>
+      <div data-rep-financial class="mt-5"></div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div data-rep-panel="appointments" hidden>
+    <div class="card p-6">
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h3 class="text-lg font-semibold text-ink">{{ t('reports.appointments_by_day') }}</h3>
+        {% if membership.can('reports.export') %}
+        <a class="btn btn-ghost btn-sm" data-rep-export-appointments href="#" download>
+          <i class="fa-solid fa-download" aria-hidden="true"></i> {{ t('reports.export') }}
+        </a>
+        {% endif %}
+      </div>
+      <div data-rep-appointments-table></div>
+    </div>
+    <div class="card mt-6 p-6">
+      <h3 class="text-lg font-semibold text-ink">{{ t('reports.appointments_by_service') }}</h3>
+      <div data-rep-service-table class="mt-5"></div>
+    </div>
+  </div>
+
+  {% if membership.can('reports.view_financial') %}
+  <div data-rep-panel="sales" hidden>
+    <div class="card p-6">
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h3 class="text-lg font-semibold text-ink">{{ t('reports.sales_by_day') }}</h3>
+        {% if membership.can('reports.export') %}
+        <a class="btn btn-ghost btn-sm" data-rep-export-sales href="#" download>
+          <i class="fa-solid fa-download" aria-hidden="true"></i> {{ t('reports.export') }}
+        </a>
+        {% endif %}
+      </div>
+      <div data-rep-sales-table></div>
+    </div>
+    <div class="card mt-6 p-6">
+      <h3 class="text-lg font-semibold text-ink">{{ t('reports.sales_by_method') }}</h3>
+      <div data-rep-method-table class="mt-5"></div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div data-rep-panel="noshows" hidden>
+    <div class="card p-6">
+      <h3 class="text-lg font-semibold text-ink">{{ t('reports.noshows_heading') }}</h3>
+      <div data-rep-noshows-table class="mt-5"></div>
+    </div>
+  </div>
+
+  <div data-rep-panel="resources" hidden>
+    <div class="card p-6">
+      <h3 class="text-lg font-semibold text-ink">{{ t('reports.resources_heading') }}</h3>
+      <div data-rep-resources-table class="mt-5"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}

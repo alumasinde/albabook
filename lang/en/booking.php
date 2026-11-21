@@ -22,6 +22,7 @@ return [
     'verified' => 'Verified business',
     'about_fallback' => 'Your premier beauty and wellness destination.',
     'opening_hours' => 'Opening Hours',
+    'faqs_heading' => 'Frequently asked questions',
     'our_services' => 'Our Services',
     'no_services_title' => 'No services yet',
     'no_services_body' => 'This business has not published bookable services yet.',

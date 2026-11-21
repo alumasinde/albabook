@@ -14,6 +14,7 @@ enum AppointmentStatus: string
     case Pending = 'pending';
     case Confirmed = 'confirmed';
     case CheckedIn = 'checked_in';
+    case InService = 'in_service';
     case Completed = 'completed';
     case NoShow = 'no_show';
     case Cancelled = 'cancelled';
@@ -39,7 +40,7 @@ enum AppointmentStatus: string
      */
     public static function timeBlocking(): array
     {
-        return [self::Pending, self::Confirmed, self::CheckedIn];
+        return [self::Pending, self::Confirmed, self::CheckedIn, self::InService];
     }
 
     /** @return list<string> */

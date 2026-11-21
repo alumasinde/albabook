@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console;
 
+use App\Console\Commands\AuditDailyCommand;
 use App\Console\Commands\DbSeedCommand;
 use App\Console\Commands\DemoSeedCommand;
 use App\Console\Commands\DownCommand;
@@ -24,6 +25,7 @@ final class Kernel
 {
     /** @var list<class-string<Command>> */
     private const COMMANDS = [
+        AuditDailyCommand::class,
         MigrateCommand::class,
         MigrateStatusCommand::class,
         MigrateFreshCommand::class,

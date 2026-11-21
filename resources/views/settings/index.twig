@@ -1,0 +1,159 @@
+{#
+  Tenant settings hub: tabbed panels for workspace profile, service
+  categories, booking-page theme, notifications and payments. All data
+  hydrates from /api/settings; mutations are AJAX with field errors.
+#}
+{% extends 'layouts/dashboard.twig' %}
+
+{% set page_title = t('nav.settings') %}
+{% set active_nav = 'settings' %}
+{% set workspace = tenant.name %}
+
+{% block title %}{{ t('nav.settings') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<div data-page="settings"{% if membership.can('settings.update') %} data-can-update="1"{% endif %}>
+  <div class="mb-6">
+    <h2 class="text-2xl font-semibold text-ink">{{ t('settings.title') }}</h2>
+    <p class="mt-1 text-sm text-muted">{{ t('settings.subtitle') }}</p>
+  </div>
+
+  <nav class="mb-6 flex flex-wrap gap-1 rounded-xl border border-line bg-white p-1" aria-label="{{ t('settings.tabs_label') }}">
+    <button type="button" class="tab-btn" data-settings-tab="profile">{{ t('settings.tab_profile') }}</button>
+    <button type="button" class="tab-btn" data-settings-tab="categories">{{ t('settings.tab_categories') }}</button>
+    <button type="button" class="tab-btn" data-settings-tab="theme">{{ t('settings.tab_theme') }}</button>
+    <button type="button" class="tab-btn" data-settings-tab="notifications">{{ t('settings.tab_notifications') }}</button>
+    <button type="button" class="tab-btn" data-settings-tab="payments">{{ t('settings.tab_payments') }}</button>
+  </nav>
+
+  <section data-settings-panel="profile" aria-labelledby="settings-profile-h">
+    <div class="card max-w-3xl p-6">
+      <h3 id="settings-profile-h" class="text-lg font-semibold text-ink">{{ t('settings.profile_heading') }}</h3>
+      <p class="mt-1 text-sm text-muted">{{ t('settings.profile_subtitle') }}</p>
+      <form data-settings-profile class="mt-5 flex flex-col gap-4" novalidate></form>
+    </div>
+  </section>
+
+  <section data-settings-panel="categories" hidden aria-labelledby="settings-categories-h">
+    <div class="card p-6">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h3 id="settings-categories-h" class="text-lg font-semibold text-ink">{{ t('settings.categories_heading') }}</h3>
+          <p class="mt-1 text-sm text-muted">{{ t('settings.categories_subtitle') }}</p>
+        </div>
+        <button type="button" class="btn btn-primary btn-md shrink-0" data-category-new>
+          <i class="fa-solid fa-plus" aria-hidden="true"></i>
+          <span>{{ t('settings.category_new') }}</span>
+        </button>
+      </div>
+      <div class="mt-5 overflow-hidden rounded-xl border border-line">
+        <table class="data-table">
+          <caption class="sr-only">{{ t('settings.categories_caption') }}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{{ t('settings.category_col_name') }}</th>
+              <th scope="col">{{ t('settings.category_col_services') }}</th>
+              <th scope="col">{{ t('settings.category_col_status') }}</th>
+              <th scope="col">{{ t('settings.category_col_actions') }}</th>
+            </tr>
+          </thead>
+          <tbody data-categories-body></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section data-settings-panel="theme" hidden aria-labelledby="settings-theme-h">
+    <div class="card max-w-3xl p-6">
+      <h3 id="settings-theme-h" class="text-lg font-semibold text-ink">{{ t('settings.theme_heading') }}</h3>
+      <p class="mt-1 text-sm text-muted">{{ t('settings.theme_subtitle') }}</p>
+      <form data-settings-theme class="mt-5 flex flex-col gap-4" novalidate></form>
+    </div>
+  </section>
+
+  <section data-settings-panel="notifications" hidden aria-labelledby="settings-notifications-h">
+    <div class="grid gap-6 xl:grid-cols-2">
+      <div class="card p-6">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h3 id="settings-notifications-h" class="text-lg font-semibold text-ink">{{ t('settings.channels_heading') }}</h3>
+            <p class="mt-1 text-sm text-muted">{{ t('settings.channels_subtitle') }}</p>
+          </div>
+          <button type="button" class="btn btn-primary btn-md shrink-0" data-channel-account-new>
+            <i class="fa-solid fa-plus" aria-hidden="true"></i>
+            <span>{{ t('settings.channel_connect') }}</span>
+          </button>
+        </div>
+        <div data-channel-accounts class="mt-5 space-y-3"></div>
+      </div>
+      <div class="card p-6">
+        <h3 class="text-lg font-semibold text-ink">{{ t('settings.prefs_heading') }}</h3>
+        <p class="mt-1 text-sm text-muted">{{ t('settings.prefs_subtitle') }}</p>
+        <div data-notif-prefs class="mt-5"></div>
+      </div>
+    </div>
+  </section>
+
+  <section data-settings-panel="payments" hidden aria-labelledby="settings-payments-h">
+    <div class="card p-6 mb-6" data-payment-policy hidden>
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h3 class="text-lg font-semibold text-ink">{{ t('settings.checkout_policy_heading') }}</h3>
+          <p class="mt-1 text-sm text-muted">{{ t('settings.checkout_policy_subtitle') }}</p>
+        </div>
+        {% if membership.can('settings.update') %}
+        <label class="checkbox-label flex items-center gap-2 whitespace-nowrap" for="checkout-full-pay">
+          <input id="checkout-full-pay" type="checkbox" class="checkbox" data-checkout-full-pay>
+          <span class="text-sm text-ink">{{ t('settings.checkout_policy_label') }}</span>
+        </label>
+        {% endif %}
+      </div>
+      <div class="mt-5 grid gap-4 border-t border-line pt-5 sm:grid-cols-2">
+        <div>
+          <label for="tax-rate" class="field-label">{{ t('settings.vat_rate_label') }}</label>
+          <input id="tax-rate" type="number" min="0" max="100" step="0.01" class="input mt-1" data-tax-rate {% if not membership.can('settings.update') %}disabled{% endif %}>
+          <p class="mt-1 text-xs text-muted">{{ t('settings.vat_rate_hint') }}</p>
+        </div>
+        <div>
+          <label for="service-charge" class="field-label">{{ t('settings.service_charge_label') }}</label>
+          <input id="service-charge" type="number" min="0" max="50" step="0.01" class="input mt-1" data-service-charge {% if not membership.can('settings.update') %}disabled{% endif %}>
+          <p class="mt-1 text-xs text-muted">{{ t('settings.service_charge_hint') }}</p>
+        </div>
+        <div class="sm:col-span-2">
+          <label for="receipt-note" class="field-label">{{ t('settings.receipt_note_label') }}</label>
+          <input id="receipt-note" type="text" maxlength="200" class="input mt-1" data-receipt-note placeholder="{{ t('settings.receipt_note_placeholder') }}" {% if not membership.can('settings.update') %}disabled{% endif %}>
+          <p class="mt-1 text-xs text-muted">{{ t('settings.receipt_note_hint') }}</p>
+        </div>
+      </div>
+      {% if membership.can('settings.update') %}
+      <button type="button" class="btn btn-primary btn-md mt-5" data-policy-save>
+        <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+        <span>{{ t('common.save') }}</span>
+      </button>
+      {% endif %}
+    </div>
+    <div class="grid gap-6 xl:grid-cols-2">
+      <div class="card p-6">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h3 id="settings-payments-h" class="text-lg font-semibold text-ink">{{ t('settings.payments_heading') }}</h3>
+            <p class="mt-1 text-sm text-muted">{{ t('settings.payments_subtitle') }}</p>
+          </div>
+          <button type="button" class="btn btn-primary btn-md shrink-0" data-payment-account-new>
+            <i class="fa-solid fa-plus" aria-hidden="true"></i>
+            <span>{{ t('settings.payment_connect') }}</span>
+          </button>
+        </div>
+        <div data-payment-accounts class="mt-5 space-y-3"></div>
+      </div>
+      {% if membership.can('payments.view') %}
+      <div class="card p-6">
+        <h3 class="text-lg font-semibold text-ink">{{ t('settings.ledger_heading') }}</h3>
+        <p class="mt-1 text-sm text-muted">{{ t('settings.ledger_subtitle') }}</p>
+        <div data-payment-ledger class="mt-5"></div>
+      </div>
+      {% endif %}
+    </div>
+  </section>
+</div>
+{% endblock %}

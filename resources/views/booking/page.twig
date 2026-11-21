@@ -8,10 +8,16 @@
 
 {% block title %}{{ settings.seo_title|default(t('booking.page_title', { business: tenant.name })) }} · {{ app_name }}{% endblock %}
 
+{% block head %}
+  {{ parent() }}
+  {% if theme_css is defined and theme_css is not null %}<style nonce="{{ csp_nonce() }}">{{ theme_css }}</style>{% endif %}
+{% endblock %}
+
 {% block content %}
 {% set first_branch = branches|first %}
 <div data-page="booking" data-slug="{{ tenant.slug }}" data-api-base="/{{ tenant.slug }}">
 
+{% if sections.hero is not defined or sections.hero %}
   <section class="booking-hero">
     <span class="inline-flex items-center gap-2 rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold text-primary-strong">
       <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>{{ tenant.name }}
@@ -24,10 +30,12 @@
       <li class="flex items-center gap-1.5"><i class="fa-regular fa-calendar-check text-accent" aria-hidden="true"></i>{{ t('booking.trust_instant') }}</li>
     </ul>
   </section>
+{% endif %}
 
   <div class="mt-8 grid gap-6 lg:grid-cols-5">
     <div class="space-y-6 lg:col-span-3">
 
+      {% if sections.about is not defined or sections.about %}
       <section id="about" class="card flex flex-col gap-5 p-6 sm:flex-row">
         <div class="booking-hero-thumb" aria-hidden="true"><i class="fa-solid fa-spa"></i></div>
         <div class="min-w-0 flex-1">
@@ -37,19 +45,19 @@
           <p class="mt-2 text-sm leading-6 text-muted">
             {{ settings.seo_description|default(t('booking.about_fallback')) }}
           </p>
-          {% if first_branch %}
+          {% if first_branch and (sections.locations is not defined or sections.locations) %}
             <p class="mt-3 flex items-center gap-1.5 text-sm text-muted">
               <i class="fa-solid fa-location-dot text-primary" aria-hidden="true"></i>
               {{ [first_branch.address_line1, first_branch.town, first_branch.county]|filter(v => v)|join(', ') }}
             </p>
-            {% if first_branch.phone %}
+            {% if first_branch.phone and (sections.contact is not defined or sections.contact) %}
               <p class="mt-1 flex items-center gap-1.5 text-sm text-muted">
                 <i class="fa-solid fa-phone text-primary" aria-hidden="true"></i>{{ first_branch.phone }}
               </p>
             {% endif %}
           {% endif %}
         </div>
-        {% if opening_hours is not empty %}
+        {% if opening_hours is not empty and (sections.opening_hours is not defined or sections.opening_hours) %}
           <div class="shrink-0">
             <h3 class="flex items-center gap-2 text-sm font-semibold text-ink">
               <i class="fa-regular fa-clock text-primary" aria-hidden="true"></i>{{ t('booking.opening_hours') }}
@@ -65,7 +73,9 @@
           </div>
         {% endif %}
       </section>
+      {% endif %}
 
+      {% if sections.services is not defined or sections.services %}
       <section id="services">
         <h2 class="text-xl font-semibold text-ink">{{ t('booking.our_services') }}</h2>
         {% if services is empty %}
@@ -94,9 +104,27 @@
           </div>
         {% endif %}
       </section>
+      {% endif %}
+
+      {% if (sections.faqs is not defined or sections.faqs) and faqs is not empty %}
+      <section id="faqs">
+        <h2 class="text-xl font-semibold text-ink">{{ t('booking.faqs_heading') }}</h2>
+        <div class="mt-4 space-y-2">
+          {% for faq in faqs %}
+            <details class="card group p-4">
+              <summary class="flex cursor-pointer items-center justify-between gap-3 text-sm font-medium text-ink">
+                {{ faq.question }}
+                <i class="fa-solid fa-chevron-down text-muted transition-transform group-open:rotate-180" aria-hidden="true"></i>
+              </summary>
+              <p class="mt-3 text-sm leading-6 text-muted">{{ faq.answer }}</p>
+            </details>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
     </div>
 
-    <aside id="book" class="lg:col-span-2">
+    <aside id="book" class="order-first lg:order-none lg:col-span-2">
       <div class="card sticky top-6 p-5">
         <h2 class="text-base font-semibold text-white -m-5 mb-4 rounded-t-xl bg-primary p-4">
           {{ t('booking.panel_title') }}

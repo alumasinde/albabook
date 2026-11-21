@@ -1,0 +1,52 @@
+{#
+  Branch directory. Shell renders the filter bar and table skeleton; rows
+  hydrate from /api/branches.
+#}
+{% extends 'layouts/dashboard.twig' %}
+
+{% set page_title = t('nav.branches') %}
+{% set active_nav = 'branches' %}
+{% set workspace = tenant.name %}
+
+{% block title %}{{ t('nav.branches') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<div data-page="branches"{% if membership.can('branches.manage') %} data-can-manage="1"{% endif %}>
+  <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h2 class="text-2xl font-semibold text-ink">{{ t('branches.title') }}</h2>
+      <p class="mt-1 text-sm text-muted">{{ t('branches.subtitle') }}</p>
+    </div>
+    {% if membership.can('branches.manage') %}
+      <button type="button" class="btn btn-primary btn-md" data-branches-new>
+        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+        <span>{{ t('branches.new') }}</span>
+      </button>
+    {% endif %}
+  </div>
+
+  <div class="card p-4">
+    <div class="max-w-md">
+      <label for="branches-q" class="field-label">{{ t('branches.search_label') }}</label>
+      <input id="branches-q" type="search" class="input" placeholder="{{ t('branches.search_placeholder') }}" data-branches-filter="q">
+    </div>
+  </div>
+
+  <div class="card mt-4 overflow-hidden">
+    <table class="data-table">
+      <caption class="sr-only">{{ t('branches.table_caption') }}</caption>
+      <thead>
+        <tr>
+          <th scope="col">{{ t('branches.col_name') }}</th>
+          <th scope="col">{{ t('branches.col_address') }}</th>
+          <th scope="col">{{ t('branches.col_contact') }}</th>
+          <th scope="col">{{ t('branches.col_staff') }}</th>
+          <th scope="col">{{ t('branches.col_status') }}</th>
+          <th scope="col">{{ t('branches.col_actions') }}</th>
+        </tr>
+      </thead>
+      <tbody data-branches-body></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

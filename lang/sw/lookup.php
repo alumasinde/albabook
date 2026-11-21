@@ -8,6 +8,7 @@ return [
         'pending' => 'Inasubiri',
         'confirmed' => 'Imethibitishwa',
         'checked_in' => 'Amefika',
+        'in_service' => 'Anahudumiwa',
         'completed' => 'Imekamilika',
         'no_show' => 'Hakufika',
         'cancelled' => 'Imeghairiwa',

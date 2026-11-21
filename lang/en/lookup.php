@@ -8,6 +8,7 @@ return [
         'pending' => 'Pending',
         'confirmed' => 'Confirmed',
         'checked_in' => 'Checked in',
+        'in_service' => 'In service',
         'completed' => 'Completed',
         'no_show' => 'No-show',
         'cancelled' => 'Cancelled',

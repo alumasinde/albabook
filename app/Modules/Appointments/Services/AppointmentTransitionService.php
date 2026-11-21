@@ -17,7 +17,8 @@ final class AppointmentTransitionService
     private const GRAPH = [
         'pending' => ['confirmed', 'cancelled'],
         'confirmed' => ['checked_in', 'cancelled', 'no_show', 'completed'],
-        'checked_in' => ['completed', 'cancelled'],
+        'checked_in' => ['in_service', 'completed', 'cancelled', 'no_show'],
+        'in_service' => ['completed', 'cancelled'],
         'completed' => [],
         'cancelled' => [],
         'no_show' => [],
@@ -29,6 +30,7 @@ final class AppointmentTransitionService
     private const PERMISSION = [
         'confirmed' => 'appointments.confirm',
         'checked_in' => 'appointments.update',
+        'in_service' => 'appointments.update',
         'completed' => 'appointments.update',
         'cancelled' => 'appointments.cancel',
         'no_show' => 'appointments.update',

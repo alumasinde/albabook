@@ -1,0 +1,121 @@
+{#
+  Services catalogue (dashboard.md §3). Shell renders the filter bar and
+  table skeleton; rows and pagination hydrate from /api/services.
+#}
+{% extends 'layouts/dashboard.twig' %}
+
+{% set page_title = t('nav.services') %}
+{% set active_nav = 'services' %}
+{% set workspace = tenant.name %}
+
+{% block title %}{{ t('nav.services') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<div data-page="services"{% if membership.can('services.manage') %} data-can-manage="1"{% endif %}>
+  <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h2 class="text-2xl font-semibold text-ink">{{ t('services.title') }}</h2>
+      <p class="mt-1 text-sm text-muted">{{ t('services.subtitle') }}</p>
+    </div>
+    {% if membership.can('services.manage') %}
+      <button type="button" class="btn btn-primary btn-md" data-svc-new>
+        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+        <span>{{ t('services.new') }}</span>
+      </button>
+    {% endif %}
+  </div>
+
+  <div class="card p-4">
+    <div class="grid gap-3 md:grid-cols-3 xl:grid-cols-4">
+      <div class="xl:col-span-2">
+        <label for="svc-q" class="field-label">{{ t('services.search_label') }}</label>
+        <input id="svc-q" type="search" class="input" placeholder="{{ t('services.search_placeholder') }}" data-svc-filter="q">
+      </div>
+      <div>
+        <label for="svc-status" class="field-label">{{ t('services.filter_status') }}</label>
+        <select id="svc-status" class="input select" data-svc-filter="status">
+          <option value="">{{ t('services.all_statuses') }}</option>
+          <option value="active">{{ t('services.status_active') }}</option>
+          <option value="inactive">{{ t('services.status_inactive') }}</option>
+        </select>
+      </div>
+      <div>
+        <label for="svc-category" class="field-label">{{ t('services.filter_category') }}</label>
+        <select id="svc-category" class="input select" data-svc-filter="category">
+          <option value="">{{ t('services.all_categories') }}</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt-4 overflow-hidden">
+    <table class="data-table">
+      <caption class="sr-only">{{ t('services.table_caption') }}</caption>
+      <thead>
+        <tr>
+          <th scope="col">{{ t('services.col_name') }}</th>
+          <th scope="col">{{ t('services.col_category') }}</th>
+          <th scope="col">{{ t('services.col_duration') }}</th>
+          <th scope="col">{{ t('services.col_price') }}</th>
+          <th scope="col">{{ t('services.col_online') }}</th>
+          <th scope="col">{{ t('services.col_status') }}</th>
+          <th scope="col">{{ t('services.col_actions') }}</th>
+        </tr>
+      </thead>
+      <tbody data-svc-body></tbody>
+    </table>
+  </div>
+
+  <div class="mt-4 flex items-center justify-between gap-2">
+    <p data-svc-info class="text-sm text-muted"></p>
+    <div data-svc-pager class="flex items-center gap-2"></div>
+  </div>
+
+  <div class="mt-8 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h3 class="text-lg font-semibold text-ink">{{ t('products.heading') }}</h3>
+      <p class="mt-1 text-sm text-muted">{{ t('products.subtitle') }}</p>
+    </div>
+    {% if membership.can('services.manage') %}
+      <button type="button" class="btn btn-primary btn-md" data-prd-new>
+        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+        <span>{{ t('products.new') }}</span>
+      </button>
+    {% endif %}
+  </div>
+
+  <div class="card mt-4 p-4">
+    <div class="grid gap-3 md:grid-cols-3">
+      <div class="md:col-span-2">
+        <label for="prd-q" class="field-label">{{ t('products.search_label') }}</label>
+        <input id="prd-q" type="search" class="input" placeholder="{{ t('products.search_placeholder') }}" data-prd-q>
+      </div>
+      <div>
+        <label for="prd-status" class="field-label">{{ t('products.filter_status') }}</label>
+        <select id="prd-status" class="input select" data-prd-status>
+          <option value="">{{ t('services.all_statuses') }}</option>
+          <option value="active">{{ t('services.status_active') }}</option>
+          <option value="inactive">{{ t('services.status_inactive') }}</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt-4 overflow-hidden">
+    <table class="data-table">
+      <caption class="sr-only">{{ t('products.table_caption') }}</caption>
+      <thead>
+        <tr>
+          <th scope="col">{{ t('products.col_name') }}</th>
+          <th scope="col">{{ t('products.col_sku') }}</th>
+          <th scope="col">{{ t('products.col_price') }}</th>
+          <th scope="col">{{ t('products.col_stock') }}</th>
+          <th scope="col">{{ t('products.col_status') }}</th>
+          <th scope="col">{{ t('services.col_actions') }}</th>
+        </tr>
+      </thead>
+      <tbody data-prd-body></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

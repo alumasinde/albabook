@@ -1,0 +1,68 @@
+{#
+  Staff directory. Shell renders the filter bar and table skeleton; rows and
+  pagination hydrate from /api/staff.
+#}
+{% extends 'layouts/dashboard.twig' %}
+
+{% set page_title = t('nav.staff') %}
+{% set active_nav = 'staff' %}
+{% set workspace = tenant.name %}
+
+{% block title %}{{ t('nav.staff') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<div data-page="staff"{% if membership.can('staff.manage') %} data-can-manage="1"{% endif %}>
+  <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h2 class="text-2xl font-semibold text-ink">{{ t('staff.title') }}</h2>
+      <p class="mt-1 text-sm text-muted">{{ t('staff.subtitle') }}</p>
+    </div>
+    {% if membership.can('staff.manage') %}
+      <button type="button" class="btn btn-primary btn-md" data-staff-new>
+        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+        <span>{{ t('staff.new') }}</span>
+      </button>
+    {% endif %}
+  </div>
+
+  <div class="card p-4">
+    <div class="grid gap-3 md:grid-cols-3">
+      <div class="md:col-span-2">
+        <label for="staff-q" class="field-label">{{ t('staff.search_label') }}</label>
+        <input id="staff-q" type="search" class="input" placeholder="{{ t('staff.search_placeholder') }}" data-staff-filter="q">
+      </div>
+      <div>
+        <label for="staff-status" class="field-label">{{ t('staff.filter_status') }}</label>
+        <select id="staff-status" class="input select" data-staff-filter="status">
+          <option value="">{{ t('staff.all_statuses') }}</option>
+          <option value="active">{{ t('staff.status_active') }}</option>
+          <option value="inactive">{{ t('staff.status_inactive') }}</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt-4 overflow-hidden">
+    <table class="data-table">
+      <caption class="sr-only">{{ t('staff.table_caption') }}</caption>
+      <thead>
+        <tr>
+          <th scope="col">{{ t('staff.col_name') }}</th>
+          <th scope="col">{{ t('staff.col_contact') }}</th>
+          <th scope="col">{{ t('staff.col_branches') }}</th>
+          <th scope="col">{{ t('staff.col_services') }}</th>
+          <th scope="col">{{ t('staff.col_online') }}</th>
+          <th scope="col">{{ t('staff.col_status') }}</th>
+          <th scope="col">{{ t('staff.col_actions') }}</th>
+        </tr>
+      </thead>
+      <tbody data-staff-body></tbody>
+    </table>
+  </div>
+
+  <div class="mt-4 flex items-center justify-between gap-2">
+    <p data-staff-info class="text-sm text-muted"></p>
+    <div data-staff-pager class="flex items-center gap-2"></div>
+  </div>
+</div>
+{% endblock %}

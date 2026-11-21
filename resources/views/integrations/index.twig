@@ -1,0 +1,44 @@
+{#
+  Integrations: webhook endpoint manager + recent delivery log.
+  Hydrates via /api/integrations.
+#}
+{% extends 'layouts/dashboard.twig' %}
+
+{% set page_title = t('nav.integrations') %}
+{% set active_nav = 'integrations' %}
+{% set workspace = tenant.name %}
+
+{% block title %}{{ t('nav.integrations') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<div data-page="integrations"{% if membership.can('integrations.manage') %} data-can-manage="1"{% endif %}>
+  <div class="mb-6">
+    <h2 class="text-2xl font-semibold text-ink">{{ t('integrations.title') }}</h2>
+    <p class="mt-1 text-sm text-muted">{{ t('integrations.subtitle') }}</p>
+  </div>
+
+  <div class="grid gap-6 xl:grid-cols-2">
+    <div class="card p-6">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h3 class="text-lg font-semibold text-ink">{{ t('integrations.endpoints_heading') }}</h3>
+          <p class="mt-1 text-sm text-muted">{{ t('integrations.endpoints_subtitle') }}</p>
+        </div>
+        {% if membership.can('integrations.manage') %}
+        <button type="button" class="btn btn-primary btn-md shrink-0" data-int-new>
+          <i class="fa-solid fa-plus" aria-hidden="true"></i>
+          <span>{{ t('integrations.endpoint_new') }}</span>
+        </button>
+        {% endif %}
+      </div>
+      <div data-int-endpoints class="mt-5 space-y-3"></div>
+    </div>
+
+    <div class="card p-6">
+      <h3 class="text-lg font-semibold text-ink">{{ t('integrations.deliveries_heading') }}</h3>
+      <p class="mt-1 text-sm text-muted">{{ t('integrations.deliveries_subtitle') }}</p>
+      <div data-int-deliveries class="mt-5 space-y-2"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}

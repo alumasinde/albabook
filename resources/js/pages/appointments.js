@@ -13,6 +13,7 @@
   const TRANSITIONS = {
     confirmed: { label: 'Confirm Appointment', tone: 'primary', icon: 'fa-circle-check' },
     checked_in: { label: 'Check In', tone: 'primary', icon: 'fa-user-check' },
+    in_service: { label: 'Start Service', tone: 'primary', icon: 'fa-play' },
     completed: { label: 'Mark Completed', tone: 'primary', icon: 'fa-flag-checkered' },
     no_show: { label: 'Mark No-Show', tone: 'secondary', icon: 'fa-user-xmark' },
     cancelled: { label: 'Cancel Appointment', tone: 'danger', icon: 'fa-ban' },
@@ -69,7 +70,7 @@
         d.items.forEach((item) => {
           const li = el('li', 'flex items-center justify-between gap-3 rounded-lg border border-line px-3 py-2 text-sm');
           const left = el('span', 'text-ink', item.service + (item.variant ? ' · ' + item.variant : ''));
-          const right = el('span', 'text-muted', [item.staff, item.duration_minutes + ' min'].filter(Boolean).join(' · '));
+          const right = el('span', 'text-muted', [item.staff, item.resources, item.duration_minutes + ' min'].filter(Boolean).join(' · '));
           li.append(left, right);
           list.append(li);
         });
@@ -85,6 +86,15 @@
       if (d.notes) {
         const notes = el('div', 'mt-4 rounded-lg bg-surface px-3 py-2 text-sm text-muted', d.notes);
         body.append(notes);
+      }
+
+      if (['confirmed', 'checked_in', 'in_service', 'completed'].includes(d.status)) {
+        const till = el('button', 'btn btn-secondary btn-md mt-5 w-full');
+        till.type = 'button';
+        till.append(el('i', 'fa-solid fa-cash-register'));
+        till.append(document.createTextNode(' Till / Checkout'));
+        till.addEventListener('click', () => AlbaBook.tillDrawer.open(d.uuid, onChange));
+        body.append(till);
       }
 
       if (d.allowed_transitions && d.allowed_transitions.length) {

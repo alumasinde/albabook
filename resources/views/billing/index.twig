@@ -1,0 +1,36 @@
+{#
+  Billing: current plan card with feature list, invoice table and payment
+  history. Hydrates via /api/billing.
+#}
+{% extends 'layouts/dashboard.twig' %}
+
+{% set page_title = t('nav.billing') %}
+{% set active_nav = 'billing' %}
+{% set workspace = tenant.name %}
+
+{% block title %}{{ t('nav.billing') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<div data-page="billing">
+  <div class="mb-6">
+    <h2 class="text-2xl font-semibold text-ink">{{ t('billing.title') }}</h2>
+    <p class="mt-1 text-sm text-muted">{{ t('billing.subtitle') }}</p>
+  </div>
+
+  <div class="grid gap-6 xl:grid-cols-3">
+    <div class="card p-6">
+      <h3 class="text-lg font-semibold text-ink">{{ t('billing.plan_heading') }}</h3>
+      <div data-bill-plan class="mt-4"></div>
+    </div>
+    <div class="card p-6 xl:col-span-2">
+      <h3 class="text-lg font-semibold text-ink">{{ t('billing.invoices_heading') }}</h3>
+      <div data-bill-invoices class="mt-4 overflow-hidden rounded-xl border border-line"></div>
+    </div>
+  </div>
+
+  <div class="card mt-6 p-6">
+    <h3 class="text-lg font-semibold text-ink">{{ t('billing.payments_heading') }}</h3>
+    <div data-bill-payments class="mt-4"></div>
+  </div>
+</div>
+{% endblock %}

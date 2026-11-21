@@ -102,7 +102,7 @@ final class SupportTest extends TestCase
 
     public function testOnlyPendingConfirmedAndCheckedInBlockTime(): void
     {
-        self::assertSame(['pending', 'confirmed', 'checked_in'], AppointmentStatus::timeBlockingValues());
+        self::assertSame(['pending', 'confirmed', 'checked_in', 'in_service'], AppointmentStatus::timeBlockingValues());
         self::assertFalse(AppointmentStatus::Cancelled->blocksTime());
     }
 }

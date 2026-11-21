@@ -72,7 +72,7 @@ final class ManualBookingService
         $occupiedEnd = $end->modify('+' . $bufferAfter . ' minutes');
 
         return $this->db->transaction(function () use (
-            $tenantId, $branchId, $staffId, $service, $duration, $bufferBefore, $bufferAfter,
+            $tenantId, $branchId, $branchTimezone, $staffId, $service, $duration, $bufferBefore, $bufferAfter,
             $price, $start, $end, $occupiedStart, $occupiedEnd,
             $customer, $source, $locale, $currency, $actorUserId, $actorType,
         ): array {
@@ -88,6 +88,30 @@ final class ManualBookingService
                 );
                 if ($conflicts > 0) {
                     throw new TransitionException('SLOT_UNAVAILABLE', 'That time is no longer available.', 409, ['time' => 'Pick another time.']);
+                }
+
+                $resourceAssignments = [];
+                $tz = new \DateTimeZone($branchTimezone);
+                $localStart = $occupiedStart->setTimezone($tz);
+                $localEnd = $occupiedEnd->setTimezone($tz);
+                foreach ($this->appointments->serviceRequirements($tenantId, (int) $service['id']) as $requirement) {
+                    $resourceId = $this->appointments->freeResourceForType(
+                        $tenantId,
+                        $branchId,
+                        (int) $requirement['resource_type_id'],
+                        $this->dates->toDb($occupiedStart),
+                        $this->dates->toDb($occupiedEnd),
+                        (int) $localStart->format('N'),
+                        $localStart->format('H:i:s'),
+                        $localEnd->format('H:i:s'),
+                    );
+                    if ($resourceId === null) {
+                        throw new TransitionException('RESOURCE_UNAVAILABLE', 'No room or equipment is free at that time.', 409, ['time' => 'Pick another time.']);
+                    }
+                    $resourceAssignments[] = [
+                        'resource_id' => $resourceId,
+                        'quantity' => (int) $requirement['quantity'],
+                    ];
                 }
 
             $customerId = $this->upsertCustomer($tenantId, $customer, $actorType);
@@ -123,7 +147,7 @@ final class ManualBookingService
                 'created_by_user_id' => $actorUserId,
             ]);
 
-            $this->appointments->insertItem([
+            $itemId = $this->appointments->insertItem([
                 'tenant_id' => $tenantId,
                 'appointment_id' => $appointmentId,
                 'item_position' => 0,
@@ -147,6 +171,17 @@ final class ManualBookingService
                 'currency' => $currency,
                 'policy_version' => $policyVersion,
             ]);
+
+            foreach ($resourceAssignments as $assignment) {
+                $this->appointments->insertResourceAllocation([
+                    'tenant_id' => $tenantId,
+                    'appointment_item_id' => $itemId,
+                    'resource_id' => $assignment['resource_id'],
+                    'quantity' => $assignment['quantity'],
+                    'occupied_start_at' => $this->dates->toDb($occupiedStart),
+                    'occupied_end_at' => $this->dates->toDb($occupiedEnd),
+                ]);
+            }
 
             $this->appointments->insertEvent($tenantId, $appointmentId, 'status.created', $actorType, $actorUserId, null, $status);
 
