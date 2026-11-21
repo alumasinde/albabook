@@ -1,0 +1,22 @@
+# Production PHP 8.3 FPM for AlbaBook (docs/deployment.md).
+# Slim runtime: no Composer, no git, no coverage tooling.
+
+FROM composer:2 AS vendor
+WORKDIR /app
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --no-scripts --optimize-autoloader --no-interaction
+
+FROM php:8.3-fpm-bookworm
+RUN docker-php-ext-install -j"$(nproc)" pdo_mysql opcache zip \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY docker/php/php.prod.ini /usr/local/etc/php/conf.d/zz-albabook.ini
+
+WORKDIR /var/www/albabook
+COPY --chown=www-data:www-data . .
+COPY --from=vendor --chown=www-data:www-data /app/vendor ./vendor
+RUN rm -rf docker tests .env .env.example \
+    && mkdir -p storage/logs storage/cache \
+    && chown -R www-data:www-data storage
+
+USER www-data

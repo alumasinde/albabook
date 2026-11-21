@@ -274,6 +274,50 @@ final class AppointmentRepository
     }
 
     /**
+     * Rows that make a staff member unbookable for a window, checked inside
+     * the booking transaction after the staff lock: approved leave
+     * overlapping [fromUtc, toUtc), staff- or branch-scoped blocked periods
+     * overlapping it, and branch/staff schedule_overrides that close the
+     * local date entirely. UTC datetimes; localDate is the branch-local day.
+     */
+    public function staffUnavailableConflict(
+        int $tenantId,
+        int $staffId,
+        int $branchId,
+        string $localDate,
+        string $fromUtc,
+        string $toUtc,
+    ): int {
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT
+                (SELECT COUNT(*) FROM staff_leave
+                  WHERE tenant_id = :t1 AND staff_id = :s1 AND status = 'approved'
+                    AND starts_at < :to1 AND ends_at > :from1)
+              + (SELECT COUNT(*) FROM blocked_periods
+                  WHERE tenant_id = :t2 AND staff_id = :s2
+                    AND starts_at < :to2 AND ends_at > :from2)
+              + (SELECT COUNT(*) FROM blocked_periods
+                  WHERE tenant_id = :t3 AND branch_id = :b1
+                    AND starts_at < :to3 AND ends_at > :from3)
+              + (SELECT COUNT(*) FROM schedule_overrides
+                  WHERE tenant_id = :t4 AND staff_id = :s3
+                    AND local_date = :d1 AND is_closed = 1)
+              + (SELECT COUNT(*) FROM schedule_overrides
+                  WHERE tenant_id = :t5 AND branch_id = :b2
+                    AND local_date = :d2 AND is_closed = 1)",
+        );
+        $stmt->execute([
+            't1' => $tenantId, 's1' => $staffId, 'to1' => $toUtc, 'from1' => $fromUtc,
+            't2' => $tenantId, 's2' => $staffId, 'to2' => $toUtc, 'from2' => $fromUtc,
+            't3' => $tenantId, 'b1' => $branchId, 'to3' => $toUtc, 'from3' => $fromUtc,
+            't4' => $tenantId, 's3' => $staffId, 'd1' => $localDate,
+            't5' => $tenantId, 'b2' => $branchId, 'd2' => $localDate,
+        ]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
+    /**
      * Lock the staff row (D-009 anchor) inside a transaction.
      * @return array<string, mixed>|null
      */
@@ -436,11 +480,30 @@ final class AppointmentRepository
     }
 
     /**
-     * First active resource of a type at a branch that is free for
-     * [fromUtc, toUtc): no overlapping appointment allocation on a
-     * time-blocking status, no overlapping unexpired booking hold, and —
-     * when the resource defines availability windows — a schedule row
-     * covering [localStart, localEnd] on $weekday (ISO, 1=Mon).
+     * Lock every active resource of a type at a branch (FOR UPDATE). Called
+     * inside the booking transaction after the staff lock so two bookings
+     * cannot race to claim the same room — InnoDB serializes the second
+     * caller on these rows until the first transaction commits.
+     */
+    public function lockResourcesForType(int $tenantId, int $branchId, int $typeId): void
+    {
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT id FROM resources
+              WHERE tenant_id = :t AND branch_id = :b AND resource_type_id = :rt
+                AND status = 'active'
+              ORDER BY id FOR UPDATE",
+        );
+        $stmt->execute(['t' => $tenantId, 'b' => $branchId, 'rt' => $typeId]);
+        $stmt->fetchAll();
+    }
+
+    /**
+     * First active resource of a type at a branch with free capacity for
+     * [fromUtc, toUtc): the summed quantity of overlapping allocations on
+     * time-blocking statuses plus overlapping unexpired holds plus $quantity
+     * must fit within the resource's capacity — and, when the resource
+     * defines availability windows, a schedule row must cover
+     * [localStart, localEnd] on $weekday (ISO, 1=Mon).
      */
     public function freeResourceForType(
         int $tenantId,
@@ -451,6 +514,7 @@ final class AppointmentRepository
         int $weekday,
         string $localStart,
         string $localEnd,
+        int $quantity = 1,
     ): ?int {
         $stmt = $this->db->pdo()->prepare(
             "SELECT r.id FROM resources r
@@ -464,19 +528,20 @@ final class AppointmentRepository
                                  AND rs.weekday = :wd
                                  AND rs.starts_at <= :lstart AND rs.ends_at >= :lend)
                )
-               AND NOT EXISTS (
-                   SELECT 1 FROM appointment_resources ar
-                     JOIN appointment_items ai ON ai.tenant_id = ar.tenant_id AND ai.id = ar.appointment_item_id
-                     JOIN appointments a ON a.tenant_id = ar.tenant_id AND a.id = ai.appointment_id
-                    WHERE ar.tenant_id = :t1 AND ar.resource_id = r.id
-                      AND ar.occupied_start_at < :to1 AND ar.occupied_end_at > :from1
-                      AND a.status IN ('pending', 'confirmed', 'checked_in', 'in_service'))
-               AND NOT EXISTS (
-                   SELECT 1 FROM booking_hold_resources hr
-                     JOIN booking_holds h ON h.tenant_id = hr.tenant_id AND h.id = hr.hold_id
-                    WHERE hr.tenant_id = :t2 AND hr.resource_id = r.id
-                      AND hr.occupied_start_at < :to2 AND hr.occupied_end_at > :from2
-                      AND h.status = 'active' AND h.expires_at > UTC_TIMESTAMP())
+               AND (
+                   (SELECT COALESCE(SUM(ar.quantity), 0) FROM appointment_resources ar
+                      JOIN appointment_items ai ON ai.tenant_id = ar.tenant_id AND ai.id = ar.appointment_item_id
+                      JOIN appointments a ON a.tenant_id = ar.tenant_id AND a.id = ai.appointment_id
+                     WHERE ar.tenant_id = :t1 AND ar.resource_id = r.id
+                       AND ar.occupied_start_at < :to1 AND ar.occupied_end_at > :from1
+                       AND a.status IN ('pending', 'confirmed', 'checked_in', 'in_service'))
+                 + (SELECT COUNT(*) FROM booking_hold_resources hr
+                      JOIN booking_holds h ON h.tenant_id = hr.tenant_id AND h.id = hr.hold_id
+                     WHERE hr.tenant_id = :t2 AND hr.resource_id = r.id
+                       AND hr.occupied_start_at < :to2 AND hr.occupied_end_at > :from2
+                       AND h.status = 'active' AND h.expires_at > UTC_TIMESTAMP())
+                 + :qty <= r.capacity
+               )
              ORDER BY r.id LIMIT 1",
         );
         $stmt->execute([
@@ -485,6 +550,7 @@ final class AppointmentRepository
             'wd' => $weekday, 'lstart' => $localStart, 'lend' => $localEnd,
             't1' => $tenantId, 'from1' => $fromUtc, 'to1' => $toUtc,
             't2' => $tenantId, 'from2' => $fromUtc, 'to2' => $toUtc,
+            'qty' => $quantity,
         ]);
         $id = $stmt->fetchColumn();
 

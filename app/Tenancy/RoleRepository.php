@@ -110,6 +110,21 @@ final class RoleRepository
         return array_values(array_map('strval', $stmt->fetchAll(\PDO::FETCH_COLUMN)));
     }
 
+    /** Every tenant-scope permission identifier — used to build the synthetic
+     * support-session membership (write scope gets all; read scope is
+     * filtered to *.view at the call site).
+     * @return list<string>
+     */
+    public function tenantPermissionIdentifiers(): array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT identifier FROM permissions WHERE scope = 'tenant' ORDER BY identifier",
+        );
+        $stmt->execute();
+
+        return array_values(array_map('strval', $stmt->fetchAll(\PDO::FETCH_COLUMN)));
+    }
+
     /** @return list<array{slug: string, name: string}> */
     public function roleSummariesForMembership(int $tenantId, int $tenantUserId): array
     {

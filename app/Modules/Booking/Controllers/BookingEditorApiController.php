@@ -256,7 +256,7 @@ final class BookingEditorApiController
 
         $this->db->transaction(function () use ($tenant, $uuid, $version, $snapshot, $membership): void {
             $this->editor->deactivateVersions($tenant->tenantId);
-            $this->editor->insertVersion($tenant->tenantId, $uuid, $version, $snapshot, $membership->userId);
+            $this->editor->insertVersion($tenant->tenantId, $uuid, $version, $snapshot, $membership->actorUserId());
         });
 
         return ApiResponse::ok([

@@ -236,6 +236,19 @@ final class TillRepository
         return (int) $this->db->pdo()->lastInsertId();
     }
 
+    /** A payment already recorded under this client idempotency key.
+     * @return array<string, mixed>|null
+     */
+    public function paymentByIdempotencyKey(int $tenantId, int $appointmentId, string $key): ?array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT * FROM payments WHERE tenant_id = ? AND appointment_id = ? AND idempotency_key = ? LIMIT 1',
+        );
+        $stmt->execute([$tenantId, $appointmentId, $key]);
+
+        return $stmt->fetch() ?: null;
+    }
+
     /** @param array<string, mixed> $data */
     public function insertRefund(int $tenantId, array $data): void
     {

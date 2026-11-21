@@ -3,16 +3,21 @@
 declare(strict_types=1);
 
 /*
- * notifications worker — implemented in Phase 8 (plan.md §20.3).
+ * notifications worker — drains notification_queue (booking receipts,
+ * confirmations, reminders) across email and the tenant's sms/whatsapp
+ * provider account.
  *
- * Contract every worker will follow (multi-tenancy.md "Background workers"):
- * - Claim jobs with SELECT ... FOR UPDATE SKIP LOCKED in short transactions.
- * - Build a fresh TenantContext per job from the job's stored tenant_id.
- * - Never hold a transaction open across an external HTTP call.
- * - Reset request-scoped state (RequestContext) between jobs.
+ * Contract (multi-tenancy.md "Background workers"): jobs are claimed with
+ * FOR UPDATE SKIP LOCKED in a short transaction; sends happen after commit
+ * so a slow provider never holds row locks.
  */
+
+use App\Core\Queue\Worker;
+use App\Modules\Notifications\Services\NotificationDispatcher;
 
 $app = (require __DIR__ . '/../bootstrap/app.php')();
 
-fwrite(STDOUT, "notifications worker: not implemented until Phase 8.\n");
-exit(0);
+exit(Worker::run(
+    'notifications',
+    static fn(): int => $app->container()->get(NotificationDispatcher::class)->dispatchBatch(20),
+));

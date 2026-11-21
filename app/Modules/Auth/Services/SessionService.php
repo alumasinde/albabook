@@ -119,6 +119,12 @@ final class SessionService
         $this->sessions->setActiveTenant($sessionId, $tenantId);
     }
 
+    /** Count a failed two-factor attempt; returns the session's new total. */
+    public function recordMfaFailure(int $sessionId): int
+    {
+        return $this->sessions->incrementMfaAttempts($sessionId);
+    }
+
     public function revoke(int $sessionId): void
     {
         $this->sessions->revoke($sessionId, $this->clock->now()->format('Y-m-d H:i:s'));

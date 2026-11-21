@@ -58,20 +58,44 @@ final class AvailabilityService
         $policy = $this->pages->policy($tenantId, (int) $branch['id']);
         $interval = (int) ($policy['slot_interval_minutes'] ?? self::DEFAULT_SLOT_INTERVAL) ?: self::DEFAULT_SLOT_INTERVAL;
         $minNotice = (int) ($policy['min_notice_minutes'] ?? self::DEFAULT_MIN_NOTICE);
+        $maxAdvance = $policy['max_advance_days'] ?? null;
+        if ($maxAdvance !== null) {
+            $latest = $this->dates->now()
+                ->setTimezone(new \DateTimeZone($branchTz))
+                ->modify('+' . (int) $maxAdvance . ' days');
+            if ($date > $latest->format('Y-m-d')) {
+                return [];
+            }
+        }
 
         $earliest = $this->dates->now()->modify("+{$minNotice} minutes");
         [$dayStart, $dayEnd] = $this->dates->localDayToUtcRange($date, $branchTz);
 
-        $business = $this->pages->businessHours($tenantId, (int) $branch['id'], $weekday, $date);
+        $branchOverride = $this->pages->branchOverride($tenantId, (int) $branch['id'], $date);
+        if ($branchOverride !== null && (int) $branchOverride['is_closed'] === 1) {
+            return [];
+        }
+
+        $business = $branchOverride !== null && $branchOverride['opens_at'] !== null && $branchOverride['closes_at'] !== null
+            ? [['opens_at' => $branchOverride['opens_at'], 'closes_at' => $branchOverride['closes_at']]]
+            : $this->pages->businessHours($tenantId, (int) $branch['id'], $weekday, $date);
         $staffIds = array_map(static fn($s): int => (int) $s['id'], $staff);
         $schedules = $this->pages->staffSchedules($tenantId, $staffIds, (int) $branch['id'], $weekday, $date);
         $breaks = $this->pages->staffBreaks($tenantId, $staffIds, $weekday, $date);
         $occupied = $this->pages->occupiedRanges($tenantId, $staffIds, $this->dates->toDb($dayStart), $this->dates->toDb($dayEnd));
+        $absences = $this->pages->staffAbsences($tenantId, $staffIds, $this->dates->toDb($dayStart), $this->dates->toDb($dayEnd));
+        $branchBlocked = $this->pages->branchBlockedRanges($tenantId, (int) $branch['id'], $this->dates->toDb($dayStart), $this->dates->toDb($dayEnd));
 
         $duration = (int) $service['duration_minutes'];
         $byStaff = [];
         foreach ($schedules as $row) {
             $byStaff[(int) $row['staff_id']][] = [(int) $this->minutes($row['starts_at']), (int) $this->minutes($row['ends_at'])];
+        }
+        foreach ($this->pages->staffOverrides($tenantId, $staffIds, $date) as $override) {
+            $sid = (int) $override['staff_id'];
+            $byStaff[$sid] = (int) $override['is_closed'] === 1
+                ? []
+                : [[$this->minutes((string) $override['opens_at']), $this->minutes((string) $override['closes_at'])]];
         }
         $breaksByStaff = [];
         foreach ($breaks as $row) {
@@ -83,6 +107,21 @@ final class AvailabilityService
                 $this->minutesFromDb($row['occupied_start_at'], $dayStart, $branchTz),
                 $this->minutesFromDb($row['occupied_end_at'], $dayStart, $branchTz),
             ];
+        }
+        foreach ($absences as $row) {
+            $occupiedByStaff[(int) $row['staff_id']][] = [
+                $this->minutesFromDb($row['starts_at'], $dayStart, $branchTz),
+                $this->minutesFromDb($row['ends_at'], $dayStart, $branchTz),
+            ];
+        }
+        foreach ($branchBlocked as $row) {
+            $busy = [
+                $this->minutesFromDb($row['starts_at'], $dayStart, $branchTz),
+                $this->minutesFromDb($row['ends_at'], $dayStart, $branchTz),
+            ];
+            foreach ($staffIds as $sid) {
+                $occupiedByStaff[$sid][] = $busy;
+            }
         }
 
         $businessWindows = array_map(

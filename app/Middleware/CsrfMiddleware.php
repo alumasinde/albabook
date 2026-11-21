@@ -45,6 +45,12 @@ final class CsrfMiddleware implements MiddlewareInterface
         $hasValidCookie = $cookieToken !== null && $this->csrf->isValidToken($cookieToken, $binding);
 
         if (!$request->isMethodSafe()) {
+            // The support entry exchange arrives as a cross-host POST from the
+            // admin console. Its credential is a single-use, short-lived code,
+            // so a forged request can only waste the attacker's own code.
+            if ($request->path() === '/support/enter') {
+                return $next($request);
+            }
             if (!$this->originAllowed($request)) {
                 throw HttpException::csrfMismatch();
             }

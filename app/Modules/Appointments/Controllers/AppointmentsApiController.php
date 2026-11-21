@@ -150,7 +150,7 @@ final class AppointmentsApiController
         }
 
         try {
-            $row = $this->transitions->transition($tenant->tenantId, $uuid, $to, $version, $membership->userId);
+            $row = $this->transitions->transition($tenant->tenantId, $uuid, $to, $version, $membership->actorUserId());
         } catch (TransitionException $e) {
             return ApiResponse::error($e->apiCode, $e->getMessage(), $e->status, $e->fields ?: null);
         }
@@ -255,7 +255,7 @@ final class AppointmentsApiController
                 'dashboard',
                 'en',
                 $tenant->currency,
-                $membership->userId,
+                $membership->actorUserId(),
                 'tenant_user',
             );
         } catch (TransitionException $e) {

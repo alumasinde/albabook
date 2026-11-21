@@ -6,17 +6,23 @@ namespace App\Modules\Auth\Services;
 
 use App\Modules\Auth\Context\MembershipContext;
 use App\Tenancy\RoleRepository;
+use App\Tenancy\TenantAccessChecker;
 use App\Tenancy\TenantMembershipRepository;
+use App\Tenancy\TenantRepository;
 
 /**
  * Builds the per-request permission set for one (tenant, user) membership.
- * Empty branch rows mean all branches (decisions.md D-007).
+ * Empty branch rows mean all branches (decisions.md D-007). The tenant's
+ * account-level allowed operations are stamped onto the context so every
+ * permission check also honours the tenant status (pending, cancelled…).
  */
 final class MembershipContextFactory
 {
     public function __construct(
         private readonly TenantMembershipRepository $memberships,
         private readonly RoleRepository $roles,
+        private readonly TenantRepository $tenants,
+        private readonly TenantAccessChecker $access,
     ) {}
 
     public function build(int $userId, int $tenantId): ?MembershipContext
@@ -28,6 +34,8 @@ final class MembershipContextFactory
 
         $tenantUserId = (int) $membership['id'];
         $branchIds = $this->memberships->branchIds($tenantId, $tenantUserId);
+        $tenant = $this->tenants->findById($tenantId);
+        $operations = $tenant === null ? [] : $this->access->allowedOperations((string) $tenant['status']);
         $roleSlugs = array_map(
             static fn(array $role): string => (string) $role['slug'],
             $this->roles->roleSummariesForMembership($tenantId, $tenantUserId),
@@ -40,6 +48,7 @@ final class MembershipContextFactory
             roleSlugs: array_values($roleSlugs),
             permissions: $this->roles->permissionIdentifiersForMembership($tenantId, $tenantUserId),
             branchIds: $branchIds === [] ? null : array_values($branchIds),
+            tenantOperations: $operations,
         );
     }
 }

@@ -21,6 +21,7 @@ use App\Shared\I18n\Translator;
 use App\Shared\Logging\LoggerFactory;
 use App\Shared\Mail\LogMailer;
 use App\Shared\Mail\Mailer;
+use App\Shared\Mail\SmtpMailer;
 use App\Shared\Money\CurrencyCatalog;
 use App\Shared\Money\CurrencyFormatter;
 use App\Shared\Money\DatabaseCurrencyCatalog;
@@ -93,12 +94,26 @@ return static function (Container $c, Config $config, string $basePath): void {
 
     $c->set(PasswordPolicy::class, static fn(): PasswordPolicy => new PasswordPolicy($config, $basePath));
 
-    $c->set(Mailer::class, static fn(): Mailer => new LogMailer(
-        $basePath . '/' . $config->string('mail.log_path', 'storage/logs/mail.log'),
-        $config->string('mail.from_address'),
-        $config->string('mail.from_name', 'AlbaBook'),
-        in_array($config->string('app.env'), ['staging', 'production'], true),
-    ));
+    $c->set(Mailer::class, static function () use ($config, $basePath): Mailer {
+        if ($config->string('mail.transport') === 'smtp') {
+            return new SmtpMailer(
+                $config->string('mail.smtp.host'),
+                $config->int('mail.smtp.port', 587),
+                $config->string('mail.smtp.encryption', 'tls'),
+                $config->string('mail.smtp.username'),
+                $config->string('mail.smtp.password'),
+                $config->string('mail.from_address'),
+                $config->string('mail.from_name', 'AlbaBook'),
+            );
+        }
+
+        return new LogMailer(
+            $basePath . '/' . $config->string('mail.log_path', 'storage/logs/mail.log'),
+            $config->string('mail.from_address'),
+            $config->string('mail.from_name', 'AlbaBook'),
+            in_array($config->string('app.env'), ['staging', 'production'], true),
+        );
+    });
 
     $c->set(Translator::class, static fn(Container $c): Translator => new Translator(
         $basePath . '/' . $config->string('i18n.path', 'lang'),

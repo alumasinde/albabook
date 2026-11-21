@@ -57,6 +57,13 @@ final class TwoFactorController
 
         $code = (string) $request->input('code', '');
         if (!$this->mfa->verify(MfaSubject::User, $session->userId, $code, $request)) {
+            if ($this->sessions->recordMfaFailure($session->sessionId) >= MfaService::MAX_ATTEMPTS) {
+                $this->sessions->revoke($session->sessionId);
+
+                return Response::redirect('/login?status=mfa_locked')
+                    ->withCookie($this->cookies->clearUserSession($request));
+            }
+
             return $this->view->response('auth/two-factor.twig', [
                 'error' => 'That code is not correct. Try again or use a recovery code.',
                 'next' => LocalRedirect::next($request, '/dashboard'),

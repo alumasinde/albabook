@@ -12,6 +12,7 @@ use App\Modules\Auth\Services\MfaService;
 use App\Modules\Platform\Context\PlatformAuthContext;
 use App\Modules\Platform\Dto\ResolvedPlatformSession;
 use App\Modules\Platform\Services\PlatformAuthenticationService;
+use App\Modules\Platform\Services\PlatformSessionService;
 use App\Shared\Security\AuthCookieFactory;
 
 final class TwoFactorController
@@ -21,6 +22,7 @@ final class TwoFactorController
         private readonly PlatformAuthContext $auth,
         private readonly MfaService $mfa,
         private readonly PlatformAuthenticationService $authentication,
+        private readonly PlatformSessionService $sessions,
         private readonly AuthCookieFactory $cookies,
     ) {}
 
@@ -50,6 +52,13 @@ final class TwoFactorController
         }
 
         if (!$this->mfa->verify(MfaSubject::PlatformUser, $user->id, (string) $request->input('code', ''), $request)) {
+            if ($this->sessions->recordMfaFailure($session->sessionId) >= MfaService::MAX_ATTEMPTS) {
+                $this->sessions->revoke($session->sessionId);
+
+                return Response::redirect('/login?status=mfa_locked')
+                    ->withCookie($this->cookies->clearPlatformSession($request));
+            }
+
             return $this->view->response('admin/two-factor.twig', [
                 'error' => 'That code is not correct. Try again or use a recovery code.',
             ], 422);

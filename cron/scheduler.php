@@ -3,14 +3,41 @@
 declare(strict_types=1);
 
 /*
- * Cron entry point, run every minute:
- *   * * * * * php /var/www/albabook/cron/scheduler.php
+ * Cron entry — run every minute:
+ *   * * * * * php /path/to/albabook/cron/scheduler.php
  *
- * Phase 4 schedules hold cleanup and the booking integrity check; Phase 8 the
- * reminder scheduler (plan.md §20.3). Each task will take a MySQL named lock
- * so overlapping cron runs cannot double-execute.
+ * One bounded pass over every queue plus the housekeeping sweep and the
+ * night-audit reconciliation (stale pending -> expired, stale confirmed ->
+ * no_show, judged against each tenant's local business day). For
+ * continuous throughput run the workers/ scripts under a supervisor
+ * instead.
  */
 
-$app = (require __DIR__ . '/../bootstrap/app.php')();
+use App\Console\Commands\AuditDailyCommand;
+use App\Console\Output;
+use App\Modules\Integrations\Services\OutboxDispatcher;
+use App\Modules\Integrations\Services\WebhookSender;
+use App\Modules\Notifications\Services\NotificationDispatcher;
+use App\Modules\Notifications\Services\ReminderService;
+use App\Modules\System\Services\CleanupService;
 
+$app = (require __DIR__ . '/../bootstrap/app.php')();
+$container = $app->container();
+
+$quiet = new Output(fopen('php://temp', 'w'), fopen('php://temp', 'w'));
+
+$housekeeping = $container->get(CleanupService::class);
+$done = $housekeeping->expireHolds()
+    + $housekeeping->expireVerificationCodes()
+    + $housekeeping->recoverStuckNotifications();
+$housekeeping->pruneRateLimits();
+
+$done += $container->get(ReminderService::class)->dispatchBatch(50)
+    + $container->get(NotificationDispatcher::class)->dispatchBatch(50)
+    + $container->get(OutboxDispatcher::class)->dispatchBatch(50)
+    + $container->get(WebhookSender::class)->dispatchBatch(20);
+
+$container->get(AuditDailyCommand::class)->run(['--apply'], $quiet);
+
+fwrite(STDOUT, "scheduler: {$done} job(s) processed.\n");
 exit(0);

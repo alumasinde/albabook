@@ -7,10 +7,11 @@ namespace App\Modules\Platform\Support;
 use App\Shared\Time\Clock;
 
 /**
- * HMAC-signed token that carries a support session into the tenant host. The
- * same value is the emailed/URL entry token and the tenant-host cookie, so a
- * copied link cannot be reused after expiry or after the admin ends the
- * session (both are re-checked against support_access_sessions).
+ * HMAC-signed token issued as the tenant-host support cookie after a
+ * single-use entry code is exchanged by POST. The cookie value is never sent
+ * in a URL; the entry credential is a separate random code stored hashed on
+ * support_access_sessions. Each issue carries a random jti so a re-exchange
+ * always produces a fresh value (multi-tenancy.md §7).
  */
 final class SupportEntryToken
 {
@@ -30,6 +31,7 @@ final class SupportEntryToken
             'u' => $uuid,
             'e' => $expiresAt,
             'w' => $write,
+            'j' => bin2hex(random_bytes(8)),
         ], JSON_THROW_ON_ERROR));
 
         return $payload . '.' . $this->sign($payload);

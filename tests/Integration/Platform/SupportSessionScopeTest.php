@@ -16,12 +16,14 @@ use App\Modules\Platform\Services\SupportSessionService;
 use App\Modules\Platform\Support\SupportEntryToken;
 use App\Shared\Audit\AuditAction;
 use App\Shared\Audit\AuditLogger;
+use App\Tenancy\Support\SupportAccess;
 use App\Tenancy\TenantSettingsService;
 use Tests\Integration\Support\Phase2TestCase;
 
 final class SupportSessionScopeTest extends Phase2TestCase
 {
     private SupportSessionService $support;
+    private SupportEntryToken $tokens;
     private int $tenantId;
 
     protected function setUp(): void
@@ -33,6 +35,7 @@ final class SupportSessionScopeTest extends Phase2TestCase
 
         $key = ConfigValidator::decodeKey($this->config->string('app.key'));
         self::assertNotNull($key, 'APP_KEY must be configured for support-token tests');
+        $this->tokens = new SupportEntryToken($key, $this->clock);
 
         $this->support = new SupportSessionService(
             $this->config,
@@ -41,9 +44,32 @@ final class SupportSessionScopeTest extends Phase2TestCase
             new SupportSessionRepository($this->db),
             $this->tenants,
             new TenantSettingsService($this->db),
-            new SupportEntryToken($key, $this->clock),
+            $this->tokens,
             new AuditLogger($this->db, $this->clock, new RequestContext()),
         );
+    }
+
+    /**
+     * Exchanges the one-time entry code the way POST /support/enter does:
+     * consume the code, mint a distinct cookie token, then locate it.
+     * @param array<string, mixed> $started
+     */
+    private function cookieToken(array $started): ?string
+    {
+        $claims = $this->support->exchangeEntryCode((string) $started['code']);
+        if ($claims === null) {
+            return null;
+        }
+
+        return $this->tokens->issue($claims['uuid'], $claims['expires_at'], $claims['write_allowed']);
+    }
+
+    /** @param array<string, mixed> $started */
+    private function enter(array $started): ?SupportAccess
+    {
+        $token = $this->cookieToken($started);
+
+        return $token === null ? null : $this->support->locateToken($token);
     }
 
     public function testAReadSessionIsAuditedAndLocatable(): void
@@ -53,7 +79,7 @@ final class SupportSessionScopeTest extends Phase2TestCase
         $started = $this->support->start($admin, $this->tenantId, 'Investigating a missing appointment', 60, false, $this->request());
 
         self::assertFalse($started['write_allowed']);
-        $access = $this->support->locateToken($started['token']);
+        $access = $this->enter($started);
         self::assertNotNull($access);
         self::assertSame($this->tenantId, $access->tenantId);
         self::assertSame($started['id'], $access->sessionId);
@@ -88,11 +114,13 @@ final class SupportSessionScopeTest extends Phase2TestCase
         $this->setTenantWriteOptIn(true);
         $write = $this->support->start($admin, $this->tenantId, 'Fixing a booking after the call', 60, true, $this->request());
         self::assertTrue($write['write_allowed']);
-        self::assertTrue($this->support->locateToken($write['token'])?->writeAllowed);
+        $token = $this->cookieToken($write);
+        self::assertNotNull($token);
+        self::assertTrue($this->support->locateToken($token)?->writeAllowed);
 
         $this->setTenantWriteOptIn(false);
         self::assertFalse(
-            $this->support->locateToken($write['token'])?->writeAllowed,
+            $this->support->locateToken($token)?->writeAllowed,
             'revoking the opt-in downgrades an open session immediately',
         );
     }
@@ -101,10 +129,12 @@ final class SupportSessionScopeTest extends Phase2TestCase
     {
         $admin = $this->admin([PlatformPermission::SupportRead->value]);
         $started = $this->support->start($admin, $this->tenantId, 'Investigating a missing appointment', 60, false, $this->request());
+        $token = $this->cookieToken($started);
+        self::assertNotNull($token);
 
         $this->support->end($admin, $started['id'], $this->request());
 
-        self::assertNull($this->support->locateToken($started['token']));
+        self::assertNull($this->support->locateToken($token));
         $this->support->end($admin, $started['id'], $this->request());
 
         $count = $this->pdo->prepare('SELECT COUNT(*) FROM audit_logs WHERE action = :action');
@@ -119,7 +149,7 @@ final class SupportSessionScopeTest extends Phase2TestCase
 
         $this->clock->advance('+31 minutes');
 
-        self::assertNull($this->support->locateToken($started['token']));
+        self::assertNull($this->enter($started));
     }
 
     public function testDurationIsClampedAndTheReasonIsRequired(): void

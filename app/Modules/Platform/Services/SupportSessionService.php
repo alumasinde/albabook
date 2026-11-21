@@ -40,7 +40,7 @@ final class SupportSessionService implements SupportSessionLocator
     ) {}
 
     /**
-     * @return array{id: int, uuid: string, token: string, expires_at: int, write_allowed: bool, tenant_slug: string}
+     * @return array{id: int, uuid: string, code: string, expires_at: int, write_allowed: bool, tenant_slug: string}
      * @throws HttpException
      */
     public function start(
@@ -103,13 +103,47 @@ final class SupportSessionService implements SupportSessionLocator
             request: $request,
         ));
 
+        // Single-use, short-lived entry code — exchanged by POST on the tenant
+        // host for the real support cookie. Never reusable, never logged.
+        $code = rtrim(strtr(base64_encode(random_bytes(24)), '+/', '-_'), '=');
+        $this->sessions->storeEntryCode(
+            $sessionId,
+            hash('sha256', $code),
+            $now->modify('+2 minutes')->format('Y-m-d H:i:s'),
+        );
+
         return [
             'id' => $sessionId,
             'uuid' => $uuid,
-            'token' => $this->tokens->issue($uuid, $expiresAt->getTimestamp(), $writeAllowed),
+            'code' => $code,
             'expires_at' => $expiresAt->getTimestamp(),
             'write_allowed' => $writeAllowed,
             'tenant_slug' => (string) $tenant['slug'],
+        ];
+    }
+
+    /**
+     * Exchanges a one-time entry code for the claims needed to issue the
+     * tenant-host support cookie. The code is consumed atomically.
+     * @return array{uuid: string, expires_at: int, write_allowed: bool}|null
+     */
+    public function exchangeEntryCode(string $code): ?array
+    {
+        $row = $this->sessions->consumeEntryCode(hash('sha256', $code));
+        if ($row === null) {
+            return null;
+        }
+
+        $expiresAt = new \DateTimeImmutable((string) $row['expires_at'], new \DateTimeZone('UTC'));
+        if ($expiresAt->getTimestamp() <= $this->clock->now()->getTimestamp()) {
+            return null;
+        }
+
+        return [
+            'uuid' => (string) $row['uuid'],
+            'expires_at' => $expiresAt->getTimestamp(),
+            'write_allowed' => (string) $row['scope'] === 'write'
+                && $this->settings->supportWriteEnabled((int) $row['tenant_id']),
         ];
     }
 

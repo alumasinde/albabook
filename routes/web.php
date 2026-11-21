@@ -199,5 +199,6 @@ return static function (RouteRegistrar $r): void {
     // Audited support entry/exit. The token is verified again before the
     // tenant-host cookie is set (multi-tenancy.md §7).
     $r->get('/support/enter', [SupportEntryController::class, 'enter'], name: 'support.enter');
+    $r->post('/support/enter', [SupportEntryController::class, 'exchange'], name: 'support.exchange');
     $r->get('/support/exit', [SupportEntryController::class, 'exit'], name: 'support.exit');
 };

@@ -23,7 +23,8 @@ final class HealthEndpointTest extends DatabaseTestCase
 
             self::assertSame(200, $response->status(), $prefix);
             self::assertSame(['database' => 'ok', 'migrations' => 'ok', 'storage' => 'ok'], $body['checks']);
-            self::assertSame('no-store', $response->header('Cache-Control'));
+            // Authenticated hosts add 'private' via CacheControlMiddleware.
+            self::assertStringContainsString('no-store', (string) $response->header('Cache-Control'));
         }
     }
 

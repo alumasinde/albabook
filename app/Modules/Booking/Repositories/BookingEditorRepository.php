@@ -202,7 +202,7 @@ final class BookingEditorRepository
         )->execute([$tenantId]);
     }
 
-    public function insertVersion(int $tenantId, string $uuid, int $versionNumber, string $snapshot, int $userId): void
+    public function insertVersion(int $tenantId, string $uuid, int $versionNumber, string $snapshot, ?int $userId): void
     {
         $this->db->pdo()->prepare(
             "INSERT INTO booking_page_versions

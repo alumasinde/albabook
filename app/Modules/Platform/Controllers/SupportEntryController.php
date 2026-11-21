@@ -7,34 +7,49 @@ namespace App\Modules\Platform\Controllers;
 use App\Core\Http\HttpException;
 use App\Core\Http\Request;
 use App\Core\Http\Response;
+use App\Modules\Platform\Services\SupportSessionService;
+use App\Modules\Platform\Support\SupportEntryToken;
 use App\Shared\Http\AppUrl;
 use App\Shared\Security\AuthCookieFactory;
-use App\Tenancy\Support\SupportSessionLocator;
 
 /**
- * Tenant-host entry and exit for support sessions. The entry token is HMAC
- * signed and re-checked against support_access_sessions before the cookie is
- * set, so revoking the session kills every outstanding link.
+ * Tenant-host entry and exit for support sessions. Entry is a POST exchange:
+ * the admin console hands over a single-use, short-lived code (never the
+ * cookie credential, never in a URL) which is consumed atomically; a freshly
+ * minted, distinct cookie token is issued in its place (multi-tenancy.md §7).
  */
 final class SupportEntryController
 {
     public function __construct(
-        private readonly SupportSessionLocator $sessions,
+        private readonly SupportSessionService $sessions,
+        private readonly SupportEntryToken $tokens,
         private readonly AuthCookieFactory $cookies,
         private readonly AppUrl $urls,
     ) {}
 
-    /** @param array<string, string> $params */
+    /**
+     * Support entry is POST-only: GETs with a credential in the query string
+     * would leak it into access logs, history and Referer headers.
+     * @param array<string, string> $params
+     */
     public function enter(Request $request, array $params): Response
     {
-        $token = (string) $request->query('token', '');
-        $access = $token === '' ? null : $this->sessions->locateToken($token);
-        if ($access === null) {
+        throw new HttpException(403, 'SUPPORT_ACCESS_DENIED', 'Support sessions are entered from the admin console.');
+    }
+
+    /** @param array<string, string> $params */
+    public function exchange(Request $request, array $params): Response
+    {
+        $code = (string) $request->input('code', '');
+        $claims = $code === '' ? null : $this->sessions->exchangeEntryCode($code);
+        if ($claims === null) {
             throw new HttpException(403, 'SUPPORT_ACCESS_DENIED', 'This support link is invalid or has expired.');
         }
 
+        $token = $this->tokens->issue($claims['uuid'], $claims['expires_at'], $claims['write_allowed']);
+
         return Response::redirect('/dashboard')
-            ->withCookie($this->cookies->support($request, $token, $access->expiresAt->getTimestamp()));
+            ->withCookie($this->cookies->support($request, $token, $claims['expires_at']));
     }
 
     /** @param array<string, string> $params */

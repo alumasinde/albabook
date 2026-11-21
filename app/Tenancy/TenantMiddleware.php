@@ -11,6 +11,7 @@ use App\Core\Http\Response;
 use App\Core\Middleware\MiddlewareInterface;
 use App\Modules\Auth\Context\AuthContext;
 use App\Modules\Auth\Context\CurrentMembership;
+use App\Modules\Auth\Context\MembershipContext;
 use App\Modules\Auth\Mfa\MfaSubject;
 use App\Modules\Auth\Repositories\MfaRepository;
 use App\Modules\Auth\Services\MembershipContextFactory;
@@ -45,6 +46,7 @@ final class TenantMiddleware implements MiddlewareInterface
         private readonly MfaPolicy $mfaPolicy,
         private readonly SupportSessionLocator $support,
         private readonly RequestContext $context,
+        private readonly RoleRepository $roles,
     ) {}
 
     public function process(Request $request, callable $next): Response
@@ -131,8 +133,30 @@ final class TenantMiddleware implements MiddlewareInterface
             throw new HttpException(403, 'SUPPORT_READ_ONLY', 'This support session is read-only.');
         }
 
+        // Support sessions get a synthetic membership so API controllers keep
+        // working: all tenant permissions when writes are allowed, *.view
+        // only otherwise. tenantOperations still gates on account status —
+        // support cannot act on behalf of a cancelled business.
+        $permissions = $this->roles->tenantPermissionIdentifiers();
+        if (!$access->writeAllowed) {
+            $permissions = array_values(array_filter(
+                $permissions,
+                static fn(string $p): bool => str_ends_with($p, '.view') || str_ends_with($p, '.export'),
+            ));
+        }
+        $operations = $this->access->allowedOperations($tenant->status);
+        $membership = new MembershipContext(
+            tenantUserId: 0,
+            userId: 0,
+            tenantId: $tenant->tenantId,
+            roleSlugs: ['platform-support'],
+            permissions: $permissions,
+            branchIds: null,
+            tenantOperations: $operations,
+        );
+
         $this->current->set($tenant);
-        $this->membership->set(null);
+        $this->membership->set($membership);
         $this->context->supportSession = [
             'reason' => $access->reason,
             'expires_at' => $access->expiresAt->getTimestamp(),
@@ -141,6 +165,7 @@ final class TenantMiddleware implements MiddlewareInterface
 
         return $next($request
             ->withAttribute('tenant', $tenant)
+            ->withAttribute('membership', $membership)
             ->withAttribute('support_access', $access));
     }
 }

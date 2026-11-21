@@ -7,6 +7,7 @@ namespace Tests\Integration\Scheduling;
 use App\Modules\Appointments\Repositories\AppointmentRepository;
 use App\Modules\Appointments\Services\ManualBookingService;
 use App\Modules\Appointments\Services\TransitionException;
+use App\Modules\Booking\Repositories\BookingPageRepository;
 use App\Shared\Time\DateTimeService;
 use Tests\Integration\Support\Phase2TestCase;
 
@@ -137,6 +138,7 @@ final class ResourceBookingTest extends Phase2TestCase
         return new ManualBookingService(
             $this->db,
             new AppointmentRepository($this->db),
+            new BookingPageRepository($this->db),
             new DateTimeService($this->clock),
             $this->uuids,
         );

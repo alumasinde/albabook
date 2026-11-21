@@ -37,18 +37,18 @@ final class ReportsApiController
         $data = [
             'from' => substr($from, 0, 10),
             'to' => $toLabel,
-            'summary' => $this->reports->summary($tenant->tenantId, $from, $to),
-            'daily' => $this->reports->daily($tenant->tenantId, $from, $to),
-            'top_services' => $this->reports->topServices($tenant->tenantId, $from, $to),
-            'appointments_by_day' => $this->reports->appointmentsByDay($tenant->tenantId, $from, $to),
-            'by_service' => $this->reports->byService($tenant->tenantId, $from, $to),
-            'noshows_by_service' => $this->reports->noShowsByService($tenant->tenantId, $from, $to),
-            'resource_utilization' => $this->reports->resourceUtilization($tenant->tenantId, $from, $to),
+            'summary' => $this->reports->summary($tenant->tenantId, $from, $to, $membership->branchIds),
+            'daily' => $this->reports->daily($tenant->tenantId, $from, $to, $membership->branchIds),
+            'top_services' => $this->reports->topServices($tenant->tenantId, $from, $to, $membership->branchIds),
+            'appointments_by_day' => $this->reports->appointmentsByDay($tenant->tenantId, $from, $to, $membership->branchIds),
+            'by_service' => $this->reports->byService($tenant->tenantId, $from, $to, $membership->branchIds),
+            'noshows_by_service' => $this->reports->noShowsByService($tenant->tenantId, $from, $to, $membership->branchIds),
+            'resource_utilization' => $this->reports->resourceUtilization($tenant->tenantId, $from, $to, $membership->branchIds),
             'currency' => $this->reports->currency($tenant->tenantId),
         ];
         if ($membership->can('reports.view_financial')) {
-            $data['financial'] = $this->reports->financial($tenant->tenantId, $from, $to);
-            $data['sales_by_day'] = $this->reports->salesByDay($tenant->tenantId, $from, $to);
+            $data['financial'] = $this->reports->financial($tenant->tenantId, $from, $to, $membership->branchIds);
+            $data['sales_by_day'] = $this->reports->salesByDay($tenant->tenantId, $from, $to, $membership->branchIds);
         }
 
         return ApiResponse::ok($data);
@@ -81,7 +81,7 @@ final class ReportsApiController
         }
         if ($type === 'sales') {
             fputcsv($stream, ['Day', 'Payments', 'Gross (minor)', 'Refunded (minor)', 'Net (minor)']);
-            foreach ($this->reports->salesByDay($tenant->tenantId, $from, $to) as $row) {
+            foreach ($this->reports->salesByDay($tenant->tenantId, $from, $to, $membership->branchIds) as $row) {
                 fputcsv($stream, [
                     $row['day'], (int) $row['payments_count'], (int) $row['gross_minor'],
                     (int) $row['refunded_minor'], (int) $row['gross_minor'] - (int) $row['refunded_minor'],
@@ -90,7 +90,7 @@ final class ReportsApiController
         } else {
             $type = 'appointments';
             fputcsv($stream, ['Reference', 'Start', 'End', 'Status', 'Payment', 'Customer', 'Branch', 'Total (minor)', 'Currency']);
-            foreach ($this->reports->exportRows($tenant->tenantId, $from, $to) as $row) {
+            foreach ($this->reports->exportRows($tenant->tenantId, $from, $to, $membership->branchIds) as $row) {
                 fputcsv($stream, [
                     $row['reference'], $row['start_at'], $row['end_at'], $row['status'],
                     $row['payment_status'], $row['customer'], $row['branch'],

@@ -9,17 +9,26 @@ use App\Core\Http\Request;
 use App\Core\Http\Response;
 use App\Core\Middleware\MiddlewareInterface;
 use App\Modules\Auth\Context\AuthContext;
+use App\Tenancy\Support\SupportSessionLocator;
 
 /**
- * Route middleware for authenticated tenant-user pages.
+ * Route middleware for authenticated tenant-user pages. A valid support
+ * session also passes — it outranks the browser's own login
+ * (multi-tenancy.md §7) and is resolved by TenantMiddleware downstream.
  */
 final class RequireAuthMiddleware implements MiddlewareInterface
 {
-    public function __construct(private readonly AuthContext $auth) {}
+    public function __construct(
+        private readonly AuthContext $auth,
+        private readonly SupportSessionLocator $support,
+    ) {}
 
     public function process(Request $request, callable $next): Response
     {
         if ($this->auth->user === null) {
+            if ($this->support->locate($request) !== null) {
+                return $next($request);
+            }
             if ($request->wantsJson()) {
                 throw new HttpException(401, 'UNAUTHENTICATED', 'Sign in to continue.');
             }

@@ -286,6 +286,9 @@
       pay.type = 'button';
       pay.append(el('i', 'fa-solid fa-money-bill-wave'));
       pay.append(document.createTextNode(' Record payment'));
+      // One key per payment attempt window: retries/double-clicks replay the
+      // same key so the server dedupes instead of double-recording the tender.
+      const idemKey = (crypto.randomUUID ? crypto.randomUUID() : 'pay-' + Date.now() + '-' + Math.random().toString(36).slice(2));
       pay.addEventListener('click', () => {
         error.classList.add('hidden');
         ui.setBusy(pay, true, 'Recording…');
@@ -293,6 +296,7 @@
           method: method.value,
           amount_minor: Math.round(Number(amount.value || 0) * 100),
           reference: ref.value.trim(),
+          idempotency_key: idemKey,
         })
           .then((ticket) => this._done(ticket))
           .catch((e) => {

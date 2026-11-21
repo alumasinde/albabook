@@ -75,6 +75,17 @@ final class SessionRepository
             ->execute(['at' => $at, 'id' => $sessionId]);
     }
 
+    /** Increment the failed-MFA counter and return the new value. */
+    public function incrementMfaAttempts(int $sessionId): int
+    {
+        $this->db->pdo()->prepare('UPDATE user_sessions SET mfa_attempts = mfa_attempts + 1 WHERE id = :id')
+            ->execute(['id' => $sessionId]);
+        $stmt = $this->db->pdo()->prepare('SELECT mfa_attempts FROM user_sessions WHERE id = :id');
+        $stmt->execute(['id' => $sessionId]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
     public function revoke(int $sessionId, string $at): void
     {
         $this->db->pdo()->prepare('UPDATE user_sessions SET revoked_at = COALESCE(revoked_at, :at) WHERE id = :id')

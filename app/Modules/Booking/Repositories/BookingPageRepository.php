@@ -224,6 +224,86 @@ final class BookingPageRepository
     }
 
     /**
+     * Approved leave and staff-scoped blocked periods overlapping a UTC
+     * window. Mirrors the write-path check in
+     * AppointmentRepository::staffUnavailableConflict.
+     *
+     * @param list<int> $staffIds
+     * @return list<array{staff_id: int, starts_at: string, ends_at: string}>
+     */
+    public function staffAbsences(int $tenantId, array $staffIds, string $fromUtc, string $toUtc): array
+    {
+        if ($staffIds === []) {
+            return [];
+        }
+        $in = implode(',', array_map('intval', $staffIds));
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT staff_id, starts_at, ends_at FROM staff_leave
+              WHERE tenant_id = :t AND staff_id IN ({$in}) AND status = 'approved'
+                AND starts_at < :to AND ends_at > :from
+             UNION ALL
+             SELECT staff_id, starts_at, ends_at FROM blocked_periods
+              WHERE tenant_id = :t2 AND staff_id IN ({$in})
+                AND starts_at < :to2 AND ends_at > :from2",
+        );
+        $stmt->execute(['t' => $tenantId, 'to' => $toUtc, 'from' => $fromUtc,
+            't2' => $tenantId, 'to2' => $toUtc, 'from2' => $fromUtc]);
+
+        return array_values($stmt->fetchAll());
+    }
+
+    /**
+     * Branch-scoped blocked periods overlapping a UTC window.
+     * @return list<array{starts_at: string, ends_at: string}>
+     */
+    public function branchBlockedRanges(int $tenantId, int $branchId, string $fromUtc, string $toUtc): array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT starts_at, ends_at FROM blocked_periods
+              WHERE tenant_id = :t AND branch_id = :b
+                AND starts_at < :to AND ends_at > :from',
+        );
+        $stmt->execute(['t' => $tenantId, 'b' => $branchId, 'to' => $toUtc, 'from' => $fromUtc]);
+
+        return array_values($stmt->fetchAll());
+    }
+
+    /** Branch-level schedule override for a local date, if one exists.
+     * @return array{is_closed: int, opens_at: ?string, closes_at: ?string}|null
+     */
+    public function branchOverride(int $tenantId, int $branchId, string $localDate): ?array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT is_closed, opens_at, closes_at FROM schedule_overrides
+              WHERE tenant_id = :t AND branch_id = :b AND local_date = :d',
+        );
+        $stmt->execute(['t' => $tenantId, 'b' => $branchId, 'd' => $localDate]);
+        $row = $stmt->fetch();
+
+        return $row === false ? null : $row;
+    }
+
+    /**
+     * Staff-level schedule overrides for a local date.
+     * @param list<int> $staffIds
+     * @return list<array{staff_id: int, is_closed: int, opens_at: ?string, closes_at: ?string}>
+     */
+    public function staffOverrides(int $tenantId, array $staffIds, string $localDate): array
+    {
+        if ($staffIds === []) {
+            return [];
+        }
+        $in = implode(',', array_map('intval', $staffIds));
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT staff_id, is_closed, opens_at, closes_at FROM schedule_overrides
+              WHERE tenant_id = :t AND staff_id IN ({$in}) AND local_date = :d",
+        );
+        $stmt->execute(['t' => $tenantId, 'd' => $localDate]);
+
+        return array_values($stmt->fetchAll());
+    }
+
+    /**
      * Occupied ranges (buffer-inclusive) for staff within a UTC window.
      * Mirrors the write-path check in AppointmentRepository::staffOccupied.
      *

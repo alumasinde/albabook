@@ -3,16 +3,17 @@
 declare(strict_types=1);
 
 /*
- * webhooks worker — implemented in Phase 9 (plan.md §20.3).
- *
- * Contract every worker will follow (multi-tenancy.md "Background workers"):
- * - Claim jobs with SELECT ... FOR UPDATE SKIP LOCKED in short transactions.
- * - Build a fresh TenantContext per job from the job's stored tenant_id.
- * - Never hold a transaction open across an external HTTP call.
- * - Reset request-scoped state (RequestContext) between jobs.
+ * webhooks worker — POSTs pending webhook_deliveries to endpoint URLs,
+ * signed with the endpoint secret (X-Albabook-Signature). Failing rows
+ * retry up to five attempts, then stay 'failed' for review.
  */
+
+use App\Core\Queue\Worker;
+use App\Modules\Integrations\Services\WebhookSender;
 
 $app = (require __DIR__ . '/../bootstrap/app.php')();
 
-fwrite(STDOUT, "webhooks worker: not implemented until Phase 9.\n");
-exit(0);
+exit(Worker::run(
+    'webhooks',
+    static fn(): int => $app->container()->get(WebhookSender::class)->dispatchBatch(20),
+));

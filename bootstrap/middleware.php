@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Middleware\AuthenticationMiddleware;
+use App\Middleware\CacheControlMiddleware;
 use App\Middleware\CsrfMiddleware;
 use App\Middleware\ErrorHandlingMiddleware;
 use App\Middleware\LocaleMiddleware;
@@ -37,9 +38,9 @@ return [
         // Authentication runs after CSRF so a state-changing request is
         // rejected before any session work, and before route middleware so
         // RequireAuth/Tenant/Permission can rely on AuthContext.
-        'app' => [SpaFragmentMiddleware::class, CsrfMiddleware::class, AuthenticationMiddleware::class],
+        'app' => [CacheControlMiddleware::class, SpaFragmentMiddleware::class, CsrfMiddleware::class, AuthenticationMiddleware::class],
         'book' => [CsrfMiddleware::class],
-        'admin' => [CsrfMiddleware::class, PlatformAuthenticationMiddleware::class],
+        'admin' => [CacheControlMiddleware::class, CsrfMiddleware::class, PlatformAuthenticationMiddleware::class],
         'api' => [],
     ],
 ];

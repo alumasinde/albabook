@@ -26,6 +26,12 @@ use App\Shared\Time\Clock;
  */
 final class MfaService
 {
+    /**
+     * Failed verification attempts allowed on one pending session before it
+     * is revoked (auth.md §8c: codes are guessable, attempts must be capped).
+     */
+    public const MAX_ATTEMPTS = 5;
+
     public function __construct(
         private readonly Config $config,
         private readonly Clock $clock,

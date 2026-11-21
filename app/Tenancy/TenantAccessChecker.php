@@ -27,6 +27,14 @@ final class TenantAccessChecker
         }
     }
 
+    /** Operations a tenant status permits; ['*'] means unrestricted.
+     * @return list<string>
+     */
+    public function allowedOperations(string $status): array
+    {
+        return $this->matrix()->operations($status);
+    }
+
     public function allows(TenantContext $tenant, string $operation): bool
     {
         try {

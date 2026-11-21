@@ -44,10 +44,20 @@ final class SupportSessionController
             return Response::redirect('/dashboard?status=support_denied');
         }
 
-        return Response::redirect($this->urls->app(
-            '/support/enter?token=' . urlencode($session['token']),
-            $request,
-        ));
+        // Hand the single-use code to the tenant host via an auto-submitted
+        // POST form — the credential never touches a URL, access log or
+        // Referer header (audit fix: bearer tokens in URLs were replayable).
+        $entryUrl = $this->urls->app('/support/enter', $request);
+        $code = htmlspecialchars($session['code'], ENT_QUOTES);
+
+        return Response::html(<<<HTML
+            <!doctype html><html><head><meta charset="utf-8"><title>Entering support session…</title></head>
+            <body>
+            <form method="post" action="{$entryUrl}"><input type="hidden" name="code" value="{$code}">
+            <noscript><p>Press continue to open the support session.</p><button type="submit">Continue</button></noscript></form>
+            <script>document.forms[0].submit();</script>
+            </body></html>
+            HTML);
     }
 
     /** @param array<string, string> $params */

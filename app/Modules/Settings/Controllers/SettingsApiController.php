@@ -426,6 +426,13 @@ final class SettingsApiController
         if ($branchId > 0 && !$this->settings->branchValid($tenant->tenantId, $branchId)) {
             $fields['branch_id'] = 'Choose a valid branch.';
         }
+        // Branch-limited members may only create accounts for their own
+        // branches; a NULL branch account is tenant-wide.
+        if ($fields === [] && $membership->branchIds !== null) {
+            if ($branchId === 0 || !in_array($branchId, $membership->branchIds, true)) {
+                $fields['branch_id'] = 'You do not have access to that branch.';
+            }
+        }
 
         $credentials = trim((string) ($body['credentials'] ?? ''));
         if ($credentials === '') {
@@ -463,6 +470,11 @@ final class SettingsApiController
         $account = $this->settings->findPaymentAccount($tenant->tenantId, (string) $params['uuid']);
         if ($account === null) {
             return ApiResponse::error('NOT_FOUND', 'Account not found.', 404);
+        }
+        $accountBranch = $account['branch_id'] === null ? null : (int) $account['branch_id'];
+        if ($membership->branchIds !== null
+            && ($accountBranch === null || !in_array($accountBranch, $membership->branchIds, true))) {
+            return ApiResponse::error('FORBIDDEN', 'You do not have access to this branch.', 403);
         }
 
         $status = (string) ($request->body()['status'] ?? $account['status']);

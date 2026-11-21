@@ -7,6 +7,7 @@ namespace App\Modules\Appointments\Services;
 use App\Core\Database\Database;
 use App\Core\Database\IsolationLevel;
 use App\Modules\Appointments\Repositories\AppointmentRepository;
+use App\Modules\Booking\Repositories\BookingPageRepository;
 use App\Shared\Support\UuidFactory;
 use App\Shared\Time\DateTimeService;
 
@@ -24,6 +25,7 @@ final class ManualBookingService
     public function __construct(
         private readonly Database $db,
         private readonly AppointmentRepository $appointments,
+        private readonly BookingPageRepository $pages,
         private readonly DateTimeService $dates,
         private readonly UuidFactory $uuids,
     ) {}
@@ -67,13 +69,24 @@ final class ManualBookingService
         if ($start < $this->dates->now() && $source !== 'dashboard') {
             throw new TransitionException('INVALID_TIME', 'That time has already passed.', 422, ['time' => 'Pick a future time.']);
         }
+        if ($source === 'public_page') {
+            $maxAdvance = $this->pages->policy($tenantId, $branchId)['max_advance_days'] ?? null;
+            if ($maxAdvance !== null) {
+                $latest = $this->dates->now()
+                    ->setTimezone(new \DateTimeZone($branchTimezone))
+                    ->modify('+' . (int) $maxAdvance . ' days');
+                if ($localDate > $latest->format('Y-m-d')) {
+                    throw new TransitionException('INVALID_TIME', 'That date is too far ahead.', 422, ['date' => 'Pick a nearer date.']);
+                }
+            }
+        }
         $end = $start->modify('+' . $duration . ' minutes');
         $occupiedStart = $start->modify('-' . $bufferBefore . ' minutes');
         $occupiedEnd = $end->modify('+' . $bufferAfter . ' minutes');
 
         return $this->db->transaction(function () use (
             $tenantId, $branchId, $branchTimezone, $staffId, $service, $duration, $bufferBefore, $bufferAfter,
-            $price, $start, $end, $occupiedStart, $occupiedEnd,
+            $price, $start, $end, $occupiedStart, $occupiedEnd, $localDate,
             $customer, $source, $locale, $currency, $actorUserId, $actorType,
         ): array {
             $staff = $this->appointments->lockStaff($tenantId, $staffId);
@@ -89,28 +102,42 @@ final class ManualBookingService
                 if ($conflicts > 0) {
                     throw new TransitionException('SLOT_UNAVAILABLE', 'That time is no longer available.', 409, ['time' => 'Pick another time.']);
                 }
+                if ($this->appointments->staffUnavailableConflict(
+                    $tenantId,
+                    $staffId,
+                    $branchId,
+                    $localDate,
+                    $this->dates->toDb($occupiedStart),
+                    $this->dates->toDb($occupiedEnd),
+                ) > 0) {
+                    throw new TransitionException('STAFF_UNAVAILABLE', 'That staff member is not available at that time.', 409, ['time' => 'Pick another time.']);
+                }
 
                 $resourceAssignments = [];
                 $tz = new \DateTimeZone($branchTimezone);
                 $localStart = $occupiedStart->setTimezone($tz);
                 $localEnd = $occupiedEnd->setTimezone($tz);
                 foreach ($this->appointments->serviceRequirements($tenantId, (int) $service['id']) as $requirement) {
+                    $resourceTypeId = (int) $requirement['resource_type_id'];
+                    $quantity = (int) $requirement['quantity'];
+                    $this->appointments->lockResourcesForType($tenantId, $branchId, $resourceTypeId);
                     $resourceId = $this->appointments->freeResourceForType(
                         $tenantId,
                         $branchId,
-                        (int) $requirement['resource_type_id'],
+                        $resourceTypeId,
                         $this->dates->toDb($occupiedStart),
                         $this->dates->toDb($occupiedEnd),
                         (int) $localStart->format('N'),
                         $localStart->format('H:i:s'),
                         $localEnd->format('H:i:s'),
+                        $quantity,
                     );
                     if ($resourceId === null) {
                         throw new TransitionException('RESOURCE_UNAVAILABLE', 'No room or equipment is free at that time.', 409, ['time' => 'Pick another time.']);
                     }
                     $resourceAssignments[] = [
                         'resource_id' => $resourceId,
-                        'quantity' => (int) $requirement['quantity'],
+                        'quantity' => $quantity,
                     ];
                 }
 

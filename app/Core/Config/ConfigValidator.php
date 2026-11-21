@@ -110,8 +110,12 @@ final class ConfigValidator
             $errors[] = 'Support session durations must be positive and the default cannot exceed the maximum.';
         }
 
-        if (!in_array($config->string('mail.transport'), ['log'], true)) {
-            $errors[] = 'MAIL_TRANSPORT must be "log" until a delivery transport is implemented.';
+        if (!in_array($config->string('mail.transport'), ['log', 'smtp'], true)) {
+            $errors[] = 'MAIL_TRANSPORT must be "log" or "smtp".';
+        }
+        if ($config->string('mail.transport') === 'smtp'
+            && ($config->string('mail.smtp.host') === '' || $config->string('mail.from_address') === '')) {
+            $errors[] = 'MAIL_TRANSPORT=smtp requires MAIL_HOST and MAIL_FROM_ADDRESS.';
         }
         if ($deployed && $config->string('mail.transport') === 'log') {
             $errors[] = 'MAIL_TRANSPORT=log is refused in staging and production; configure a real transport before deploying.';

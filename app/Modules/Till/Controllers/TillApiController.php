@@ -50,6 +50,9 @@ final class TillApiController
         if ($appointment === null) {
             return ApiResponse::error('NOT_FOUND', 'Appointment not found.', 404);
         }
+        if (!$membership->canAccessBranch((int) $appointment['branch_id'])) {
+            return ApiResponse::error('FORBIDDEN', 'You do not have access to this branch.', 403);
+        }
 
         return ApiResponse::ok($this->payload($tenant, $membership, $appointment));
     }
@@ -76,6 +79,7 @@ final class TillApiController
                 if ($appointment === null) {
                     throw new TransitionException('NOT_FOUND', 'Appointment not found.', 404);
                 }
+                $this->assertBranch($membership, $appointment);
                 $this->assertOpen($appointment);
 
                 $line = $this->buildLine($tenant->tenantId, $kind, $body);
@@ -84,7 +88,7 @@ final class TillApiController
                 }
 
                 $line['line_no'] = $this->till->nextLineNo($tenant->tenantId, (int) $appointment['id']);
-                $line['added_by_user_id'] = $membership->userId;
+                $line['added_by_user_id'] = $membership->actorUserId();
                 $this->till->insertSaleItem($tenant->tenantId, (int) $appointment['id'], $line);
 
                 $derived = $this->refreshTotals($tenant->tenantId, (int) $appointment['id']);
@@ -121,6 +125,7 @@ final class TillApiController
                 if ($appointment === null) {
                     throw new TransitionException('NOT_FOUND', 'Appointment not found.', 404);
                 }
+                $this->assertBranch($membership, $appointment);
                 $this->assertOpen($appointment);
 
                 $item = $this->till->findSaleItem($tenant->tenantId, (int) $appointment['id'], (int) $params['id']);
@@ -164,6 +169,7 @@ final class TillApiController
                 if ($appointment === null) {
                     throw new TransitionException('NOT_FOUND', 'Appointment not found.', 404);
                 }
+                $this->assertBranch($membership, $appointment);
                 $this->assertOpen($appointment);
 
                 $item = $this->till->findSaleItem($tenant->tenantId, (int) $appointment['id'], (int) $params['id']);
@@ -219,17 +225,49 @@ final class TillApiController
             $fields['reference'] = 'Reference is too long.';
         }
 
+        // Client-supplied idempotency key: retries (double-click, timeout,
+        // retry) replay with the same key and hit uq_payments_idempotency
+        // instead of recording a second tender.
+        $idempotencyKey = trim((string) ($body['idempotency_key'] ?? ''));
+        if (mb_strlen($idempotencyKey) < 8 || mb_strlen($idempotencyKey) > 100 || preg_match('/[^\x20-\x7E]/', $idempotencyKey) === 1) {
+            $fields['idempotency_key'] = 'A payment idempotency key is required.';
+        }
+
         if ($fields !== []) {
             return ApiResponse::error('VALIDATION', 'Fix the highlighted fields.', 422, $fields);
         }
 
         try {
-            $payload = $this->db->transaction(function () use ($tenant, $membership, $params, $method, $amount, $reference): array {
+            $payload = $this->db->transaction(function () use ($tenant, $membership, $params, $method, $amount, $reference, $idempotencyKey): array {
                 $appointment = $this->till->appointment($tenant->tenantId, (string) $params['uuid'], true);
                 if ($appointment === null) {
                     throw new TransitionException('NOT_FOUND', 'Appointment not found.', 404);
                 }
+                $this->assertBranch($membership, $appointment);
                 $this->assertOpen($appointment);
+
+                // Idempotent replay before any validation: a retry of a
+                // payment that already landed returns the recorded result.
+                if ($this->till->paymentByIdempotencyKey($tenant->tenantId, (int) $appointment['id'], $idempotencyKey) !== null) {
+                    $derived = $this->refreshTotals($tenant->tenantId, (int) $appointment['id']);
+                    $appointment['payment_status'] = $derived['payment_status'];
+                    $appointment['total_amount_minor'] = $derived['total_minor'];
+
+                    return $this->payload($tenant, $membership, $appointment);
+                }
+
+                // Overpayment cap: nothing may be recorded beyond the balance
+                // actually due (net of succeeded refunds).
+                $totals = $this->computeTotals($tenant->tenantId, (int) $appointment['id']);
+                $outstanding = max(0, $totals['total_minor'] - $totals['paid_minor'] + $totals['refunded_minor']);
+                if ((int) $amount > $outstanding) {
+                    throw new TransitionException(
+                        'PAYMENT_EXCEEDS_BALANCE',
+                        'The amount exceeds the outstanding balance.',
+                        422,
+                        ['amount_minor' => 'The amount exceeds the outstanding balance.'],
+                    );
+                }
 
                 $this->till->insertPayment($tenant->tenantId, [
                     'uuid' => $this->uuids->generate(),
@@ -244,8 +282,8 @@ final class TillApiController
                     'currency' => $appointment['currency'],
                     'status' => 'succeeded',
                     'received_at' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s'),
-                    'recorded_by_user_id' => $membership->userId,
-                    'idempotency_key' => $this->uuids->generate(),
+                    'recorded_by_user_id' => $membership->actorUserId(),
+                    'idempotency_key' => $idempotencyKey,
                 ]);
 
                 $derived = $this->refreshTotals($tenant->tenantId, (int) $appointment['id']);
@@ -257,6 +295,19 @@ final class TillApiController
         } catch (TransitionException $e) {
             return ApiResponse::error($e->apiCode, $e->getMessage(), $e->status, $e->fields ?: null);
         } catch (\PDOException $e) {
+            if (str_contains($e->getMessage(), 'uq_payments_idempotency')) {
+                // Idempotent replay: the earlier request already recorded this
+                // payment — return the current ticket as if it succeeded again.
+                $appointment = $this->till->appointment($tenant->tenantId, (string) $params['uuid']);
+                if ($appointment !== null && $membership->canAccessBranch((int) $appointment['branch_id'])) {
+                    $derived = $this->refreshTotals($tenant->tenantId, (int) $appointment['id']);
+                    $appointment['payment_status'] = $derived['payment_status'];
+                    $appointment['total_amount_minor'] = $derived['total_minor'];
+
+                    return ApiResponse::ok($this->payload($tenant, $membership, $appointment));
+                }
+                throw $e;
+            }
             if (str_contains($e->getMessage(), 'uq_payments_method_reference')) {
                 return ApiResponse::error('DUPLICATE_REFERENCE', 'That transaction reference is already recorded.', 409);
             }
@@ -292,6 +343,7 @@ final class TillApiController
                 if ($appointment === null) {
                     throw new TransitionException('NOT_FOUND', 'Appointment not found.', 404);
                 }
+                $this->assertBranch($membership, $appointment);
 
                 $payment = $this->till->findPaymentByUuid($tenant->tenantId, (string) $params['payment_uuid']);
                 if ($payment === null || (int) $payment['appointment_id'] !== (int) $appointment['id']) {
@@ -315,7 +367,7 @@ final class TillApiController
                     'status' => 'succeeded',
                     'reason' => $reason !== '' ? $reason : null,
                     'refunded_at' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s'),
-                    'recorded_by_user_id' => $membership->userId,
+                    'recorded_by_user_id' => $membership->actorUserId(),
                 ]);
 
                 $derived = $this->refreshTotals($tenant->tenantId, (int) $appointment['id']);
@@ -347,6 +399,7 @@ final class TillApiController
                 if ($appointment === null) {
                     throw new TransitionException('NOT_FOUND', 'Appointment not found.', 404);
                 }
+                $this->assertBranch($membership, $appointment);
                 $this->assertOpen($appointment);
 
                 $totals = $this->computeTotals($tenant->tenantId, (int) $appointment['id']);
@@ -384,7 +437,7 @@ final class TillApiController
                     (int) $appointment['id'],
                     'status.completed',
                     'tenant_user',
-                    $membership->userId,
+                    $membership->actorUserId(),
                     (string) $appointment['status'],
                     'completed',
                 );
@@ -566,6 +619,16 @@ final class TillApiController
         }
 
         $this->till->outbox($tenantId, $this->uuids->generate(), 'payment.received', (int) $appointment['id'], $eventPayload);
+    }
+
+    /** Branch-limited members can only touch tickets at their own branches.
+     * @param array<string, mixed> $appointment
+     */
+    private function assertBranch(MembershipContext $membership, array $appointment): void
+    {
+        if (!$membership->canAccessBranch((int) $appointment['branch_id'])) {
+            throw new TransitionException('FORBIDDEN', 'You do not have access to this branch.', 403);
+        }
     }
 
     /** @param array<string, mixed> $appointment */

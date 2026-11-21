@@ -34,6 +34,42 @@ final class SupportSessionRepository
         return (int) $pdo->lastInsertId();
     }
 
+    /** Stores the one-time entry code (hashed) with a short TTL. */
+    public function storeEntryCode(int $id, string $hash, string $expiresAt): void
+    {
+        $this->db->pdo()->prepare(
+            'UPDATE support_access_sessions SET entry_code_hash = :h, entry_code_expires_at = :e WHERE id = :id',
+        )->execute(['h' => $hash, 'e' => $expiresAt, 'id' => $id]);
+    }
+
+    /**
+     * Atomically consumes a live entry code — the second of two racing
+     * exchanges finds the hash already NULLed and fails. Returns the session
+     * row on success.
+     * @return array<string, mixed>|null
+     */
+    public function consumeEntryCode(string $hash): ?array
+    {
+        $pdo = $this->db->pdo();
+        $stmt = $pdo->prepare(
+            'SELECT * FROM support_access_sessions
+             WHERE entry_code_hash = :h AND entry_code_expires_at > UTC_TIMESTAMP() AND ended_at IS NULL LIMIT 1',
+        );
+        $stmt->execute(['h' => $hash]);
+        $row = $stmt->fetch();
+        if ($row === false) {
+            return null;
+        }
+
+        $consume = $pdo->prepare(
+            'UPDATE support_access_sessions SET entry_code_hash = NULL, entry_code_expires_at = NULL
+             WHERE id = :id AND entry_code_hash = :h',
+        );
+        $consume->execute(['id' => $row['id'], 'h' => $hash]);
+
+        return $consume->rowCount() === 1 ? $row : null;
+    }
+
     /** @return array<string, mixed>|null */
     public function findActiveById(int $id): ?array
     {

@@ -3,16 +3,17 @@
 declare(strict_types=1);
 
 /*
- * reminders worker — implemented in Phase 8 (plan.md §20.3).
- *
- * Contract every worker will follow (multi-tenancy.md "Background workers"):
- * - Claim jobs with SELECT ... FOR UPDATE SKIP LOCKED in short transactions.
- * - Build a fresh TenantContext per job from the job's stored tenant_id.
- * - Never hold a transaction open across an external HTTP call.
- * - Reset request-scoped state (RequestContext) between jobs.
+ * reminders worker — turns due scheduled_notifications rows into real
+ * notification_queue jobs (24h / 2h appointment reminders). Stale rows
+ * (appointment moved or ended) are skipped.
  */
+
+use App\Core\Queue\Worker;
+use App\Modules\Notifications\Services\ReminderService;
 
 $app = (require __DIR__ . '/../bootstrap/app.php')();
 
-fwrite(STDOUT, "reminders worker: not implemented until Phase 8.\n");
-exit(0);
+exit(Worker::run(
+    'reminders',
+    static fn(): int => $app->container()->get(ReminderService::class)->dispatchBatch(50),
+));
