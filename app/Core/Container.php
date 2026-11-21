@@ -103,7 +103,7 @@ final class Container
                 continue;
             }
             throw new ContainerException(
-                "Cannot autowire parameter \${$parameter->getName()} of {$class}; register a factory."
+                "Cannot autowire parameter \${$parameter->getName()} of {$class}; register a factory.",
             );
         }
 

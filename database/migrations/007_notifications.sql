@@ -6,7 +6,7 @@
 -- a worker enqueues rows here and sends outside the transaction
 -- (booking-engine.md §9, §17).
 
-SET NAMES utf8mb4;
+SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 SET time_zone = '+00:00';
 
 CREATE TABLE notification_providers (

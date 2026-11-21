@@ -72,7 +72,7 @@ final class Router
                 foreach ($this->routes[$group->value] ?? [] as $route) {
                     $collector->addRoute($route->methods, $route->path, $route);
                 }
-            }
+            },
         );
     }
 }

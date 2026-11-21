@@ -23,8 +23,7 @@ final class ComponentCatalogueController
     public function __construct(
         private readonly View $view,
         private readonly Config $config,
-    ) {
-    }
+    ) {}
 
     /** @param array<string, string> $params */
     public function show(Request $request, array $params): Response

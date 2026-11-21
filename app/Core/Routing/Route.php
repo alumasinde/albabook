@@ -13,6 +13,7 @@ final readonly class Route
      * @param list<string>                                 $methods
      * @param array{0: class-string, 1: string}            $handler
      * @param list<class-string<MiddlewareInterface>>       $middleware route-specific, run after the group stack
+     * @param array<string, mixed>                          $options    declarative checks read by middleware
      */
     public function __construct(
         public HostGroup $group,
@@ -21,6 +22,6 @@ final readonly class Route
         public array $handler,
         public array $middleware = [],
         public ?string $name = null,
-    ) {
-    }
+        public array $options = [],
+    ) {}
 }

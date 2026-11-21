@@ -1,0 +1,36 @@
+{% extends 'layouts/auth.twig' %}
+
+{% block title %}{{ t('auth.enroll_title') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-semibold text-ink">{{ t('auth.enroll_title') }}</h1>
+<p class="mt-1 text-sm text-muted">{{ t('auth.enroll_subtitle') }}</p>
+
+{% if error %}
+  <div class="mt-6">
+    {% include 'components/feedback/alert.twig' with { tone: 'danger', message: t('auth.enroll_invalid_code') } only %}
+  </div>
+{% endif %}
+
+<div class="mt-6 rounded-xl border border-line bg-surface p-4">
+  <p class="text-sm font-medium text-ink">{{ t('auth.account_email') }}</p>
+  <p class="mt-1 break-all text-sm text-muted">{{ email }}</p>
+  <p class="mt-4 text-sm font-medium text-ink">{{ t('auth.manual_setup') }}</p>
+  <code class="mt-1 block break-all rounded-lg bg-white px-3 py-2 text-sm text-ink">{{ secret }}</code>
+</div>
+
+<form method="post" action="/two-factor/enroll" class="mt-6 space-y-5" novalidate>
+  {{ csrf_field() }}
+  <input type="hidden" name="factor_id" value="{{ factor_id }}">
+  {% include 'components/forms/input.twig' with {
+    name: 'code', label: t('auth.code'), inputmode: 'numeric',
+    autocomplete: 'one-time-code', required: true,
+  } only %}
+  {% include 'components/buttons/button.twig' with { label: t('auth.confirm_enroll'), type: 'submit', full_width: true } only %}
+</form>
+
+<form method="post" action="/logout" class="mt-8">
+  {{ csrf_field() }}
+  {% include 'components/buttons/button.twig' with { label: t('auth.sign_out'), type: 'submit', variant: 'ghost', full_width: true } only %}
+</form>
+{% endblock %}

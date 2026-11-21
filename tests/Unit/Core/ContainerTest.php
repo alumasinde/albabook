@@ -13,7 +13,7 @@ final class ContainerTest extends TestCase
     public function testRegisteredFactoriesAreSharedByDefault(): void
     {
         $c = new Container();
-        $c->set(\stdClass::class, static fn (): \stdClass => new \stdClass());
+        $c->set(\stdClass::class, static fn(): \stdClass => new \stdClass());
 
         self::assertSame($c->get(\stdClass::class), $c->get(\stdClass::class));
     }
@@ -21,7 +21,7 @@ final class ContainerTest extends TestCase
     public function testNonSharedFactoriesReturnNewInstances(): void
     {
         $c = new Container();
-        $c->set('thing', static fn (): \stdClass => new \stdClass(), shared: false);
+        $c->set('thing', static fn(): \stdClass => new \stdClass(), shared: false);
 
         self::assertNotSame($c->get('thing'), $c->get('thing'));
     }
@@ -51,8 +51,8 @@ final class ContainerTest extends TestCase
     public function testCircularDependencyIsDetected(): void
     {
         $c = new Container();
-        $c->set('a', static fn (Container $c): mixed => $c->get('b'));
-        $c->set('b', static fn (Container $c): mixed => $c->get('a'));
+        $c->set('a', static fn(Container $c): mixed => $c->get('b'));
+        $c->set('b', static fn(Container $c): mixed => $c->get('a'));
 
         $this->expectException(ContainerException::class);
         $this->expectExceptionMessage('Circular');
@@ -60,20 +60,14 @@ final class ContainerTest extends TestCase
     }
 }
 
-final class ContainerFixtureDependency
-{
-}
+final class ContainerFixtureDependency {}
 
 final class ContainerFixtureService
 {
-    public function __construct(public readonly ContainerFixtureDependency $dependency, public readonly int $retries = 5)
-    {
-    }
+    public function __construct(public readonly ContainerFixtureDependency $dependency, public readonly int $retries = 5) {}
 }
 
 final class ContainerFixtureNeedsScalar
 {
-    public function __construct(public readonly string $name)
-    {
-    }
+    public function __construct(public readonly string $name) {}
 }

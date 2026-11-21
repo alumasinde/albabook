@@ -20,6 +20,9 @@ final class RequestContext
     public ?string $csrfToken = null;
     public string $locale = 'en';
 
+    /** @var array{reason: string, expires_at: int, write_allowed: bool}|null */
+    public ?array $supportSession = null;
+
     public function reset(): void
     {
         $this->requestId = null;
@@ -27,5 +30,6 @@ final class RequestContext
         $this->cspNonce = null;
         $this->csrfToken = null;
         $this->locale = 'en';
+        $this->supportSession = null;
     }
 }

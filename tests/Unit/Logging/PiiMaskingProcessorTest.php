@@ -16,7 +16,7 @@ final class PiiMaskingProcessorTest extends TestCase
     {
         $masked = PiiMaskingProcessor::maskString(
             'Booking for jane.wanjiru@example.co.ke, phone +254712345678 / 0712 345 678, token '
-            . str_repeat('aB3_', 10)
+            . str_repeat('aB3_', 10),
         );
 
         self::assertStringNotContainsString('jane.wanjiru@example.co.ke', $masked);

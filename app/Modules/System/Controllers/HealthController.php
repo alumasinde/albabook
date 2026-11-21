@@ -15,9 +15,7 @@ use App\Modules\System\Services\HealthCheck;
  */
 final class HealthController
 {
-    public function __construct(private readonly HealthCheck $health)
-    {
-    }
+    public function __construct(private readonly HealthCheck $health) {}
 
     /** @param array<string, string> $params */
     public function show(Request $request, array $params): Response

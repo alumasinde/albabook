@@ -6,7 +6,7 @@
 -- for personal data before insertion (D-012); the application never writes raw
 -- phone numbers, emails or secrets here.
 
-SET NAMES utf8mb4;
+SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 SET time_zone = '+00:00';
 
 CREATE TABLE audit_logs (

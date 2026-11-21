@@ -17,9 +17,7 @@ use App\Shared\Support\MaintenanceMode;
  */
 final class MaintenanceMiddleware implements MiddlewareInterface
 {
-    public function __construct(private readonly MaintenanceMode $maintenance)
-    {
-    }
+    public function __construct(private readonly MaintenanceMode $maintenance) {}
 
     public function process(Request $request, callable $next): Response
     {

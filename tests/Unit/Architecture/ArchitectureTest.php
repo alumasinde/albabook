@@ -31,9 +31,23 @@ final class ArchitectureTest extends TestCase
     public function testMoneyCodeNeverUsesFloats(): void
     {
         foreach (self::phpFiles('app/Shared/Money') as $file) {
-            $code = (string) file_get_contents($file);
+            $code = self::codeWithoutComments($file);
             self::assertDoesNotMatchRegularExpression('/\bfloat\b|\(float\)|floatval\(|round\(|number_format\(/', $code, basename($file) . ' must stay integer-only (D-006).');
         }
+    }
+
+    /** Prose in docblocks ("no float ever touches an amount") is not code. */
+    private static function codeWithoutComments(string $file): string
+    {
+        $code = '';
+        foreach (token_get_all((string) file_get_contents($file)) as $token) {
+            if (is_array($token) && ($token[0] === T_COMMENT || $token[0] === T_DOC_COMMENT)) {
+                continue;
+            }
+            $code .= is_array($token) ? $token[1] : $token;
+        }
+
+        return $code;
     }
 
     public function testEveryPhpFileDeclaresStrictTypes(): void

@@ -1,0 +1,70 @@
+{% extends 'layouts/account.twig' %}
+
+{% block title %}{{ t('auth.security_title') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-semibold text-ink">{{ t('auth.security_title') }}</h1>
+<p class="mt-1 text-sm text-muted">{{ t('auth.security_subtitle') }}</p>
+
+{% if status == 'password' %}
+  <div class="mt-6">
+    {% include 'components/feedback/alert.twig' with { tone: 'success', message: t('auth.password_updated'), dismissible: true } only %}
+  </div>
+{% elseif status == 'mfa_disabled' %}
+  <div class="mt-6">
+    {% include 'components/feedback/alert.twig' with { tone: 'success', message: t('auth.mfa_disabled_done'), dismissible: true } only %}
+  </div>
+{% endif %}
+
+<section class="card mt-6 p-6" aria-labelledby="password-heading">
+  <h2 id="password-heading" class="text-lg font-semibold text-ink">{{ t('auth.password_section') }}</h2>
+  <p class="mt-1 text-sm text-muted">{{ t('auth.password_section_body') }}</p>
+
+  <form method="post" action="/security/password" class="mt-5 space-y-5" novalidate>
+    {{ csrf_field() }}
+    {% include 'components/forms/password.twig' with {
+      name: 'current_password', label: t('auth.current_password'),
+      autocomplete: 'current-password', required: true, error: errors.current_password|default(''),
+    } only %}
+    {% include 'components/forms/password.twig' with {
+      name: 'password', label: t('auth.password'), autocomplete: 'new-password',
+      required: true, help: t('auth.password_help'), error: errors.password|default(''),
+    } only %}
+    {% include 'components/forms/password.twig' with {
+      name: 'password_confirmation', label: t('auth.confirm_password'),
+      autocomplete: 'new-password', required: true,
+    } only %}
+    {% include 'components/buttons/button.twig' with { label: t('auth.change_password'), type: 'submit' } only %}
+  </form>
+</section>
+
+<section class="card mt-6 p-6" aria-labelledby="mfa-heading">
+  <div class="flex flex-wrap items-center gap-3">
+    <h2 id="mfa-heading" class="text-lg font-semibold text-ink">{{ t('auth.mfa_section') }}</h2>
+    {% if mfaEnabled %}
+      {% include 'components/feedback/status-badge.twig' with { status: 'confirmed', label: t('auth.mfa_enabled') } only %}
+    {% else %}
+      {% include 'components/feedback/status-badge.twig' with { status: 'cancelled', label: t('auth.mfa_disabled') } only %}
+    {% endif %}
+  </div>
+
+  {% if mfaEnabled %}
+    <p class="mt-2 text-sm text-muted">{{ t('auth.mfa_enabled_note') }}</p>
+    <p class="mt-2 text-sm text-muted">{{ t('auth.recovery_remaining', { count: recoveryCodes|length }) }}</p>
+    <form method="post" action="/security/mfa/disable" class="mt-5 space-y-4" novalidate>
+      {{ csrf_field() }}
+      {% include 'components/forms/password.twig' with {
+        name: 'current_password', label: t('auth.current_password'),
+        autocomplete: 'current-password', required: true,
+        help: t('auth.disable_mfa_help'), error: errors.current_password|default(''),
+      } only %}
+      {% include 'components/buttons/button.twig' with { label: t('auth.disable_mfa'), type: 'submit', variant: 'danger' } only %}
+    </form>
+  {% else %}
+    <p class="mt-2 text-sm text-muted">{{ t('auth.mfa_disabled_note') }}</p>
+    <div class="mt-5">
+      {% include 'components/buttons/button.twig' with { label: t('auth.enable_mfa'), href: '/two-factor/enroll', icon: 'fa-shield-halved' } only %}
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

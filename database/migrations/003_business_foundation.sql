@@ -8,7 +8,7 @@
 -- schedule_overrides and blocked_periods use typed nullable scope columns with
 -- composite tenant FKs, not polymorphic scope_type/scope_id (decisions.md D-021).
 
-SET NAMES utf8mb4;
+SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 SET time_zone = '+00:00';
 
 CREATE TABLE business_categories (

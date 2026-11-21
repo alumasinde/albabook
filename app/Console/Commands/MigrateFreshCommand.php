@@ -15,8 +15,7 @@ final class MigrateFreshCommand implements Command
     public function __construct(
         private readonly MigrationRunner $runner,
         private readonly Config $config,
-    ) {
-    }
+    ) {}
 
     public function name(): string
     {
@@ -40,7 +39,7 @@ final class MigrateFreshCommand implements Command
         $database = $this->config->string('database.database');
         $output->warn("Dropping every table in \"{$database}\"…");
         $this->runner->dropAll();
-        $applied = $this->runner->migrate(static fn (string $version) => $output->line("  applied  {$version}"));
+        $applied = $this->runner->migrate(static fn(string $version) => $output->line("  applied  {$version}"));
         $output->success(sprintf('Rebuilt with %d migration(s).', count($applied)));
 
         return 0;

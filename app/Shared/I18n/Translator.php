@@ -23,8 +23,7 @@ final class Translator
         private readonly string $path,
         private readonly string $fallbackLocale,
         private readonly RequestContext $context,
-    ) {
-    }
+    ) {}
 
     /** @param array<string, string|int> $replace */
     public function trans(string $key, array $replace = [], ?string $locale = null): string
@@ -32,6 +31,8 @@ final class Translator
         $locale ??= $this->context->locale;
         $line = $this->find($key, $locale) ?? $this->find($key, $this->fallbackLocale) ?? $key;
 
+        // Longer names first so ":pages" is not consumed by ":page".
+        uksort($replace, static fn(string $a, string $b): int => strlen($b) <=> strlen($a));
         foreach ($replace as $name => $value) {
             $line = str_replace(':' . $name, (string) $value, $line);
         }

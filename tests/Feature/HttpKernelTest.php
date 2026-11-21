@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Core\Config\Config;
+use App\Core\Config\ConfigurationException;
 use App\Core\Http\Request;
 use App\Core\Http\Response;
 use Tests\Support\AppTestCase;
@@ -16,16 +18,20 @@ final class HttpKernelTest extends AppTestCase
 {
     public function testEachHostServesItsOwnShell(): void
     {
-        $tenant = $this->get(self::TENANT, '/');
+        $tenantHome = $this->get(self::TENANT, '/');
+        self::assertSame(302, $tenantHome->status());
+        self::assertSame('/login', $tenantHome->header('Location'));
+
+        $tenant = $this->get(self::TENANT, '/login');
         self::assertSame(200, $tenant->status());
-        self::assertStringContainsString('id="sidebar"', $tenant->body());
+        self::assertStringContainsString('Sign in', $tenant->body());
 
         $booking = $this->get(self::BOOKING, '/');
         self::assertSame(200, $booking->status());
         self::assertStringContainsString('booking-page', $booking->body());
         self::assertStringContainsString('/_/assets/css/app.css', $booking->body(), 'booking host serves assets under /_/ (D-005)');
 
-        $admin = $this->get(self::ADMIN, '/');
+        $admin = $this->get(self::ADMIN, '/login');
         self::assertSame(200, $admin->status());
         self::assertStringContainsString('Platform', $admin->body());
 
@@ -79,7 +85,7 @@ final class HttpKernelTest extends AppTestCase
     {
         $this->app->container()->get(\App\Core\Routing\Router::class)->group(
             \App\Core\Http\HostGroup::Tenant,
-            static fn ($r) => $r->get('/_test/explode', [ExplodingController::class, 'explode']),
+            static fn($r) => $r->get('/_test/explode', [ExplodingController::class, 'explode']),
         );
 
         $response = $this->get(self::TENANT, '/_test/explode');
@@ -160,7 +166,7 @@ final class HttpKernelTest extends AppTestCase
 
     public function testDashboardStaysEnglishEvenIfSwahiliRequested(): void
     {
-        $response = $this->get(self::TENANT, '/?lang=sw', cookies: ['albabook_lang' => 'sw']);
+        $response = $this->get(self::TENANT, '/login?lang=sw', cookies: ['albabook_lang' => 'sw']);
 
         self::assertStringContainsString('<html lang="en"', $response->body());
     }
@@ -181,17 +187,29 @@ final class HttpKernelTest extends AppTestCase
 
     public function testHeadRequestsAreAnswered(): void
     {
-        $response = $this->app->handle(Request::create('HEAD', 'http://' . self::TENANT . '/'));
+        $response = $this->app->handle(Request::create('HEAD', 'http://' . self::TENANT . '/login'));
 
         self::assertSame(200, $response->status());
     }
 
     public function testComponentCatalogueIsHiddenInProduction(): void
     {
-        $this->withEnv(['APP_ENV' => 'production', 'APP_DEBUG' => 'false', 'SESSION_SECURE_COOKIE' => 'true', 'DB_PASSWORD' => 'a-real-password']);
-        $this->app = $this->boot();
+        $config = $this->app->container()->get(Config::class);
+        $this->app->container()->instance(Config::class, new Config(array_replace_recursive(
+            $config->all(),
+            ['app' => ['env' => 'production', 'debug' => false]],
+        )));
 
         self::assertSame(404, $this->get(self::TENANT, '/_system/components')->status());
+    }
+
+    public function testProductionRefusesLogMailTransport(): void
+    {
+        $this->withEnv(['APP_ENV' => 'production', 'APP_DEBUG' => 'false', 'SESSION_SECURE_COOKIE' => 'true', 'DB_PASSWORD' => 'a-real-password']);
+
+        $this->expectException(ConfigurationException::class);
+        $this->expectExceptionMessage('MAIL_TRANSPORT');
+        $this->boot();
     }
 
     public function testInvalidConfigurationRefusesToBoot(): void
@@ -201,6 +219,41 @@ final class HttpKernelTest extends AppTestCase
         $this->expectException(\App\Core\Config\ConfigurationException::class);
         $this->expectExceptionMessage('APP_KEY');
         $this->boot();
+    }
+
+    public function testGuestPagesRenderWithCsrfFields(): void
+    {
+        $register = $this->get(self::TENANT, '/register');
+        self::assertSame(200, $register->status());
+        self::assertStringContainsString('Create your account', $register->body());
+        self::assertStringContainsString('action="/register"', $register->body());
+        self::assertMatchesRegularExpression('/name="_csrf" value="[^"]+"/', $register->body());
+
+        $forgot = $this->get(self::TENANT, '/forgot-password');
+        self::assertSame(200, $forgot->status());
+        self::assertStringContainsString('Reset your password', $forgot->body());
+        self::assertStringContainsString('action="/forgot-password"', $forgot->body());
+    }
+
+    public function testProtectedPagesRedirectToLoginWithALocalNextTarget(): void
+    {
+        $dashboard = $this->get(self::TENANT, '/dashboard');
+        self::assertSame(302, $dashboard->status());
+        self::assertSame('/login?next=' . urlencode('/dashboard'), $dashboard->header('Location'));
+
+        $admin = $this->get(self::ADMIN, '/dashboard');
+        self::assertSame(302, $admin->status());
+        self::assertSame('/login', $admin->header('Location'), 'the platform app never echoes a next target');
+
+        $api = $this->get(self::API, '/');
+        self::assertSame(200, $api->status(), 'the API host has no browser session middleware');
+    }
+
+    public function testLoginPostIsCsrfProtectedBeforeCredentialsAreChecked(): void
+    {
+        $response = $this->request('POST', self::TENANT, '/login', ['email' => 'nobody@example.test', 'password' => 'irrelevant']);
+
+        self::assertSame(419, $response->status());
     }
 
     private function latestLogContaining(string $needle): string

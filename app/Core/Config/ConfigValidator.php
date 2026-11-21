@@ -78,6 +78,55 @@ final class ConfigValidator
             }
         }
 
+        foreach (['security.session.cookie_secure', 'security.remember.cookie_secure', 'security.support.cookie_secure', 'security.platform.cookie_secure'] as $key) {
+            if (!str_starts_with($config->string($key), '__Host-')) {
+                $errors[] = strtoupper(str_replace('.', '_', $key)) . ' must start with __Host-.';
+            }
+        }
+
+        if ($config->int('security.session.idle_timeout_minutes') < 1 || $config->int('security.session.absolute_timeout_minutes') < 1) {
+            $errors[] = 'Session idle and absolute timeouts must be at least one minute.';
+        }
+        if ($config->int('security.session.idle_timeout_minutes') > $config->int('security.session.absolute_timeout_minutes')) {
+            $errors[] = 'Session idle timeout cannot exceed the absolute timeout.';
+        }
+
+        if ($config->int('auth.password.min_length') < 8 || $config->int('auth.password.max_length') > 128) {
+            $errors[] = 'Password length limits are outside the supported range.';
+        }
+        if ($config->string('auth.password.common_passwords_path') === '' || !is_file(dirname(__DIR__, 3) . '/' . $config->string('auth.password.common_passwords_path'))) {
+            $errors[] = 'auth.password.common_passwords_path must point to the bundled common-password list.';
+        }
+        if ($config->int('auth.mfa.leeway_steps') < 0 || $config->int('auth.mfa.leeway_steps') > 2) {
+            $errors[] = 'auth.mfa.leeway_steps must be 0, 1 or 2.';
+        }
+
+        $slugPattern = $config->string('tenancy.slug.pattern');
+        if (@preg_match($slugPattern, '') === false) {
+            $errors[] = 'tenancy.slug.pattern is not a valid regular expression.';
+        }
+        if ($config->int('tenancy.support.max_minutes') < 1
+            || $config->int('tenancy.support.default_minutes') > $config->int('tenancy.support.max_minutes')) {
+            $errors[] = 'Support session durations must be positive and the default cannot exceed the maximum.';
+        }
+
+        if (!in_array($config->string('mail.transport'), ['log'], true)) {
+            $errors[] = 'MAIL_TRANSPORT must be "log" until a delivery transport is implemented.';
+        }
+        if ($deployed && $config->string('mail.transport') === 'log') {
+            $errors[] = 'MAIL_TRANSPORT=log is refused in staging and production; configure a real transport before deploying.';
+        }
+        if (filter_var($config->string('mail.from_address'), FILTER_VALIDATE_EMAIL) === false) {
+            $errors[] = 'MAIL_FROM_ADDRESS must be a valid email address.';
+        }
+
+        foreach ($config->array('security.platform.ip_allowlist') as $entry) {
+            if (!is_string($entry) || !TrustedProxies::isValidEntry($entry)) {
+                $errors[] = 'SECURITY_PLATFORM_IP_ALLOWLIST contains an entry that is not an IP address or CIDR range.';
+                break;
+            }
+        }
+
         if (!in_array($config->string('logging.level'), self::LOG_LEVELS, true)) {
             $errors[] = 'LOG_LEVEL must be one of: ' . implode(', ', self::LOG_LEVELS) . '.';
         }

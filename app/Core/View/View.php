@@ -14,9 +14,7 @@ use Twig\Environment;
  */
 final class View
 {
-    public function __construct(private readonly Environment $twig)
-    {
-    }
+    public function __construct(private readonly Environment $twig) {}
 
     /** @param array<string, mixed> $data */
     public function render(string $template, array $data = []): string

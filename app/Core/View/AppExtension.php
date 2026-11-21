@@ -27,8 +27,7 @@ final class AppExtension extends AbstractExtension implements GlobalsInterface
         private readonly AssetVersions $assets,
         private readonly Config $config,
         private readonly ?CurrencyFormatter $currency = null,
-    ) {
-    }
+    ) {}
 
     /** @return array<string, mixed> */
     public function getGlobals(): array
@@ -36,24 +35,25 @@ final class AppExtension extends AbstractExtension implements GlobalsInterface
         return [
             'app_name' => $this->config->string('app.name', 'AlbaBook'),
             'app_debug' => $this->config->isDebug(),
+            'support_session' => $this->context->supportSession,
         ];
     }
 
     public function getFunctions(): array
     {
         return [
-            new TwigFunction('t', fn (string $key, array $replace = []): string => $this->translator->trans($key, $replace)),
-            new TwigFunction('asset', fn (string $path): string => $this->assets->url($path, $this->context->hostGroup)),
-            new TwigFunction('csrf_token', fn (): string => $this->context->csrfToken ?? ''),
-            new TwigFunction('csrf_field', fn (): Markup => new Markup(sprintf(
+            new TwigFunction('t', fn(string $key, array $replace = []): string => $this->translator->trans($key, $replace)),
+            new TwigFunction('asset', fn(string $path): string => $this->assets->url($path, $this->context->hostGroup)),
+            new TwigFunction('csrf_token', fn(): string => $this->context->csrfToken ?? ''),
+            new TwigFunction('csrf_field', fn(): Markup => new Markup(sprintf(
                 '<input type="hidden" name="%s" value="%s">',
                 htmlspecialchars($this->config->string('security.csrf.field', '_csrf'), ENT_QUOTES, 'UTF-8'),
                 htmlspecialchars($this->context->csrfToken ?? '', ENT_QUOTES, 'UTF-8'),
             ), 'UTF-8')),
-            new TwigFunction('csp_nonce', fn (): string => $this->context->cspNonce ?? ''),
-            new TwigFunction('request_id', fn (): string => $this->context->requestId ?? ''),
-            new TwigFunction('locale', fn (): string => $this->context->locale),
-            new TwigFunction('host_group', fn (): ?string => $this->context->hostGroup?->value),
+            new TwigFunction('csp_nonce', fn(): string => $this->context->cspNonce ?? ''),
+            new TwigFunction('request_id', fn(): string => $this->context->requestId ?? ''),
+            new TwigFunction('locale', fn(): string => $this->context->locale),
+            new TwigFunction('host_group', fn(): ?string => $this->context->hostGroup?->value),
         ];
     }
 

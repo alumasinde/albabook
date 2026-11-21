@@ -1,0 +1,80 @@
+{% extends 'layouts/auth.twig' %}
+
+{% block title %}{{ t('auth.invitation_title') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+{% if mode == 'invalid' %}
+  <h1 class="text-2xl font-semibold text-ink">{{ t('auth.invitation_title') }}</h1>
+  <div class="mt-6">
+    {% include 'components/feedback/alert.twig' with { tone: 'danger', message: errors.invitation|default(t('auth.invitation_invalid')) } only %}
+  </div>
+  <p class="mt-8 text-sm text-muted">
+    <a href="/login" class="font-medium text-primary-strong hover:underline">{{ t('auth.back_to_login') }}</a>
+  </p>
+{% else %}
+  <h1 class="text-2xl font-semibold text-ink">{{ t('auth.invitation_title') }}</h1>
+  <p class="mt-1 text-sm text-muted">{{ t('auth.invitation_invited_by', { name: invitation.inviter_first_name ~ ' ' ~ invitation.inviter_last_name }) }}</p>
+
+  <div class="mt-6 rounded-xl border border-line bg-surface p-4">
+    <p class="text-sm font-medium text-ink">{{ invitation.tenant_name }}</p>
+    <p class="mt-1 text-sm text-muted">{{ t('auth.invitation_for', { email: invitation.email }) }}</p>
+    <p class="mt-3 text-xs font-semibold uppercase tracking-wide text-muted">{{ t('auth.invitation_roles') }}</p>
+    <div class="mt-2 flex flex-wrap gap-2">
+      {% for role in invitation.roles %}
+        {% include 'components/feedback/status-badge.twig' with { status: 'completed', label: role.name } only %}
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if mode == 'existing' %}
+    {% if signedInEmail|lower == invitation.email|lower %}
+      <p class="mt-6 text-sm text-muted">{{ t('auth.invitation_existing', { email: signedInEmail }) }}</p>
+      <form method="post" action="/invite/{{ token }}" class="mt-6">
+        {{ csrf_field() }}
+        {% include 'components/buttons/button.twig' with { label: t('auth.invitation_accept'), type: 'submit', full_width: true } only %}
+      </form>
+    {% else %}
+      <div class="mt-6">
+        {% include 'components/feedback/alert.twig' with { tone: 'warning', message: t('auth.invitation_existing_wrong', { email: invitation.email }) } only %}
+      </div>
+      <form method="post" action="/logout" class="mt-6">
+        {{ csrf_field() }}
+        {% include 'components/buttons/button.twig' with { label: t('auth.sign_out'), type: 'submit', variant: 'secondary', full_width: true } only %}
+      </form>
+    {% endif %}
+  {% else %}
+    {% if errors|length > 0 %}
+      <div class="mt-6">
+        {% include 'components/feedback/alert.twig' with { tone: 'danger', title: t('forms.fix_errors_title'), message: t('forms.fix_errors_body', { count: errors|length }) } only %}
+      </div>
+    {% endif %}
+
+    <form method="post" action="/invite/{{ token }}" class="mt-6 space-y-5" novalidate>
+      {{ csrf_field() }}
+      <div class="grid gap-5 sm:grid-cols-2">
+        {% include 'components/forms/input.twig' with {
+          name: 'first_name', label: t('auth.first_name'), value: old.first_name|default(''),
+          autocomplete: 'given-name', required: true, error: errors.first_name|default(''),
+        } only %}
+        {% include 'components/forms/input.twig' with {
+          name: 'last_name', label: t('auth.last_name'), value: old.last_name|default(''),
+          autocomplete: 'family-name', required: true, error: errors.last_name|default(''),
+        } only %}
+      </div>
+      {% include 'components/forms/input.twig' with {
+        name: 'phone', label: t('auth.phone'), type: 'tel', value: old.phone|default(''),
+        autocomplete: 'tel', inputmode: 'tel', help: t('auth.phone_help'), error: errors.phone|default(''),
+      } only %}
+      {% include 'components/forms/password.twig' with {
+        name: 'password', label: t('auth.password'), autocomplete: 'new-password',
+        required: true, help: t('auth.password_help'), error: errors.password|default(''),
+      } only %}
+      {% include 'components/forms/password.twig' with {
+        name: 'password_confirmation', label: t('auth.confirm_password'),
+        autocomplete: 'new-password', required: true,
+      } only %}
+      {% include 'components/buttons/button.twig' with { label: t('auth.invitation_accept'), type: 'submit', full_width: true } only %}
+    </form>
+  {% endif %}
+{% endif %}
+{% endblock %}

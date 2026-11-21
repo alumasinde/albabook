@@ -24,8 +24,7 @@ final class LangCheckCommand implements Command
     public function __construct(
         private readonly Translator $translator,
         private readonly Config $config,
-    ) {
-    }
+    ) {}
 
     public function name(): string
     {
@@ -42,7 +41,7 @@ final class LangCheckCommand implements Command
         $fallback = $this->config->string('i18n.fallback_locale', 'en');
         $reference = array_filter(
             $this->translator->all($fallback),
-            static fn (string $key): bool => in_array(explode('.', $key, 2)[0], self::CUSTOMER_DOMAINS, true),
+            static fn(string $key): bool => in_array(explode('.', $key, 2)[0], self::CUSTOMER_DOMAINS, true),
             ARRAY_FILTER_USE_KEY,
         );
 
@@ -53,7 +52,7 @@ final class LangCheckCommand implements Command
             }
             $present = $this->translator->all($locale);
             $missing = array_diff_key($reference, $present);
-            $unknown = array_diff_key(array_filter($present, static fn (string $k): bool => in_array(explode('.', $k, 2)[0], self::CUSTOMER_DOMAINS, true), ARRAY_FILTER_USE_KEY), $reference);
+            $unknown = array_diff_key(array_filter($present, static fn(string $k): bool => in_array(explode('.', $k, 2)[0], self::CUSTOMER_DOMAINS, true), ARRAY_FILTER_USE_KEY), $reference);
 
             $output->line(sprintf('%s: %d/%d customer-facing strings translated', $locale, count($reference) - count($missing), count($reference)));
             foreach (array_keys($missing) as $key) {

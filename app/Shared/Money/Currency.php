@@ -10,6 +10,5 @@ final readonly class Currency
         public string $code,
         public string $symbol,
         public int $exponent,
-    ) {
-    }
+    ) {}
 }

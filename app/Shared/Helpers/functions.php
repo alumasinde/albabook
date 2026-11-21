@@ -13,7 +13,7 @@ if (!function_exists('env')) {
     {
         $value = $_ENV[$key] ?? $_SERVER[$key] ?? getenv($key);
 
-        if ($value === false || $value === null) {
+        if ($value === false) {
             return $default;
         }
 

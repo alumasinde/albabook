@@ -28,8 +28,7 @@ final class TrustedHostMiddleware implements MiddlewareInterface
         private readonly HostMap $hosts,
         private readonly TrustedProxies $proxies,
         private readonly RequestContext $context,
-    ) {
-    }
+    ) {}
 
     public function process(Request $request, callable $next): Response
     {
@@ -62,7 +61,7 @@ final class TrustedHostMiddleware implements MiddlewareInterface
                 ->withAttribute('host', $host)
                 ->withAttribute('host_group', $group)
                 ->withAttribute('scheme', $scheme)
-                ->withAttribute('client_ip', $clientIp)
+                ->withAttribute('client_ip', $clientIp),
         );
     }
 

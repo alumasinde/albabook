@@ -6,13 +6,11 @@ namespace App\Shared\Money;
 
 /**
  * The only place money becomes text, and text becomes money (D-006).
- * Pure integer/string arithmetic: no float ever touches an amount.
+ * Pure integer/string arithmetic: no floating point ever touches an amount.
  */
 final class CurrencyFormatter
 {
-    public function __construct(private readonly CurrencyCatalog $catalog)
-    {
-    }
+    public function __construct(private readonly CurrencyCatalog $catalog) {}
 
     /**
      * "KSh 38,500" / "KSh 1,250.50". Whole amounts drop zero decimals unless

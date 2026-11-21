@@ -1,0 +1,23 @@
+{% extends 'layouts/auth.twig' %}
+
+{% block title %}{{ t('auth.recovery_title') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-semibold text-ink">{{ t('auth.recovery_title') }}</h1>
+<p class="mt-1 text-sm text-muted">{{ t('auth.recovery_subtitle') }}</p>
+
+<div class="mt-6">
+  {% include 'components/feedback/alert.twig' with { tone: 'warning', message: t('auth.recovery_warning') } only %}
+</div>
+
+<ul class="mt-6 grid grid-cols-2 gap-2 rounded-xl border border-line bg-white p-4 font-mono text-sm text-ink">
+  {% for code in codes %}
+    <li class="rounded-md bg-surface px-3 py-2 text-center tracking-wider">{{ code }}</li>
+  {% endfor %}
+</ul>
+
+<div class="mt-8">
+  {% include 'components/buttons/button.twig' with { label: t('auth.recovery_continue'), href: '/dashboard', full_width: true } only %}
+</div>
+<p class="mt-3 text-center text-xs text-muted">{{ t('auth.recovery_saved') }}</p>
+{% endblock %}

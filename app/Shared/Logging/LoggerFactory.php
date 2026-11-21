@@ -18,7 +18,16 @@ final class LoggerFactory
 {
     public static function create(Config $config, RequestContext $context, string $basePath, string $channel = 'app'): LoggerInterface
     {
-        $level = Level::fromName($config->string('logging.level', 'info'));
+        $level = match (strtolower($config->string('logging.level', 'info'))) {
+            'debug' => Level::Debug,
+            'notice' => Level::Notice,
+            'warning' => Level::Warning,
+            'error' => Level::Error,
+            'critical' => Level::Critical,
+            'alert' => Level::Alert,
+            'emergency' => Level::Emergency,
+            default => Level::Info,
+        };
 
         $handler = $config->string('logging.channel', 'file') === 'stderr'
             ? new StreamHandler('php://stderr', $level)
@@ -33,7 +42,7 @@ final class LoggerFactory
         $handler->setFormatter(
             $config->string('logging.format', 'line') === 'json'
                 ? new JsonFormatter(JsonFormatter::BATCH_MODE_NEWLINES, true)
-                : new LineFormatter("[%datetime%] %channel%.%level_name%: %message% %context% %extra%\n", 'Y-m-d\TH:i:s.uP', true, true)
+                : new LineFormatter("[%datetime%] %channel%.%level_name%: %message% %context% %extra%\n", 'Y-m-d\TH:i:s.uP', false, true),
         );
 
         $logger = new Logger($channel, [$handler]);

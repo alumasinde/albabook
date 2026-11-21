@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Core;
 
+use App\Core\Http\HostGroup;
 use App\Core\Http\HttpException;
 use App\Core\Http\Request;
 use App\Core\Http\RequestContext;
@@ -27,8 +28,7 @@ final class ExceptionHandler
         private readonly RequestContext $context,
         private readonly View $view,
         private readonly bool $debug,
-    ) {
-    }
+    ) {}
 
     public function render(\Throwable $e, Request $request): Response
     {
@@ -40,7 +40,7 @@ final class ExceptionHandler
 
         $this->report($e, $status, $code, $request);
 
-        $response = $request->wantsJson()
+        $response = $this->context->hostGroup === HostGroup::Api || $request->wantsJson()
             ? Response::json($this->jsonBody($e, $code, $message, $requestId), $status)
             : $this->htmlResponse($e, $status, $code, $message, $requestId);
 

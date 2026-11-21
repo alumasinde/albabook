@@ -10,9 +10,7 @@ use App\Shared\Support\MaintenanceMode;
 
 final class DownCommand implements Command
 {
-    public function __construct(private readonly MaintenanceMode $maintenance)
-    {
-    }
+    public function __construct(private readonly MaintenanceMode $maintenance) {}
 
     public function name(): string
     {

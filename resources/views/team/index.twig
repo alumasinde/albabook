@@ -1,0 +1,139 @@
+{% extends 'layouts/app.twig' %}
+
+{% set page_title = t('auth.team_title') %}
+{% set active_nav = 'team' %}
+{% set workspace = tenant.name %}
+
+{% block title %}{{ t('auth.team_title') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+{% set statusTones = { active: 'success', invited: 'info', suspended: 'danger', removed: 'neutral' } %}
+
+<h2 class="text-2xl font-semibold text-ink">{{ t('auth.team_title') }}</h2>
+<p class="mt-1 text-sm text-muted">{{ t('auth.team_subtitle', { name: tenant.name }) }}</p>
+
+{% if status == 'invited' %}
+  <div class="mt-6">
+    {% include 'components/feedback/alert.twig' with { tone: 'success', message: t('auth.invited_done'), dismissible: true } only %}
+  </div>
+{% elseif status == 'revoked' %}
+  <div class="mt-6">
+    {% include 'components/feedback/alert.twig' with { tone: 'success', message: t('auth.revoked_done'), dismissible: true } only %}
+  </div>
+{% endif %}
+
+<div class="mt-8 grid gap-6 lg:grid-cols-3">
+  <section class="lg:col-span-2" aria-labelledby="members-heading">
+    <h3 id="members-heading" class="text-lg font-semibold text-ink">{{ t('auth.members') }}</h3>
+    {% if members is empty %}
+      <div class="mt-4">
+        {% include 'components/feedback/empty-state.twig' with { title: t('auth.no_members'), message: t('auth.invite_help'), icon: 'fa-user-group' } only %}
+      </div>
+    {% else %}
+      <div class="card mt-4 overflow-x-auto">
+        <table class="data-table">
+          <caption class="sr-only">{{ t('auth.members') }}</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="text-left">{{ t('common.name') }}</th>
+              <th scope="col" class="text-left">{{ t('auth.email') }}</th>
+              <th scope="col" class="text-left">{{ t('auth.roles') }}</th>
+              <th scope="col" class="text-left">{{ t('auth.account_status') }}</th>
+              <th scope="col" class="text-left">{{ t('auth.member_since') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for member in members %}
+              <tr>
+                <td data-label="{{ t('common.name') }}">{{ member.first_name }} {{ member.last_name }}</td>
+                <td data-label="{{ t('auth.email') }}">{{ member.email }}</td>
+                <td data-label="{{ t('auth.roles') }}">{{ member.roles|default('—') }}</td>
+                <td data-label="{{ t('auth.account_status') }}">
+                  <span class="badge badge-{{ statusTones[member.status]|default('neutral') }}">
+                    <span class="badge-dot" aria-hidden="true"></span>{{ t('auth.status_' ~ member.status) }}
+                  </span>
+                </td>
+                <td data-label="{{ t('auth.member_since') }}">{{ member.joined_at ? member.joined_at|date('d M Y', 'UTC') : '—' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </section>
+
+  <section aria-labelledby="invite-heading">
+    <h3 id="invite-heading" class="text-lg font-semibold text-ink">{{ t('auth.invite_title') }}</h3>
+    <p class="mt-1 text-sm text-muted">{{ t('auth.invite_help') }}</p>
+
+    {% if errors|length > 0 %}
+      <div class="mt-4">
+        {% include 'components/feedback/alert.twig' with { tone: 'danger', title: t('forms.fix_errors_title'), message: t('forms.fix_errors_body', { count: errors|length }) } only %}
+      </div>
+    {% endif %}
+
+    <form method="post" action="/team/invitations" class="card mt-4 space-y-5 p-5" novalidate>
+      {{ csrf_field() }}
+      {% include 'components/forms/input.twig' with {
+        name: 'email', label: t('auth.email'), type: 'email', value: old.email|default(''),
+        autocomplete: 'email', inputmode: 'email', required: true, error: errors.email|default(''),
+      } only %}
+
+      <fieldset>
+        <legend class="field-label">{{ t('auth.invite_roles') }}</legend>
+        <p class="mt-1 text-sm text-muted">{{ t('auth.invite_roles_help') }}</p>
+        <div class="mt-3 space-y-3">
+          {% for role in roles %}
+            {% include 'components/forms/checkbox.twig' with {
+              name: 'role_ids[]', id: 'role-' ~ role.id, value: role.id,
+              label: role.name ~ (role.description ? ' — ' ~ role.description : ''),
+              checked: role.id in old.role_ids|default([]),
+            } only %}
+          {% endfor %}
+        </div>
+        {% if errors.role_ids|default('') %}
+          <p class="field-error mt-2"><i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>{{ errors.role_ids }}</p>
+        {% endif %}
+      </fieldset>
+
+      {% include 'components/buttons/button.twig' with { label: t('auth.send_invitation'), type: 'submit', full_width: true } only %}
+    </form>
+  </section>
+</div>
+
+<section class="mt-8" aria-labelledby="invitations-heading">
+  <h3 id="invitations-heading" class="text-lg font-semibold text-ink">{{ t('auth.pending_invitations') }}</h3>
+  {% if invitations is empty %}
+    <div class="mt-4">
+      {% include 'components/feedback/empty-state.twig' with { title: t('auth.no_invitations'), message: t('auth.invite_help'), icon: 'fa-envelope-open-text' } only %}
+    </div>
+  {% else %}
+    <div class="card mt-4 overflow-x-auto">
+      <table class="data-table">
+        <caption class="sr-only">{{ t('auth.pending_invitations') }}</caption>
+        <thead>
+          <tr>
+            <th scope="col" class="text-left">{{ t('auth.email') }}</th>
+            <th scope="col" class="text-left">{{ t('auth.expires') }}</th>
+            <th scope="col" class="text-right">{{ t('common.actions') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for invitation in invitations %}
+            <tr>
+              <td data-label="{{ t('auth.email') }}">{{ invitation.email }}</td>
+              <td data-label="{{ t('auth.expires') }}">{{ invitation.expires_at|date('d M Y H:i', 'UTC') }} UTC</td>
+              <td data-label="{{ t('common.actions') }}" class="md:text-right">
+                <form method="post" action="/team/invitations/{{ invitation.id }}/revoke">
+                  {{ csrf_field() }}
+                  {% include 'components/buttons/button.twig' with { label: t('auth.revoke'), type: 'submit', variant: 'secondary', size: 'sm' } only %}
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

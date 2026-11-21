@@ -11,9 +11,7 @@ namespace App\Core\Config;
 final class Config
 {
     /** @param array<string, mixed> $items */
-    public function __construct(private readonly array $items)
-    {
-    }
+    public function __construct(private readonly array $items) {}
 
     public static function loadFrom(string $directory): self
     {

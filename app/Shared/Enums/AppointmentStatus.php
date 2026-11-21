@@ -45,6 +45,6 @@ enum AppointmentStatus: string
     /** @return list<string> */
     public static function timeBlockingValues(): array
     {
-        return array_map(static fn (self $s): string => $s->value, self::timeBlocking());
+        return array_map(static fn(self $s): string => $s->value, self::timeBlocking());
     }
 }

@@ -18,14 +18,17 @@ final class HealthCheck
         private readonly MaintenanceMode $maintenance,
         private readonly LoggerInterface $logger,
         private readonly string $basePath,
-    ) {
-    }
+    ) {}
 
     /** @return array{status: string, checks: array<string, string>} */
     public function run(): array
     {
         $checks = [
-            'database' => $this->check('database', fn (): bool => (int) $this->db->pdo()->query('SELECT 1')->fetchColumn() === 1),
+            'database' => $this->check('database', function (): bool {
+                $statement = $this->db->pdo()->query('SELECT 1');
+
+                return $statement !== false && (int) $statement->fetchColumn() === 1;
+            }),
             'migrations' => $this->check('migrations', function (): bool {
                 foreach ($this->migrations->status() as $status) {
                     if ($status->state !== MigrationStatus::APPLIED) {
@@ -35,7 +38,7 @@ final class HealthCheck
 
                 return true;
             }),
-            'storage' => $this->check('storage', fn (): bool => is_writable($this->basePath . '/storage/logs') && is_writable($this->basePath . '/storage/cache')),
+            'storage' => $this->check('storage', fn(): bool => is_writable($this->basePath . '/storage/logs') && is_writable($this->basePath . '/storage/cache')),
         ];
 
         $healthy = !in_array('fail', $checks, true);

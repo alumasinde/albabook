@@ -6,7 +6,7 @@
 -- renders only the active published version; drafts live in the editable tables
 -- until published.
 
-SET NAMES utf8mb4;
+SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 SET time_zone = '+00:00';
 
 CREATE TABLE tenant_assets (

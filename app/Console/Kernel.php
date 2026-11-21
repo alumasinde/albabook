@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Console;
 
+use App\Console\Commands\DbSeedCommand;
 use App\Console\Commands\DownCommand;
 use App\Console\Commands\LangCheckCommand;
 use App\Console\Commands\MigrateCommand;
 use App\Console\Commands\MigrateFreshCommand;
 use App\Console\Commands\MigrateStatusCommand;
+use App\Console\Commands\PlatformAdminCommand;
 use App\Console\Commands\UpCommand;
 use App\Core\Container;
 use App\Shared\Support\TokenGenerator;
@@ -24,14 +26,14 @@ final class Kernel
         MigrateCommand::class,
         MigrateStatusCommand::class,
         MigrateFreshCommand::class,
+        DbSeedCommand::class,
         LangCheckCommand::class,
+        PlatformAdminCommand::class,
         DownCommand::class,
         UpCommand::class,
     ];
 
-    public function __construct(private readonly Container $container)
-    {
-    }
+    public function __construct(private readonly Container $container) {}
 
     /** @param list<string> $args */
     public function run(array $args, ?Output $output = null): int

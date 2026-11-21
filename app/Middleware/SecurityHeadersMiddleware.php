@@ -26,8 +26,7 @@ final class SecurityHeadersMiddleware implements MiddlewareInterface
         private readonly RequestContext $context,
         private readonly TokenGenerator $tokens,
         private readonly Config $config,
-    ) {
-    }
+    ) {}
 
     public function process(Request $request, callable $next): Response
     {

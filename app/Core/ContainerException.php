@@ -4,6 +4,4 @@ declare(strict_types=1);
 
 namespace App\Core;
 
-final class ContainerException extends \LogicException
-{
-}
+final class ContainerException extends \LogicException {}

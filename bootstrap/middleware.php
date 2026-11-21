@@ -2,10 +2,12 @@
 
 declare(strict_types=1);
 
+use App\Middleware\AuthenticationMiddleware;
 use App\Middleware\CsrfMiddleware;
 use App\Middleware\ErrorHandlingMiddleware;
 use App\Middleware\LocaleMiddleware;
 use App\Middleware\MaintenanceMiddleware;
+use App\Middleware\PlatformAuthenticationMiddleware;
 use App\Middleware\RequestIdMiddleware;
 use App\Middleware\SecurityHeadersMiddleware;
 use App\Middleware\TrustedHostMiddleware;
@@ -31,9 +33,12 @@ return [
         LocaleMiddleware::class,
     ],
     'groups' => [
-        'app' => [CsrfMiddleware::class],
+        // Authentication runs after CSRF so a state-changing request is
+        // rejected before any session work, and before route middleware so
+        // RequireAuth/Tenant/Permission can rely on AuthContext.
+        'app' => [CsrfMiddleware::class, AuthenticationMiddleware::class],
         'book' => [CsrfMiddleware::class],
-        'admin' => [CsrfMiddleware::class],
+        'admin' => [CsrfMiddleware::class, PlatformAuthenticationMiddleware::class],
         'api' => [],
     ],
 ];

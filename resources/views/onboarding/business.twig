@@ -1,0 +1,41 @@
+{% extends 'layouts/account.twig' %}
+
+{% block title %}{{ t('auth.onboarding_title') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-semibold text-ink">{{ t('auth.onboarding_title') }}</h1>
+<p class="mt-1 text-sm text-muted">{{ t('auth.onboarding_subtitle') }}</p>
+
+{% if errors|length > 0 %}
+  <div class="mt-6">
+    {% include 'components/feedback/alert.twig' with { tone: 'danger', title: t('forms.fix_errors_title'), message: t('forms.fix_errors_body', { count: errors|length }) } only %}
+  </div>
+{% endif %}
+
+<form method="post" action="/onboarding/business" class="card mt-6 space-y-5 p-6" novalidate>
+  {{ csrf_field() }}
+
+  {% include 'components/forms/input.twig' with {
+    name: 'name', label: t('auth.business_name'), value: old.name|default(''),
+    autocomplete: 'organization', required: true, error: errors.name|default(''),
+  } only %}
+
+  {% include 'components/forms/input.twig' with {
+    name: 'slug', label: t('auth.business_slug'), value: old.slug|default(''),
+    help: t('auth.business_slug_help'), required: true, error: errors.slug|default(''),
+  } only %}
+
+  <div class="grid gap-5 sm:grid-cols-2">
+    {% include 'components/forms/input.twig' with {
+      name: 'timezone', label: t('auth.timezone'), value: old.timezone|default('Africa/Nairobi'),
+      help: t('auth.timezone_help'), error: errors.timezone|default(''),
+    } only %}
+    {% include 'components/forms/input.twig' with {
+      name: 'currency', label: t('auth.currency'), value: old.currency|default('KES'),
+      help: t('auth.currency_help'), error: errors.currency|default(''),
+    } only %}
+  </div>
+
+  {% include 'components/buttons/button.twig' with { label: t('auth.create_business'), type: 'submit', full_width: true } only %}
+</form>
+{% endblock %}

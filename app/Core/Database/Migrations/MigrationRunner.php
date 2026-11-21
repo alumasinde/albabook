@@ -27,8 +27,7 @@ final class MigrationRunner
     public function __construct(
         private readonly Database $db,
         private readonly string $directory,
-    ) {
-    }
+    ) {}
 
     /**
      * @param callable(string): void|null $onApplied called with each version as it completes
@@ -85,14 +84,14 @@ final class MigrationRunner
             }
         }
 
-        usort($result, static fn (MigrationStatus $a, MigrationStatus $b): int => strcmp($a->version, $b->version));
+        usort($result, static fn(MigrationStatus $a, MigrationStatus $b): int => strcmp($a->version, $b->version));
 
         return $result;
     }
 
     public function pendingCount(): int
     {
-        return count(array_filter($this->status(), static fn (MigrationStatus $s): bool => $s->state === MigrationStatus::PENDING));
+        return count(array_filter($this->status(), static fn(MigrationStatus $s): bool => $s->state === MigrationStatus::PENDING));
     }
 
     /**
@@ -210,7 +209,7 @@ final class MigrationRunner
                 execution_ms INT UNSIGNED NOT NULL DEFAULT 0,
                 applied_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (version)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
         );
     }
 

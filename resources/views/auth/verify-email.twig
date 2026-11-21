@@ -1,0 +1,38 @@
+{% extends 'layouts/auth.twig' %}
+
+{% block title %}{{ t('auth.verify_title') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+{% if verified %}
+  <h1 class="text-2xl font-semibold text-ink">{{ t('auth.verify_done_title') }}</h1>
+  <div class="mt-6">
+    {% include 'components/feedback/alert.twig' with { tone: 'success', message: t('auth.verify_done_body') } only %}
+  </div>
+  <div class="mt-8">
+    {% include 'components/buttons/button.twig' with { label: t('auth.go_dashboard'), href: '/dashboard', full_width: true } only %}
+  </div>
+{% else %}
+  <h1 class="text-2xl font-semibold text-ink">{{ t('auth.verify_title') }}</h1>
+  <p class="mt-1 text-sm text-muted">{{ t('auth.verify_subtitle') }}</p>
+
+  <div class="mt-6 space-y-3">
+    {% if error %}
+      {% include 'components/feedback/alert.twig' with { tone: 'danger', message: t('auth.verify_invalid') } only %}
+    {% elseif resent %}
+      {% include 'components/feedback/alert.twig' with { tone: 'success', message: t('auth.verify_resent') } only %}
+    {% endif %}
+    <p class="text-sm text-muted">{{ t('auth.verify_pending_body') }}</p>
+  </div>
+
+  {% if canResend %}
+    <form method="post" action="/verify-email/resend" class="mt-6">
+      {{ csrf_field() }}
+      {% include 'components/buttons/button.twig' with { label: t('auth.verify_resend'), type: 'submit', variant: 'secondary', full_width: true } only %}
+    </form>
+  {% endif %}
+
+  <p class="mt-8 text-sm text-muted">
+    <a href="/login" class="font-medium text-primary-strong hover:underline">{{ t('auth.back_to_login') }}</a>
+  </p>
+{% endif %}
+{% endblock %}

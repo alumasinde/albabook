@@ -24,8 +24,7 @@ final class LocaleMiddleware implements MiddlewareInterface
     public function __construct(
         private readonly RequestContext $context,
         private readonly Config $config,
-    ) {
-    }
+    ) {}
 
     public function process(Request $request, callable $next): Response
     {

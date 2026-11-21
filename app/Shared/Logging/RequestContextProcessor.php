@@ -11,9 +11,7 @@ use Monolog\Processor\ProcessorInterface;
 /** Adds request_id and host group to every log line. */
 final class RequestContextProcessor implements ProcessorInterface
 {
-    public function __construct(private readonly RequestContext $context)
-    {
-    }
+    public function __construct(private readonly RequestContext $context) {}
 
     public function __invoke(LogRecord $record): LogRecord
     {

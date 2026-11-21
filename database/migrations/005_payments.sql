@@ -6,7 +6,7 @@
 -- billing (009_subscriptions.sql). Money is integer minor units (D-006).
 -- An unmatched C2B payment is a payments row with status 'unmatched' (D-022).
 
-SET NAMES utf8mb4;
+SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 SET time_zone = '+00:00';
 
 CREATE TABLE tenant_payment_accounts (

@@ -15,9 +15,7 @@ use App\Core\Middleware\MiddlewareInterface;
  */
 final class ErrorHandlingMiddleware implements MiddlewareInterface
 {
-    public function __construct(private readonly ExceptionHandler $handler)
-    {
-    }
+    public function __construct(private readonly ExceptionHandler $handler) {}
 
     public function process(Request $request, callable $next): Response
     {

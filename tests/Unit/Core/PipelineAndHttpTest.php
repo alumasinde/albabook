@@ -16,6 +16,7 @@ final class PipelineAndHttpTest extends TestCase
 {
     public function testMiddlewareRunsOutermostFirstAndUnwindsInReverse(): void
     {
+        /** @var \ArrayObject<int, string> $log */
         $log = new \ArrayObject();
         $pipeline = new Pipeline(new Container());
 
@@ -73,7 +74,7 @@ final class PipelineAndHttpTest extends TestCase
     public function testCookieRejectsUnsafeValues(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        new Cookie('name', "value;injected=1");
+        new Cookie('name', 'value;injected=1');
     }
 
     public function testResponseHeaderNamesAreCaseInsensitive(): void
@@ -88,9 +89,7 @@ final class PipelineAndHttpTest extends TestCase
 final class TraceMiddleware implements MiddlewareInterface
 {
     /** @param \ArrayObject<int, string> $log */
-    public function __construct(private readonly string $name, private readonly \ArrayObject $log)
-    {
-    }
+    public function __construct(private readonly string $name, private readonly \ArrayObject $log) {}
 
     public function process(Request $request, callable $next): Response
     {

@@ -44,17 +44,28 @@ services:
       MYSQL_USER: ${DB_USERNAME:-albabook}
       MYSQL_PASSWORD: ${DB_PASSWORD:-albabook}
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
+    # Server settings are flags, not a mounted .cnf: MySQL ignores config files
+    # that look world-writable, which every Windows bind mount does.
+    command:
+      - --default-time-zone=+00:00
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --sql-mode=ONLY_FULL_GROUP_BY,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+      - --innodb-lock-wait-timeout=10
+      # Lets the app user create the audit_logs append-only triggers.
+      - --log-bin-trust-function-creators=1
     ports:
       - "${DB_FORWARD_PORT:-33060}:3306"
     volumes:
       - db-data:/var/lib/mysql
       - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
-      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/albabook.cnf:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${DB_ROOT_PASSWORD:-root}"]
       interval: 5s
       timeout: 5s
       retries: 30
+      # First start initialises the data directory, which can take minutes.
+      start_period: 180s
 
 volumes:
   db-data:

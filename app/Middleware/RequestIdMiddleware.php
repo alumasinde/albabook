@@ -21,8 +21,7 @@ final class RequestIdMiddleware implements MiddlewareInterface
     public function __construct(
         private readonly RequestContext $context,
         private readonly UuidFactory $uuids,
-    ) {
-    }
+    ) {}
 
     public function process(Request $request, callable $next): Response
     {

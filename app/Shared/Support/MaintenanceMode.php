@@ -6,9 +6,7 @@ namespace App\Shared\Support;
 
 final class MaintenanceMode
 {
-    public function __construct(private readonly string $flagFile)
-    {
-    }
+    public function __construct(private readonly string $flagFile) {}
 
     public function isActive(): bool
     {

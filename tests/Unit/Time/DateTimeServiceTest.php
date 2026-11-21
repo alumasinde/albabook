@@ -23,8 +23,8 @@ final class DateTimeServiceTest extends TestCase
     {
         $utc = $this->time->localToUtc('2026-11-23', '09:00', 'Africa/Nairobi');
 
-        self::assertSame('2026-11-23 06:00:00', $utc?->format('Y-m-d H:i:s'));
-        self::assertSame('UTC', $utc?->getTimezone()->getName());
+        self::assertSame('2026-11-23 06:00:00', $utc->format('Y-m-d H:i:s'));
+        self::assertSame('UTC', $utc->getTimezone()->getName());
     }
 
     public function testLocalDayRangeIsComputedInTheBranchTimezone(): void

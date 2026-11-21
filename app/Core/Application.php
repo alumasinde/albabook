@@ -27,8 +27,7 @@ final class Application
         private readonly Pipeline $pipeline,
         private readonly array $globalMiddleware,
         private readonly array $groupMiddleware,
-    ) {
-    }
+    ) {}
 
     public function container(): Container
     {
@@ -38,7 +37,7 @@ final class Application
     public function handle(Request $request): Response
     {
         try {
-            return $this->pipeline->run($request, $this->globalMiddleware, fn (Request $r): Response => $this->dispatch($r));
+            return $this->pipeline->run($request, $this->globalMiddleware, fn(Request $r): Response => $this->dispatch($r));
         } catch (\Throwable $e) {
             // Last resort: ErrorHandlingMiddleware normally renders errors. Reaching
             // here means the error handling itself failed, so stay minimal.
@@ -67,7 +66,10 @@ final class Application
         }
 
         $match = $this->router->match($group, $request->method(), $request->path());
-        $request = $request->withAttribute('route', $match->route)->withAttribute('route_params', $match->parameters);
+        $request = $request
+            ->withAttribute('route', $match->route)
+            ->withAttribute('route_params', $match->parameters)
+            ->withAttribute('route_options', $match->route->options);
 
         $middleware = array_merge($this->groupMiddleware[$group->value] ?? [], $match->route->middleware);
 

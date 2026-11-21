@@ -10,6 +10,5 @@ final readonly class RouteMatch
     public function __construct(
         public Route $route,
         public array $parameters,
-    ) {
-    }
+    ) {}
 }

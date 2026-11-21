@@ -66,11 +66,12 @@ abstract class DatabaseTestCase extends TestCase
         return new MigrationRunner($db, $directory ?? dirname(__DIR__, 2) . '/database/migrations');
     }
 
+    /** @return array<string, mixed> */
     public static function databaseConfig(): array
     {
         $config = require dirname(__DIR__, 2) . '/config/database.php';
-        // .env is not loaded in unit/integration tests; fall back to the docker defaults.
-        $config['host'] = (string) (env('DB_HOST') ?? 'db');
+        // tests/bootstrap.php loads .env; these defaults match docker-compose.yml.
+        $config['host'] = (string) (env('DB_HOST') ?? '127.0.0.1');
         $config['username'] = (string) (env('DB_USERNAME') ?? 'albabook');
         $config['password'] = (string) (env('DB_PASSWORD') ?? 'albabook');
         $config['database'] = (string) (env('DB_DATABASE') ?? 'albabook_test');
@@ -84,7 +85,14 @@ abstract class DatabaseTestCase extends TestCase
             return self::$database;
         }
 
-        $db = new Database(self::databaseConfig());
+        $config = self::databaseConfig();
+        // Tests drop every table in this database. Never point them at a
+        // database whose name does not say it is disposable.
+        if (!str_ends_with((string) $config['database'], '_test')) {
+            throw new \RuntimeException("Refusing to run database tests against \"{$config['database']}\": the name must end in _test.");
+        }
+
+        $db = new Database($config);
         try {
             $db->pdo();
         } catch (\PDOException $e) {
@@ -104,8 +112,8 @@ abstract class DatabaseTestCase extends TestCase
         $sql = sprintf(
             'INSERT INTO `%s` (%s) VALUES (%s)',
             $table,
-            implode(', ', array_map(static fn (string $c): string => "`{$c}`", $columns)),
-            implode(', ', array_map(static fn (string $c): string => ':' . $c, $columns)),
+            implode(', ', array_map(static fn(string $c): string => "`{$c}`", $columns)),
+            implode(', ', array_map(static fn(string $c): string => ':' . $c, $columns)),
         );
         $this->pdo->prepare($sql)->execute($row);
 
@@ -116,7 +124,7 @@ abstract class DatabaseTestCase extends TestCase
      * Assert that $sql fails with a MySQL constraint error. Uses a savepoint so
      * the surrounding test transaction stays usable.
      *
-     * @param array<string, mixed> $params
+     * @param array<int|string, mixed> $params
      */
     protected function assertRejected(string $sql, array $params = [], string $expectedFragment = ''): void
     {

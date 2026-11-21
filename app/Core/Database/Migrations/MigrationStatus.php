@@ -15,6 +15,5 @@ final readonly class MigrationStatus
         public string $version,
         public string $state,
         public ?string $appliedAt = null,
-    ) {
-    }
+    ) {}
 }

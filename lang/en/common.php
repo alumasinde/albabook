@@ -8,6 +8,8 @@ return [
     'close_menu' => 'Close menu',
     'close' => 'Close',
     'dismiss' => 'Dismiss',
+    'name' => 'Name',
+    'actions' => 'Actions',
     'loading' => 'Loading…',
     'language' => 'Language',
     'breadcrumb' => 'Breadcrumb',

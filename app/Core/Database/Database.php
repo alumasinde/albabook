@@ -19,9 +19,7 @@ final class Database
     private ?PDO $pdo = null;
 
     /** @param array<string, mixed> $config config/database.php */
-    public function __construct(private readonly array $config)
-    {
-    }
+    public function __construct(private readonly array $config) {}
 
     public function pdo(): PDO
     {
@@ -61,17 +59,22 @@ final class Database
         $maxAttempts ??= (int) ($this->config['transaction']['max_attempts'] ?? 3);
         $baseDelayMs = (int) ($this->config['transaction']['retry_base_delay_ms'] ?? 25);
         $previousTimeout = null;
-
-        if ($lockWaitTimeoutSeconds !== null) {
-            $previousTimeout = (int) $pdo->query('SELECT @@SESSION.innodb_lock_wait_timeout')->fetchColumn();
-            $pdo->exec('SET SESSION innodb_lock_wait_timeout = ' . max(1, $lockWaitTimeoutSeconds));
-        }
+        $previousIsolation = null;
 
         try {
+            if ($isolation !== null) {
+                // Session scope works identically on MySQL 8 and MariaDB; the
+                // next-transaction form (SET TRANSACTION …) is ignored on MariaDB.
+                $previousIsolation = (string) $pdo->query('SELECT @@SESSION.transaction_isolation')->fetchColumn();
+                $pdo->exec('SET SESSION TRANSACTION ISOLATION LEVEL ' . $isolation->value);
+            }
+
+            if ($lockWaitTimeoutSeconds !== null) {
+                $previousTimeout = (int) $pdo->query('SELECT @@SESSION.innodb_lock_wait_timeout')->fetchColumn();
+                $pdo->exec('SET SESSION innodb_lock_wait_timeout = ' . max(1, $lockWaitTimeoutSeconds));
+            }
+
             for ($attempt = 1; ; $attempt++) {
-                if ($isolation !== null) {
-                    $pdo->exec('SET TRANSACTION ISOLATION LEVEL ' . $isolation->value);
-                }
                 $pdo->beginTransaction();
                 try {
                     $result = $work($pdo);
@@ -79,6 +82,8 @@ final class Database
 
                     return $result;
                 } catch (\Throwable $e) {
+                    // The closure may have committed before throwing.
+                    // @phpstan-ignore-next-line
                     if ($pdo->inTransaction()) {
                         $pdo->rollBack();
                     }
@@ -89,6 +94,9 @@ final class Database
                 }
             }
         } finally {
+            if ($previousIsolation !== null && preg_match('/^[A-Z-]+$/', $previousIsolation) === 1) {
+                $pdo->exec('SET SESSION TRANSACTION ISOLATION LEVEL ' . str_replace('-', ' ', $previousIsolation));
+            }
             if ($previousTimeout !== null) {
                 $pdo->exec('SET SESSION innodb_lock_wait_timeout = ' . $previousTimeout);
             }

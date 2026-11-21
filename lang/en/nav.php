@@ -18,6 +18,7 @@ return [
     'reports' => 'Reports',
     'notifications' => 'Notifications',
     'booking_page' => 'Booking page',
+    'team' => 'Team',
     'settings' => 'Settings',
     'components' => 'Components',
     'platform' => 'Platform',

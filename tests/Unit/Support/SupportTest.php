@@ -43,7 +43,7 @@ final class SupportTest extends TestCase
     public function testTypedReferencesAreNormalised(): void
     {
         self::assertSame('7K3Q9XPM', TokenGenerator::normaliseReference('ab-7k3q-9xpm'));
-        self::assertSame('10000001', TokenGenerator::normaliseReference('IO00 00L1'));
+        self::assertSame('10000011', TokenGenerator::normaliseReference('IO00 00L1'));
     }
 
     public function testNumericCodeIsZeroPadded(): void

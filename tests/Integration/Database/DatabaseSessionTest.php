@@ -16,6 +16,10 @@ final class DatabaseSessionTest extends DatabaseTestCase
     {
         $version = (string) $this->pdo->query('SELECT VERSION()')->fetchColumn();
 
+        if (str_contains(strtolower($version), 'mariadb') && (string) env('ALLOW_MARIADB', '0') === '1') {
+            self::markTestSkipped('MariaDB is allowed for Phase 1 local development (ALLOW_MARIADB=1); Docker and CI must run MySQL 8 (D-009).');
+        }
+
         self::assertStringNotContainsStringIgnoringCase('mariadb', $version, 'The booking engine relies on MySQL 8 behaviour (D-009).');
         self::assertMatchesRegularExpression('/^(8|9)\./', $version);
     }
@@ -49,7 +53,7 @@ final class DatabaseSessionTest extends DatabaseTestCase
         $before = (int) $this->pdo->query('SELECT @@SESSION.innodb_lock_wait_timeout')->fetchColumn();
 
         $level = $this->db->transaction(
-            static fn (\PDO $pdo): string => (string) $pdo->query('SELECT @@transaction_isolation')->fetchColumn(),
+            static fn(\PDO $pdo): string => (string) $pdo->query('SELECT @@transaction_isolation')->fetchColumn(),
             IsolationLevel::ReadCommitted,
             lockWaitTimeoutSeconds: 3,
         );
@@ -95,7 +99,7 @@ final class DatabaseSessionTest extends DatabaseTestCase
     public function testNestedTransactionsAreRefused(): void
     {
         $this->expectException(\LogicException::class);
-        $this->db->transaction(fn () => $this->db->transaction(static fn () => null));
+        $this->db->transaction(fn() => $this->db->transaction(static fn() => null));
     }
 
     public function testDatabaseClassIsTheOnlyConnectionPath(): void

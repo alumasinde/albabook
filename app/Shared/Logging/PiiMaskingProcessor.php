@@ -41,12 +41,20 @@ final class PiiMaskingProcessor implements ProcessorInterface
     {
         $value = (string) preg_replace_callback(
             '/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i',
-            static fn (array $m): string => mb_substr($m[0], 0, 1) . '***@***',
+            static fn(array $m): string => mb_substr($m[0], 0, 1) . '***@***',
             $value,
         );
 
         // Tokens before phones, so digits inside a token are not half-masked.
-        $value = (string) preg_replace('/(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{32,}(?![A-Za-z0-9_-])/', '[redacted]', $value);
+        // Canonical UUIDs are correlation ids, not secrets, and stay readable.
+        $value = (string) preg_replace_callback(
+            '/(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{32,}(?![A-Za-z0-9_-])/',
+            static fn(array $m): string => preg_match(
+                '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i',
+                $m[0],
+            ) === 1 ? $m[0] : '[redacted]',
+            $value,
+        );
 
         // Deliberately narrow so dates, times, amounts and ids are left alone:
         // E.164 (+ and 9–15 digits), and Kenyan mobile/landline forms with
@@ -59,7 +67,7 @@ final class PiiMaskingProcessor implements ProcessorInterface
 
         return (string) preg_replace_callback(
             $patterns,
-            static fn (array $m): string => '***' . substr(preg_replace('/\D/', '', $m[0]) ?? '', -3),
+            static fn(array $m): string => '***' . substr(preg_replace('/\D/', '', $m[0]) ?? '', -3),
             $value,
         );
     }

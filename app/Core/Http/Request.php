@@ -32,8 +32,7 @@ final class Request
         private readonly array $server = [],
         private array $attributes = [],
         private readonly string $rawBody = '',
-    ) {
-    }
+    ) {}
 
     public static function fromGlobals(): self
     {
@@ -153,6 +152,12 @@ final class Request
     public function query(string $key, mixed $default = null): mixed
     {
         return $this->query[$key] ?? $default;
+    }
+
+    /** @return array<string, mixed> */
+    public function queryAll(): array
+    {
+        return $this->query;
     }
 
     public function input(string $key, mixed $default = null): mixed

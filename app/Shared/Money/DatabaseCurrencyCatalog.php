@@ -14,9 +14,7 @@ final class DatabaseCurrencyCatalog implements CurrencyCatalog
     /** @var array<string, Currency>|null */
     private ?array $currencies = null;
 
-    public function __construct(private readonly Database $db)
-    {
-    }
+    public function __construct(private readonly Database $db) {}
 
     public function get(string $code): Currency
     {

@@ -13,7 +13,7 @@
 --   * Tenants are never hard-deleted (archived, then anonymised per D-012), so
 --     every foreign key to tenants is ON DELETE RESTRICT (D-024).
 
-SET NAMES utf8mb4;
+SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 SET time_zone = '+00:00';
 
 CREATE TABLE tenants (

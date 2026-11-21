@@ -1,0 +1,77 @@
+{% extends 'layouts/auth.twig' %}
+
+{% block title %}{{ t('auth.register_title') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+{% if sent %}
+  <h1 class="text-2xl font-semibold text-ink">{{ t('auth.register_sent_title') }}</h1>
+  <div class="mt-6">
+    {% include 'components/feedback/alert.twig' with { tone: 'success', message: t('auth.register_sent_body') } only %}
+  </div>
+  <p class="mt-4 text-sm text-muted">{{ t('auth.register_sent_note') }}</p>
+  <div class="mt-8">
+    {% include 'components/buttons/button.twig' with { label: t('auth.back_to_login'), href: '/login', variant: 'secondary', full_width: true } only %}
+  </div>
+{% else %}
+  <h1 class="text-2xl font-semibold text-ink">{{ t('auth.register_title') }}</h1>
+  <p class="mt-1 text-sm text-muted">{{ t('auth.register_subtitle') }}</p>
+
+  {% if errors|length > 0 %}
+    <div class="mt-6">
+      {% include 'components/feedback/alert.twig' with { tone: 'danger', title: t('forms.fix_errors_title'), message: t('forms.fix_errors_body', { count: errors|length }) } only %}
+    </div>
+  {% endif %}
+
+  <form method="post" action="/register" class="mt-6 space-y-5" novalidate>
+    {{ csrf_field() }}
+
+    <div class="grid gap-5 sm:grid-cols-2">
+      {% include 'components/forms/input.twig' with {
+        name: 'first_name', label: t('auth.first_name'), value: old.first_name|default(''),
+        autocomplete: 'given-name', required: true, error: errors.first_name|default(''),
+      } only %}
+      {% include 'components/forms/input.twig' with {
+        name: 'last_name', label: t('auth.last_name'), value: old.last_name|default(''),
+        autocomplete: 'family-name', required: true, error: errors.last_name|default(''),
+      } only %}
+    </div>
+
+    {% include 'components/forms/input.twig' with {
+      name: 'middle_name', label: t('auth.middle_name'), value: old.middle_name|default(''),
+      autocomplete: 'additional-name', error: errors.middle_name|default(''),
+    } only %}
+
+    {% include 'components/forms/input.twig' with {
+      name: 'email', label: t('auth.email'), type: 'email', value: old.email|default(''),
+      autocomplete: 'email', inputmode: 'email', required: true, error: errors.email|default(''),
+    } only %}
+
+    {% include 'components/forms/input.twig' with {
+      name: 'phone', label: t('auth.phone'), type: 'tel', value: old.phone|default(''),
+      autocomplete: 'tel', inputmode: 'tel', help: t('auth.phone_help'), error: errors.phone|default(''),
+    } only %}
+
+    {% include 'components/forms/password.twig' with {
+      name: 'password', label: t('auth.password'), autocomplete: 'new-password',
+      required: true, help: t('auth.password_help'), error: errors.password|default(''),
+    } only %}
+
+    {% include 'components/forms/password.twig' with {
+      name: 'password_confirmation', label: t('auth.confirm_password'),
+      autocomplete: 'new-password', required: true,
+    } only %}
+
+    {% include 'components/forms/checkbox.twig' with {
+      name: 'terms', label: t('auth.terms'), checked: old.terms|default(false),
+      error: errors.terms|default(''),
+    } only %}
+
+    {% include 'components/buttons/button.twig' with { label: t('auth.submit_register'), type: 'submit', full_width: true } only %}
+  </form>
+
+  <p class="mt-8 text-sm text-muted">
+    {{ t('auth.have_account') }}
+    <a href="/login" class="font-medium text-primary-strong hover:underline">{{ t('auth.sign_in') }}</a>
+  </p>
+{% endif %}
+{% endblock %}

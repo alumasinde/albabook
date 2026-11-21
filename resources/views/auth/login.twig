@@ -1,0 +1,46 @@
+{% extends 'layouts/auth.twig' %}
+
+{% block title %}{{ t('auth.login_title') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-semibold text-ink">{{ t('auth.login_title') }}</h1>
+<p class="mt-1 text-sm text-muted">{{ t('auth.login_subtitle') }}</p>
+
+<div class="mt-6 space-y-3">
+  {% if status == 'reset' %}
+    {% include 'components/feedback/alert.twig' with { tone: 'success', message: t('auth.reset_done'), dismissible: true } only %}
+  {% elseif status == 'invited' %}
+    {% include 'components/feedback/alert.twig' with { tone: 'success', message: t('auth.invitation_accepted'), dismissible: true } only %}
+  {% endif %}
+  {% if error %}
+    {% include 'components/feedback/alert.twig' with { tone: 'danger', message: error } only %}
+  {% endif %}
+</div>
+
+<form method="post" action="/login" class="mt-6 space-y-5" novalidate>
+  {{ csrf_field() }}
+  {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+
+  {% include 'components/forms/input.twig' with {
+    name: 'email', label: t('auth.email'), type: 'email', value: email,
+    autocomplete: 'email', required: true, inputmode: 'email',
+  } only %}
+
+  {% include 'components/forms/password.twig' with {
+    name: 'password', label: t('auth.password'),
+    autocomplete: 'current-password', required: true,
+  } only %}
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    {% include 'components/forms/checkbox.twig' with { name: 'remember', label: t('auth.remember') } only %}
+    <a href="/forgot-password" class="text-sm font-medium text-primary-strong hover:underline">{{ t('auth.forgot') }}</a>
+  </div>
+
+  {% include 'components/buttons/button.twig' with { label: t('auth.submit_login'), type: 'submit', full_width: true } only %}
+</form>
+
+<p class="mt-8 text-sm text-muted">
+  {{ t('auth.no_account') }}
+  <a href="/register" class="font-medium text-primary-strong hover:underline">{{ t('auth.create_account') }}</a>
+</p>
+{% endblock %}

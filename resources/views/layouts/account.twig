@@ -1,0 +1,27 @@
+{#
+  Signed-in account shell for pages that do not depend on an active workspace
+  (security, workspace picker, business onboarding).
+#}
+{% extends 'layouts/base.twig' %}
+
+{% block body %}
+<div class="min-h-screen">
+  <header class="topbar">
+    <div class="flex items-center gap-3">
+      <span class="brand-mark" aria-hidden="true">A</span>
+      <span class="font-semibold text-ink">{{ app_name }}</span>
+    </div>
+    <nav class="flex items-center gap-1" aria-label="{{ t('nav.main') }}">
+      <a href="/workspaces" class="btn btn-ghost btn-sm">{{ t('auth.action_workspaces') }}</a>
+      <a href="/security" class="btn btn-ghost btn-sm">{{ t('auth.action_security') }}</a>
+      <form method="post" action="/logout">
+        {{ csrf_field() }}
+        {% include 'components/buttons/button.twig' with { label: t('auth.sign_out'), type: 'submit', variant: 'secondary', size: 'sm' } only %}
+      </form>
+    </nav>
+  </header>
+  <main id="main" class="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6" tabindex="-1">
+    {% block content %}{% endblock %}
+  </main>
+</div>
+{% endblock %}

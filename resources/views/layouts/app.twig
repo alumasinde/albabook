@@ -5,6 +5,7 @@
 {% extends 'layouts/base.twig' %}
 
 {% block body %}
+{% include 'components/feedback/support-banner.twig' only %}
 <div class="min-h-screen lg:flex">
   {% include 'components/layout/sidebar.twig' with {
     brand: app_name,
@@ -25,6 +26,7 @@
         { key: 'reports', label: t('nav.reports'), icon: 'fa-chart-line', href: '#' },
         { key: 'notifications', label: t('nav.notifications'), icon: 'fa-bell', href: '#' },
         { key: 'booking_page', label: t('nav.booking_page'), icon: 'fa-globe', href: '#' },
+        { key: 'team', label: t('nav.team'), icon: 'fa-user-shield', href: '/team' },
         { key: 'settings', label: t('nav.settings'), icon: 'fa-gear', href: '#' },
         { key: 'components', label: t('nav.components'), icon: 'fa-swatchbook', href: '/_system/components' },
       ] },

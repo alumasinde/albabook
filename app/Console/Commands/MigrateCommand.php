@@ -10,9 +10,7 @@ use App\Core\Database\Migrations\MigrationRunner;
 
 final class MigrateCommand implements Command
 {
-    public function __construct(private readonly MigrationRunner $runner)
-    {
-    }
+    public function __construct(private readonly MigrationRunner $runner) {}
 
     public function name(): string
     {
@@ -26,7 +24,7 @@ final class MigrateCommand implements Command
 
     public function run(array $args, Output $output): int
     {
-        $applied = $this->runner->migrate(static fn (string $version) => $output->line("  applied  {$version}"));
+        $applied = $this->runner->migrate(static fn(string $version) => $output->line("  applied  {$version}"));
         $output->success($applied === [] ? 'Nothing to migrate.' : sprintf('Applied %d migration(s).', count($applied)));
 
         return 0;

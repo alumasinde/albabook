@@ -6,7 +6,7 @@
 -- Intervals are half-open [start, end); occupancies include buffers.
 -- Appointment instants are UTC; the branch timezone is applied at the edges.
 
-SET NAMES utf8mb4;
+SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 SET time_zone = '+00:00';
 
 CREATE TABLE schedule_versions (

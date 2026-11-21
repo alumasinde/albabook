@@ -18,7 +18,7 @@
 --   * Where code branches on a value, a PHP backed enum mirrors the codes and a
 --     test asserts the enum cases equal the seeded rows.
 
-SET NAMES utf8mb4;
+SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 SET time_zone = '+00:00';
 
 -- ---------------------------------------------------------------------------

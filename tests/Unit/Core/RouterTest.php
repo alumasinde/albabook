@@ -6,8 +6,8 @@ namespace Tests\Unit\Core;
 
 use App\Core\Http\HostGroup;
 use App\Core\Http\HttpException;
-use App\Core\Routing\RouteRegistrar;
 use App\Core\Routing\Router;
+use App\Core\Routing\RouteRegistrar;
 use PHPUnit\Framework\TestCase;
 
 final class RouterTest extends TestCase
@@ -81,14 +81,12 @@ final class RouterTest extends TestCase
     public function testRoutesAddedLaterAreMatched(): void
     {
         $router = new Router();
-        $router->group(HostGroup::Api, static fn (RouteRegistrar $r) => $r->get('/a', [self::class, 'handler']));
+        $router->group(HostGroup::Api, static fn(RouteRegistrar $r) => $r->get('/a', [self::class, 'handler']));
         $router->match(HostGroup::Api, 'GET', '/a');
-        $router->group(HostGroup::Api, static fn (RouteRegistrar $r) => $r->get('/b', [self::class, 'handler']));
+        $router->group(HostGroup::Api, static fn(RouteRegistrar $r) => $r->get('/b', [self::class, 'handler']));
 
         self::assertSame('/b', $router->match(HostGroup::Api, 'GET', '/b')->route->path);
     }
 
-    public static function handler(): void
-    {
-    }
+    public static function handler(): void {}
 }

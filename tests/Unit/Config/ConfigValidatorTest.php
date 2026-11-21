@@ -22,7 +22,7 @@ final class ConfigValidatorTest extends TestCase
     {
         foreach (['', 'not-base64', 'base64:' . base64_encode('too short')] as $key) {
             $errors = (new ConfigValidator())->validate(self::config(['app' => ['key' => $key]]));
-            self::assertNotEmpty(array_filter($errors, static fn (string $e): bool => str_contains($e, 'APP_KEY')), "key: {$key}");
+            self::assertNotEmpty(array_filter($errors, static fn(string $e): bool => str_contains($e, 'APP_KEY')), "key: {$key}");
         }
     }
 
@@ -93,7 +93,23 @@ final class ConfigValidatorTest extends TestCase
                 'default_tenant_currency' => 'KES',
             ],
             'database' => ['host' => 'db', 'port' => 3306, 'database' => 'albabook', 'username' => 'albabook', 'password' => ''],
-            'security' => ['secure_cookies' => false, 'trusted_proxies' => []],
+            'security' => [
+                'secure_cookies' => false,
+                'trusted_proxies' => [],
+                'session' => ['idle_timeout_minutes' => 120, 'absolute_timeout_minutes' => 720, 'cookie_secure' => '__Host-albabook_app'],
+                'remember' => ['cookie_secure' => '__Host-albabook_remember'],
+                'support' => ['cookie_secure' => '__Host-albabook_support'],
+                'platform' => ['cookie_secure' => '__Host-albabook_admin', 'ip_allowlist' => []],
+            ],
+            'auth' => [
+                'password' => ['min_length' => 12, 'max_length' => 128, 'common_passwords_path' => 'resources/security/common-passwords.txt'],
+                'mfa' => ['leeway_steps' => 1],
+            ],
+            'tenancy' => [
+                'slug' => ['pattern' => '/^[a-z0-9]+(-[a-z0-9]+)*$/'],
+                'support' => ['default_minutes' => 60, 'max_minutes' => 240],
+            ],
+            'mail' => ['transport' => 'log', 'from_address' => 'no-reply@albabook.test'],
             'logging' => ['level' => 'debug', 'channel' => 'file', 'format' => 'line'],
         ];
 

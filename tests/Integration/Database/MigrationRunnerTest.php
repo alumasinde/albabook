@@ -89,7 +89,7 @@ final class MigrationRunnerTest extends DatabaseTestCase
             self::assertStringContainsString('commits DDL implicitly', $e->getMessage());
         }
 
-        $states = array_map(static fn (MigrationStatus $s): string => $s->version . ':' . $s->state, $runner->status());
+        $states = array_map(static fn(MigrationStatus $s): string => $s->version . ':' . $s->state, $runner->status());
         self::assertSame(['001_ok:applied', '002_bad:pending'], $states);
     }
 

@@ -1,0 +1,175 @@
+{% extends 'layouts/admin.twig' %}
+
+{% block title %}{{ t('admin.dashboard_title') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+{% set statusTones = { pending: 'warning', trial: 'info', active: 'success', suspended: 'danger', cancelled: 'neutral', archived: 'neutral' } %}
+
+<h1 class="text-2xl font-semibold text-ink">{{ t('admin.dashboard_title') }}</h1>
+<p class="mt-1 text-sm text-muted">{{ t('admin.dashboard_subtitle') }}</p>
+
+{% if status == 'support_invalid' %}
+  <div class="mt-6">
+    {% include 'components/feedback/alert.twig' with { tone: 'danger', message: t('admin.support_invalid'), dismissible: true } only %}
+  </div>
+{% elseif status == 'support_denied' %}
+  <div class="mt-6">
+    {% include 'components/feedback/alert.twig' with { tone: 'danger', message: t('admin.support_denied'), dismissible: true } only %}
+  </div>
+{% elseif status == 'support_ended' %}
+  <div class="mt-6">
+    {% include 'components/feedback/alert.twig' with { tone: 'success', message: t('admin.support_ended_status'), dismissible: true } only %}
+  </div>
+{% endif %}
+
+<div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+  {% include 'components/data/stat-card.twig' with { label: t('admin.kpi_total'), value: tenants|length, icon: 'fa-building' } only %}
+  {% include 'components/data/stat-card.twig' with { label: t('admin.kpi_tenants'), value: counts.active|default(0), icon: 'fa-circle-check' } only %}
+  {% include 'components/data/stat-card.twig' with { label: t('admin.kpi_trials'), value: counts.trial|default(0), icon: 'fa-hourglass-half' } only %}
+  {% include 'components/data/stat-card.twig' with { label: t('admin.kpi_pending'), value: counts.pending|default(0), icon: 'fa-clock' } only %}
+</div>
+
+<section class="card mt-6 p-6" aria-labelledby="support-heading">
+  <h2 id="support-heading" class="text-lg font-semibold text-ink">{{ t('admin.support_title') }}</h2>
+  <p class="mt-1 text-sm text-muted">{{ t('admin.support_read_help') }}</p>
+
+  {% if canSupportRead and tenants is not empty %}
+    {% set tenantOptions = [] %}
+    {% for tenant in tenants %}
+      {% set tenantOptions = tenantOptions|merge([{ value: tenant.id, label: tenant.name ~ ' (' ~ tenant.slug ~ ')' }]) %}
+    {% endfor %}
+    <form method="post" action="/support-sessions" class="mt-5 grid gap-4 lg:grid-cols-4" novalidate>
+      {{ csrf_field() }}
+      <div class="lg:col-span-2">
+        {% include 'components/forms/select.twig' with {
+          name: 'tenant_id', label: t('admin.support_tenant'), options: tenantOptions,
+          value: '', placeholder: t('admin.support_tenant'), required: true,
+          error: status == 'support_invalid' ? t('admin.support_invalid') : '',
+        } only %}
+      </div>
+      <div class="lg:col-span-2">
+        {% include 'components/forms/select.twig' with {
+          name: 'minutes', label: t('admin.support_minutes'), value: '60', required: true,
+          options: [
+            { value: '30', label: '30' },
+            { value: '60', label: '60' },
+            { value: '120', label: '120' },
+            { value: '240', label: '240' },
+          ],
+        } only %}
+      </div>
+      <div class="lg:col-span-4">
+        {% include 'components/forms/textarea.twig' with {
+          name: 'reason', label: t('admin.support_reason'), value: '',
+          required: true, rows: 2,
+          help: '10–500 characters. Recorded in the audit log.',
+        } only %}
+      </div>
+      {% if canSupportWrite %}
+        <div class="lg:col-span-2">
+          {% include 'components/forms/checkbox.twig' with {
+            name: 'write', label: t('admin.support_write'),
+            help: t('admin.support_read_help'),
+          } only %}
+        </div>
+      {% endif %}
+      <div class="lg:col-span-4">
+        {% include 'components/buttons/button.twig' with { label: t('admin.support_start'), type: 'submit', icon: 'fa-user-shield' } only %}
+      </div>
+    </form>
+  {% elseif not canSupportRead %}
+    <div class="mt-5">
+      {% include 'components/feedback/alert.twig' with { tone: 'info', message: t('admin.support_no_permission') } only %}
+    </div>
+  {% endif %}
+</section>
+
+<section class="mt-6" aria-labelledby="tenants-heading">
+  <h2 id="tenants-heading" class="text-lg font-semibold text-ink">{{ t('admin.tenants') }}</h2>
+  {% if tenants is empty %}
+    <div class="mt-4">
+      {% include 'components/feedback/empty-state.twig' with { title: t('admin.tenants_empty'), message: t('admin.tenants_empty_body'), icon: 'fa-building' } only %}
+    </div>
+  {% else %}
+    <div class="card mt-4 overflow-x-auto">
+      <table class="data-table">
+        <caption class="sr-only">{{ t('admin.tenants') }}</caption>
+        <thead>
+          <tr>
+            <th scope="col" class="text-left">{{ t('admin.tenant_name') }}</th>
+            <th scope="col" class="text-left">{{ t('admin.tenant_slug') }}</th>
+            <th scope="col" class="text-left">{{ t('admin.tenant_status') }}</th>
+            <th scope="col" class="text-left">{{ t('admin.tenant_created') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tenant in tenants %}
+            <tr>
+              <td data-label="{{ t('admin.tenant_name') }}">{{ tenant.name }}</td>
+              <td data-label="{{ t('admin.tenant_slug') }}">{{ tenant.slug }}</td>
+              <td data-label="{{ t('admin.tenant_status') }}">
+                <span class="badge badge-{{ statusTones[tenant.status]|default('neutral') }}">
+                  <span class="badge-dot" aria-hidden="true"></span>{{ tenant.status|capitalize }}
+                </span>
+              </td>
+              <td data-label="{{ t('admin.tenant_created') }}">{{ tenant.created_at|date('d M Y', 'UTC') }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</section>
+
+<section class="mt-8" aria-labelledby="recent-support-heading">
+  <h2 id="recent-support-heading" class="text-lg font-semibold text-ink">{{ t('admin.support_recent') }}</h2>
+  {% if supportSessions is empty %}
+    <div class="mt-4">
+      {% include 'components/feedback/empty-state.twig' with { title: t('admin.support_none'), message: t('admin.support_read_help'), icon: 'fa-user-shield' } only %}
+    </div>
+  {% else %}
+    <div class="card mt-4 overflow-x-auto">
+      <table class="data-table">
+        <caption class="sr-only">{{ t('admin.support_recent') }}</caption>
+        <thead>
+          <tr>
+            <th scope="col" class="text-left">{{ t('admin.support_tenant') }}</th>
+            <th scope="col" class="text-left">{{ t('admin.support_reason') }}</th>
+            <th scope="col" class="text-left">{{ t('admin.support_scope') }}</th>
+            <th scope="col" class="text-left">{{ t('admin.support_started') }}</th>
+            <th scope="col" class="text-left">{{ t('admin.support_expires') }}</th>
+            <th scope="col" class="text-right">{{ t('common.actions') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for session in supportSessions %}
+            <tr>
+              <td data-label="{{ t('admin.support_tenant') }}">{{ session.tenant_name }}</td>
+              <td data-label="{{ t('admin.support_reason') }}">{{ session.reason }}</td>
+              <td data-label="{{ t('admin.support_scope') }}">
+                {% if session.scope == 'write' %}
+                  <span class="badge badge-warning">{{ t('admin.support_write_scope') }}</span>
+                {% else %}
+                  <span class="badge badge-neutral">{{ t('admin.support_read_only') }}</span>
+                {% endif %}
+              </td>
+              <td data-label="{{ t('admin.support_started') }}">{{ session.started_at|date('d M Y H:i', 'UTC') }} UTC</td>
+              <td data-label="{{ t('admin.support_expires') }}">{{ session.expires_at|date('d M Y H:i', 'UTC') }} UTC</td>
+              <td data-label="{{ t('common.actions') }}" class="md:text-right">
+                {% if session.ended_at is null %}
+                  <form method="post" action="/support-sessions/{{ session.id }}/end">
+                    {{ csrf_field() }}
+                    {% include 'components/buttons/button.twig' with { label: t('admin.support_end'), type: 'submit', variant: 'secondary', size: 'sm' } only %}
+                  </form>
+                {% else %}
+                  <span class="text-sm text-muted">{{ t('admin.support_ended') }}</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

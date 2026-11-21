@@ -18,7 +18,7 @@ final class LookupEnumMirrorTest extends DatabaseTestCase
     {
         $rows = $this->pdo->query('SELECT code, is_terminal FROM tenant_statuses ORDER BY sort_position')->fetchAll();
 
-        self::assertSame(array_map(static fn (TenantStatus $s): string => $s->value, TenantStatus::cases()), array_column($rows, 'code'));
+        self::assertSame(array_map(static fn(TenantStatus $s): string => $s->value, TenantStatus::cases()), array_column($rows, 'code'));
         foreach ($rows as $row) {
             self::assertSame((bool) $row['is_terminal'], TenantStatus::from((string) $row['code'])->isTerminal(), (string) $row['code']);
         }
@@ -28,7 +28,7 @@ final class LookupEnumMirrorTest extends DatabaseTestCase
     {
         $rows = $this->pdo->query('SELECT code, blocks_time, is_terminal FROM appointment_statuses ORDER BY sort_position')->fetchAll();
 
-        self::assertSame(array_map(static fn (AppointmentStatus $s): string => $s->value, AppointmentStatus::cases()), array_column($rows, 'code'));
+        self::assertSame(array_map(static fn(AppointmentStatus $s): string => $s->value, AppointmentStatus::cases()), array_column($rows, 'code'));
         foreach ($rows as $row) {
             $status = AppointmentStatus::from((string) $row['code']);
             self::assertSame((bool) $row['blocks_time'], $status->blocksTime(), "{$status->value} blocks_time");
@@ -61,7 +61,9 @@ final class LookupEnumMirrorTest extends DatabaseTestCase
         $defaults = require dirname(__DIR__, 3) . '/config/booking.php';
         $columns = $this->pdo->query(
             "SELECT COLUMN_NAME FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'booking_policies' AND IS_NULLABLE = 'YES' AND COLUMN_NAME NOT IN ('branch_id', 'deposit_value')"
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'booking_policies' AND IS_NULLABLE = 'YES'
+               AND EXTRA NOT LIKE '%GENERATED%'
+               AND COLUMN_NAME NOT IN ('branch_id', 'deposit_value')",
         )->fetchAll(\PDO::FETCH_COLUMN);
 
         foreach ($columns as $column) {

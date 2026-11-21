@@ -1,0 +1,31 @@
+{% extends 'layouts/account.twig' %}
+
+{% block title %}{{ t('auth.workspaces_title') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-semibold text-ink">{{ t('auth.workspaces_title') }}</h1>
+<p class="mt-1 text-sm text-muted">{{ t('auth.workspaces_subtitle') }}</p>
+
+<ul class="mt-6 space-y-3">
+  {% for workspace in workspaces %}
+    <li class="card flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+      <div class="min-w-0">
+        <p class="flex flex-wrap items-center gap-2 font-semibold text-ink">
+          {{ workspace.name }}
+          {% if workspace.tenant_id == activeTenantId %}
+            {% include 'components/feedback/status-badge.twig' with { status: 'completed', label: t('auth.active') } only %}
+          {% endif %}
+        </p>
+        <p class="mt-1 truncate text-sm text-muted">{{ workspace.slug }}</p>
+      </div>
+      <form method="post" action="/workspaces/{{ workspace.tenant_id }}/switch">
+        {{ csrf_field() }}
+        {% include 'components/buttons/button.twig' with {
+          label: t('auth.open_workspace'), type: 'submit',
+          variant: workspace.tenant_id == activeTenantId ? 'secondary' : 'primary',
+        } only %}
+      </form>
+    </li>
+  {% endfor %}
+</ul>
+{% endblock %}

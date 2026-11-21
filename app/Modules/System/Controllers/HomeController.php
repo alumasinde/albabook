@@ -7,6 +7,8 @@ namespace App\Modules\System\Controllers;
 use App\Core\Http\Request;
 use App\Core\Http\Response;
 use App\Core\View\View;
+use App\Modules\Auth\Context\AuthContext;
+use App\Modules\Platform\Context\PlatformAuthContext;
 
 /**
  * Placeholder landing pages per host until Phase 2 (login), Phase 6 (booking
@@ -15,14 +17,20 @@ use App\Core\View\View;
  */
 final class HomeController
 {
-    public function __construct(private readonly View $view)
-    {
-    }
+    public function __construct(
+        private readonly View $view,
+        private readonly AuthContext $auth,
+        private readonly PlatformAuthContext $platformAuth,
+    ) {}
 
     /** @param array<string, string> $params */
     public function tenant(Request $request, array $params): Response
     {
-        return $this->view->response('pages/home/tenant.twig');
+        if ($this->auth->user !== null) {
+            return Response::redirect($this->auth->mfaPending ? '/two-factor' : '/dashboard');
+        }
+
+        return Response::redirect('/login');
     }
 
     /** @param array<string, string> $params */
@@ -34,7 +42,11 @@ final class HomeController
     /** @param array<string, string> $params */
     public function admin(Request $request, array $params): Response
     {
-        return $this->view->response('pages/home/admin.twig');
+        if ($this->platformAuth->isAuthenticated()) {
+            return Response::redirect($this->platformAuth->mfaPending ? '/two-factor' : '/dashboard');
+        }
+
+        return Response::redirect('/login');
     }
 
     /** @param array<string, string> $params */

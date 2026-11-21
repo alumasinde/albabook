@@ -47,7 +47,7 @@ return static function (array $overrides = []): Application {
     (require __DIR__ . '/routes.php')($router, $basePath);
     $container->instance(Router::class, $router);
 
-    /** @var array{global: list<class-string>, groups: array<string, list<class-string>>} $middleware */
+    /** @var array{global: list<class-string<App\Core\Middleware\MiddlewareInterface>>, groups: array<string, list<class-string<App\Core\Middleware\MiddlewareInterface>>>} $middleware */
     $middleware = require __DIR__ . '/middleware.php';
 
     $app = new Application(

@@ -11,9 +11,7 @@ namespace App\Shared\Support;
 final class TrustedProxies
 {
     /** @param list<string> $entries IPs or CIDR ranges */
-    public function __construct(private readonly array $entries)
-    {
-    }
+    public function __construct(private readonly array $entries) {}
 
     public function isTrusted(string $ip): bool
     {

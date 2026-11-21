@@ -14,10 +14,14 @@
         <span class="rounded-md bg-white/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide">{{ t('nav.platform') }}</span>
       </div>
       <nav aria-label="{{ t('nav.platform') }}" class="hidden items-center gap-1 text-sm md:flex">
-        <a href="/" class="admin-nav-link">{{ t('nav.tenants') }}</a>
+        <a href="/dashboard" class="admin-nav-link">{{ t('nav.overview') }}</a>
         <a href="#" class="admin-nav-link">{{ t('nav.plans') }}</a>
         <a href="#" class="admin-nav-link">{{ t('nav.audit_logs') }}</a>
         <a href="/_system/components" class="admin-nav-link">{{ t('nav.components') }}</a>
+        <form method="post" action="/logout">
+          {{ csrf_field() }}
+          <button type="submit" class="admin-nav-link">{{ t('auth.sign_out') }}</button>
+        </form>
       </nav>
     </div>
   </header>

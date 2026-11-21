@@ -13,9 +13,7 @@ use App\Core\Http\Response;
  */
 final class Pipeline
 {
-    public function __construct(private readonly Container $container)
-    {
-    }
+    public function __construct(private readonly Container $container) {}
 
     /**
      * @param list<class-string<MiddlewareInterface>|MiddlewareInterface> $middleware
@@ -30,7 +28,7 @@ final class Pipeline
                 throw new \LogicException(sprintf('%s is not a middleware.', get_debug_type($instance)));
             }
             $current = $next;
-            $next = static fn (Request $request): Response => $instance->process($request, $current);
+            $next = static fn(Request $request): Response => $instance->process($request, $current);
         }
 
         return $next($request);

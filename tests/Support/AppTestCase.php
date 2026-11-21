@@ -63,6 +63,7 @@ abstract class AppTestCase extends TestCase
     }
 
     /** Temporarily set environment variables for the next boot(); restored in tearDown. */
+    /** @param array<string, string> $values */
     protected function withEnv(array $values): void
     {
         foreach ($values as $key => $value) {
@@ -85,6 +86,10 @@ abstract class AppTestCase extends TestCase
         return $this->app->handle(Request::create($method, "http://{$host}{$path}", $body, $headers, $cookies, $server));
     }
 
+    /**
+     * @param array<string, string> $headers
+     * @param array<string, string> $cookies
+     */
     protected function get(string $host, string $path, array $headers = [], array $cookies = []): Response
     {
         return $this->request('GET', $host, $path, [], $headers, $cookies);

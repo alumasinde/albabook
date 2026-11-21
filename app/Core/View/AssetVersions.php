@@ -16,9 +16,7 @@ final class AssetVersions
     /** @var array<string, string> */
     private array $versions = [];
 
-    public function __construct(private readonly string $publicAssetsPath)
-    {
-    }
+    public function __construct(private readonly string $publicAssetsPath) {}
 
     public function url(string $path, ?HostGroup $group): string
     {

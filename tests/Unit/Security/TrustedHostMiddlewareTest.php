@@ -18,7 +18,7 @@ final class TrustedHostMiddlewareTest extends TestCase
 {
     public function testKnownHostMapsToItsGroup(): void
     {
-        $seen = $this->run(Request::create('GET', 'http://book.albabook.test:8080/'));
+        $seen = $this->process(Request::create('GET', 'http://book.albabook.test:8080/'));
 
         self::assertSame(HostGroup::Booking, $seen->hostGroup());
         self::assertSame('book.albabook.test', $seen->host());
@@ -26,7 +26,7 @@ final class TrustedHostMiddlewareTest extends TestCase
 
     public function testHostIsCaseInsensitiveAndTrailingDotIsIgnored(): void
     {
-        $seen = $this->run(Request::create('GET', 'http://app.albabook.test/', headers: ['Host' => 'APP.Albabook.test.']));
+        $seen = $this->process(Request::create('GET', 'http://app.albabook.test/', headers: ['Host' => 'APP.Albabook.test.']));
 
         self::assertSame(HostGroup::Tenant, $seen->hostGroup());
     }
@@ -34,7 +34,7 @@ final class TrustedHostMiddlewareTest extends TestCase
     public function testUnknownHostIsRejectedBeforeRouting(): void
     {
         try {
-            $this->run(Request::create('GET', 'http://evil.example.com/'));
+            $this->process(Request::create('GET', 'http://evil.example.com/'));
             self::fail('Expected 400');
         } catch (HttpException $e) {
             self::assertSame(400, $e->status);
@@ -47,7 +47,7 @@ final class TrustedHostMiddlewareTest extends TestCase
         $request = Request::create('GET', 'http://evil.example.com/', headers: ['X-Forwarded-Host' => 'app.albabook.test'], server: ['REMOTE_ADDR' => '203.0.113.9']);
 
         $this->expectException(HttpException::class);
-        $this->run($request);
+        $this->process($request);
     }
 
     public function testForwardedHeadersFromTrustedProxyAreUsed(): void
@@ -58,7 +58,7 @@ final class TrustedHostMiddlewareTest extends TestCase
             'X-Forwarded-For' => '198.51.100.7, 10.0.0.5',
         ], server: ['REMOTE_ADDR' => '10.0.0.2']);
 
-        $seen = $this->run($request);
+        $seen = $this->process($request);
 
         self::assertSame(HostGroup::Admin, $seen->hostGroup());
         self::assertTrue($seen->isSecure());
@@ -69,7 +69,7 @@ final class TrustedHostMiddlewareTest extends TestCase
     {
         $request = Request::create('GET', 'http://app.albabook.test/', headers: ['X-Forwarded-For' => '1.2.3.4'], server: ['REMOTE_ADDR' => '203.0.113.9']);
 
-        self::assertSame('203.0.113.9', $this->run($request)->clientIp());
+        self::assertSame('203.0.113.9', $this->process($request)->clientIp());
     }
 
     public function testIpv6LiteralHostIsRejected(): void
@@ -77,7 +77,7 @@ final class TrustedHostMiddlewareTest extends TestCase
         self::assertNull(TrustedHostMiddleware::normaliseHost('[::1]:8080'));
     }
 
-    private function run(Request $request): Request
+    private function process(Request $request): Request
     {
         $middleware = new TrustedHostMiddleware(
             new HostMap(['app' => 'app.albabook.test', 'book' => 'book.albabook.test', 'api' => 'api.albabook.test', 'admin' => 'admin.albabook.test']),

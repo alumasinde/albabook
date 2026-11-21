@@ -12,6 +12,7 @@ use App\Core\Http\RequestContext;
 use App\Core\Http\Response;
 use App\Core\Middleware\MiddlewareInterface;
 use App\Shared\Security\CsrfService;
+use App\Shared\Security\SessionCookieNames;
 
 /**
  * Protects state-changing browser requests (plan.md §19.3).
@@ -28,8 +29,8 @@ final class CsrfMiddleware implements MiddlewareInterface
         private readonly CsrfService $csrf,
         private readonly RequestContext $context,
         private readonly Config $config,
-    ) {
-    }
+        private readonly SessionCookieNames $cookies,
+    ) {}
 
     public function process(Request $request, callable $next): Response
     {
@@ -39,8 +40,9 @@ final class CsrfMiddleware implements MiddlewareInterface
         }
 
         $cookieName = $this->cookieName($request);
+        $binding = $this->cookies->csrfBinding($request);
         $cookieToken = $request->cookie($cookieName);
-        $hasValidCookie = $cookieToken !== null && $this->csrf->isValidToken($cookieToken);
+        $hasValidCookie = $cookieToken !== null && $this->csrf->isValidToken($cookieToken, $binding);
 
         if (!$request->isMethodSafe()) {
             if (!$this->originAllowed($request)) {
@@ -48,12 +50,14 @@ final class CsrfMiddleware implements MiddlewareInterface
             }
             $submitted = $request->input($this->config->string('security.csrf.field', '_csrf'));
             $submitted = is_string($submitted) ? $submitted : $request->header($this->config->string('security.csrf.header', 'X-CSRF-Token'));
-            if (!$this->csrf->verify($cookieToken, $submitted)) {
+            if (!$this->csrf->verify($cookieToken, $submitted, $binding)) {
                 throw HttpException::csrfMismatch();
             }
         }
 
-        $token = $hasValidCookie ? $cookieToken : $this->csrf->issue();
+        // A token minted before login is rebound to the new session on the
+        // first request after authentication.
+        $token = $hasValidCookie ? $cookieToken : $this->csrf->issue($binding);
         $this->context->csrfToken = $token;
 
         $response = $next($request);

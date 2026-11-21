@@ -11,9 +11,7 @@ use App\Core\Database\Migrations\MigrationStatus;
 
 final class MigrateStatusCommand implements Command
 {
-    public function __construct(private readonly MigrationRunner $runner)
-    {
-    }
+    public function __construct(private readonly MigrationRunner $runner) {}
 
     public function name(): string
     {

@@ -21,9 +21,7 @@ final class DateTimeService
 {
     public const DB_FORMAT = 'Y-m-d H:i:s';
 
-    public function __construct(private readonly Clock $clock)
-    {
-    }
+    public function __construct(private readonly Clock $clock) {}
 
     public function now(): \DateTimeImmutable
     {

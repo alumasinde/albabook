@@ -6,7 +6,7 @@
 -- customer payments (005_payments.sql). AlbaTech subscription invoices must be
 -- eTIMS-compliant from launch (D-015).
 
-SET NAMES utf8mb4;
+SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 SET time_zone = '+00:00';
 
 CREATE TABLE plans (

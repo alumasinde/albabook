@@ -11,7 +11,7 @@
 -- of a STORED generated column (roles.tenant_id -> tenant_scope). The tenant
 -- FK is RESTRICT, which D-024 requires anyway.
 
-SET NAMES utf8mb4;
+SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 SET time_zone = '+00:00';
 
 CREATE TABLE users (

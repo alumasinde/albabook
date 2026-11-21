@@ -5,7 +5,7 @@
 -- Private API credentials are tenant-bound, hashed and scoped (D-008). Webhook
 -- signing secrets are encrypted at rest; the plaintext is shown once.
 
-SET NAMES utf8mb4;
+SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 SET time_zone = '+00:00';
 
 CREATE TABLE api_credentials (

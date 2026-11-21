@@ -1,0 +1,82 @@
+{% extends 'layouts/app.twig' %}
+
+{% set page_title = t('auth.dashboard_title') %}
+{% set active_nav = 'overview' %}
+{% set workspace = tenant.name %}
+
+{% block title %}{{ t('auth.dashboard_title') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+{% set statusTones = { pending: 'warning', trial: 'info', active: 'success', suspended: 'danger', cancelled: 'neutral', archived: 'neutral' } %}
+
+<h2 class="text-2xl font-semibold text-ink">
+  {% if user %}{{ t('auth.welcome_back', { name: user.displayName }) }}{% else %}{{ t('admin.support_enter_title') }}{% endif %}
+</h2>
+<p class="mt-1 text-sm text-muted">{{ t('auth.dashboard_subtitle') }}</p>
+
+{% if user and not user.emailVerified %}
+  <div class="mt-6">
+    {% include 'components/feedback/alert.twig' with { tone: 'warning', message: t('auth.email_unverified') ~ '. ' ~ t('auth.verify_pending_body') } only %}
+    <div class="mt-3">
+      {% include 'components/buttons/button.twig' with { label: t('auth.action_verify'), href: '/verify-email', variant: 'secondary', size: 'sm' } only %}
+    </div>
+  </div>
+{% endif %}
+
+<div class="mt-6 grid gap-4 lg:grid-cols-3">
+  <div class="card p-5 lg:col-span-2">
+    <h3 class="text-base font-semibold text-ink">{{ t('auth.workspace') }}</h3>
+    <p class="mt-1 text-2xl font-semibold text-ink">{{ tenant.name }}</p>
+    <p class="mt-1 text-sm text-muted">{{ tenant.slug }}</p>
+
+    <dl class="mt-5 grid gap-4 sm:grid-cols-3">
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-wide text-muted">{{ t('auth.account_status') }}</dt>
+        <dd class="mt-1">
+          <span class="badge badge-{{ statusTones[tenant.status]|default('neutral') }}">
+            <span class="badge-dot" aria-hidden="true"></span>{{ tenant.status|capitalize }}
+          </span>
+        </dd>
+      </div>
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-wide text-muted">{{ t('auth.workspace_timezone') }}</dt>
+        <dd class="mt-1 text-sm text-ink">{{ tenant.timezone }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-wide text-muted">{{ t('auth.workspace_currency') }}</dt>
+        <dd class="mt-1 text-sm text-ink">{{ tenant.currency }}</dd>
+      </div>
+    </dl>
+  </div>
+
+  <div class="card p-5">
+    <h3 class="text-base font-semibold text-ink">{{ t('auth.membership') }}</h3>
+    {% if membership %}
+      <p class="mt-3 text-xs font-semibold uppercase tracking-wide text-muted">{{ t('auth.roles') }}</p>
+      <div class="mt-2 flex flex-wrap gap-2">
+        {% for role in membership.roleSlugs %}
+          <span class="badge badge-info">{{ role|replace({'_': ' '})|capitalize }}</span>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="mt-3 text-sm text-muted">{{ t('admin.support_read_help') }}</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if membership %}
+  <section class="mt-6" aria-labelledby="quick-actions">
+    <h3 id="quick-actions" class="text-base font-semibold text-ink">{{ t('auth.quick_actions') }}</h3>
+    <div class="mt-3 flex flex-wrap gap-3">
+      {% include 'components/buttons/button.twig' with { label: t('auth.action_team'), href: '/team', icon: 'fa-user-group' } only %}
+      {% include 'components/buttons/button.twig' with { label: t('auth.action_security'), href: '/security', variant: 'secondary', icon: 'fa-shield-halved' } only %}
+      {% include 'components/buttons/button.twig' with { label: t('auth.action_workspaces'), href: '/workspaces', variant: 'secondary', icon: 'fa-building' } only %}
+    </div>
+  </section>
+{% endif %}
+
+<section class="card mt-6 p-6" aria-labelledby="setup-heading">
+  <h3 id="setup-heading" class="text-base font-semibold text-ink">{{ t('auth.setup_progress') }}</h3>
+  <p class="mt-2 max-w-2xl text-sm text-muted">{{ t('auth.setup_body') }}</p>
+</section>
+{% endblock %}
