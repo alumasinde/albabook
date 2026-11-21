@@ -1,0 +1,23 @@
+{#
+  Authentication shell (auth.md §2): form on the left, product panel on the right,
+  single column on mobile. Used by Phase 2 login/register/reset pages.
+#}
+{% extends 'layouts/base.twig' %}
+
+{% block body %}
+<div class="grid min-h-screen lg:grid-cols-2">
+  <main id="main" class="flex items-center justify-center px-4 py-10 sm:px-8" tabindex="-1">
+    <div class="w-full max-w-md">
+      <div class="mb-8 flex items-center gap-2 font-semibold text-lg">
+        <span class="brand-mark" aria-hidden="true">A</span>{{ app_name }}
+      </div>
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+  <aside class="hidden bg-navy p-12 text-white lg:flex lg:flex-col lg:justify-end" aria-hidden="true">
+    <p class="text-3xl font-semibold leading-tight">{{ t('auth.tagline') }}</p>
+    <p class="mt-4 max-w-md text-white/70">{{ t('auth.tagline_detail') }}</p>
+    <p class="mt-12 text-sm text-white/50">{{ t('auth.footer') }}</p>
+  </aside>
+</div>
+{% endblock %}

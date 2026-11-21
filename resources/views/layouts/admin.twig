@@ -1,0 +1,28 @@
+{#
+  Platform admin shell (auth.md §10). Deliberately looks different from the tenant
+  portal (dark top bar, "Platform" label) so admins always know which boundary they are in.
+#}
+{% extends 'layouts/base.twig' %}
+
+{% block body %}
+<div class="min-h-screen">
+  <header class="bg-navy text-white">
+    <div class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+      <div class="flex items-center gap-3">
+        <span class="brand-mark" aria-hidden="true">A</span>
+        <span class="font-semibold">{{ app_name }}</span>
+        <span class="rounded-md bg-white/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide">{{ t('nav.platform') }}</span>
+      </div>
+      <nav aria-label="{{ t('nav.platform') }}" class="hidden items-center gap-1 text-sm md:flex">
+        <a href="/" class="admin-nav-link">{{ t('nav.tenants') }}</a>
+        <a href="#" class="admin-nav-link">{{ t('nav.plans') }}</a>
+        <a href="#" class="admin-nav-link">{{ t('nav.audit_logs') }}</a>
+        <a href="/_system/components" class="admin-nav-link">{{ t('nav.components') }}</a>
+      </nav>
+    </div>
+  </header>
+  <main id="main" class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8" tabindex="-1">
+    {% block content %}{% endblock %}
+  </main>
+</div>
+{% endblock %}

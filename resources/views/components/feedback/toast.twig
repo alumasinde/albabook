@@ -1,0 +1,6 @@
+{#
+  Server-rendered toast (e.g. after a redirect). app.js moves it into #toast-region and
+  dismisses it after a few seconds; window.AlbaBook.toast(message, tone) creates them from JS.
+  Params: message, tone? (success|danger|info)
+#}
+<template data-toast data-tone="{{ tone|default('success') }}">{{ message }}</template>

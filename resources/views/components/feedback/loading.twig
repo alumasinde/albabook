@@ -1,0 +1,5 @@
+{# Params: label? — announced to screen readers. #}
+<div class="flex items-center gap-3 text-sm text-muted" role="status">
+  <span class="spinner" aria-hidden="true"></span>
+  <span>{{ label|default(t('common.loading')) }}</span>
+</div>

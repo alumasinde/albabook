@@ -1,0 +1,20 @@
+{#
+  KPI card (dashboard.md §2B). The caller passes an already formatted value
+  (e.g. via the |money filter); the card never calculates.
+  Params: label, value, hint?, icon?, trend? ({ direction: up|down|flat, text })
+#}
+<div class="card p-5">
+  <div class="flex items-start justify-between gap-3">
+    <p class="text-sm font-medium text-muted">{{ label }}</p>
+    {% if icon|default('') %}<span class="stat-icon" aria-hidden="true"><i class="fa-solid {{ icon }}"></i></span>{% endif %}
+  </div>
+  <p class="mt-2 text-3xl font-semibold tracking-tight text-ink">{{ value }}</p>
+  {% if trend|default(null) %}
+    <p class="mt-2 text-sm trend-{{ trend.direction }}">
+      <i class="fa-solid {{ trend.direction == 'up' ? 'fa-arrow-trend-up' : (trend.direction == 'down' ? 'fa-arrow-trend-down' : 'fa-minus') }}" aria-hidden="true"></i>
+      {{ trend.text }}
+    </p>
+  {% elseif hint|default('') %}
+    <p class="mt-2 text-sm text-muted">{{ hint }}</p>
+  {% endif %}
+</div>

@@ -1,0 +1,27 @@
+<?php
+
+declare(strict_types=1);
+
+return [
+    'main' => 'Main navigation',
+    'workspace' => 'Workspace',
+    'management' => 'Management',
+    'active_workspace' => 'Active workspace',
+    'overview' => 'Overview',
+    'calendar' => 'Calendar',
+    'appointments' => 'Appointments',
+    'services' => 'Services',
+    'staff' => 'Staff',
+    'customers' => 'Customers',
+    'branches' => 'Branches',
+    'resources' => 'Resources',
+    'reports' => 'Reports',
+    'notifications' => 'Notifications',
+    'booking_page' => 'Booking page',
+    'settings' => 'Settings',
+    'components' => 'Components',
+    'platform' => 'Platform',
+    'tenants' => 'Tenants',
+    'plans' => 'Plans',
+    'audit_logs' => 'Audit logs',
+];

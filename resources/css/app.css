@@ -1,0 +1,221 @@
+/*
+ * AlbaBook design system (plan.md §22, dashboard.md §6, auth.md §6).
+ *
+ * Colour tokens are RGB channels so Tailwind opacity modifiers work.
+ * Contrast (WCAG 2.2 AA, 4.5:1 for text) was checked for every text/background
+ * pair used below: white on primary 4.8:1, white on success-strong 5.2:1,
+ * white on danger 5.1:1, muted on white/surface ≥ 5.6:1.
+ * "success" (#16A085) is decorative only; text uses success-strong.
+ *
+ * Tenant themes (Phase 7) override --brand-* inside .booking-page through a
+ * nonce'd <style> block; dashboard colours are never tenant-controlled.
+ */
+
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('../fonts/inter-latin-wght-normal.woff2') format('woff2-variations');
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-navy: 23 26 44;              /* #171A2C */
+    --color-primary: 109 92 232;         /* #6D5CE8 */
+    --color-primary-strong: 85 69 204;   /* #5545CC */
+    --color-primary-soft: 240 238 253;
+    --color-success: 22 160 133;         /* #16A085 (decorative) */
+    --color-success-strong: 17 122 101;  /* #117A65 */
+    --color-success-soft: 231 246 242;
+    --color-warning: 242 169 59;         /* #F2A93B (decorative) */
+    --color-warning-strong: 138 90 0;    /* #8A5A00 */
+    --color-warning-soft: 254 245 230;
+    --color-danger: 201 58 58;           /* #C93A3A */
+    --color-danger-strong: 163 38 38;    /* #A32626 */
+    --color-danger-soft: 252 236 236;
+    --color-surface: 243 244 248;        /* #F3F4F8 */
+    --color-ink: 31 35 51;               /* #1F2333 */
+    --color-muted: 91 97 117;            /* #5B6175 */
+    --color-line: 227 229 236;
+
+    /* Booking-page brand defaults (plan.md §8.8); replaced by the published tenant theme. */
+    --brand-primary: rgb(var(--color-primary));
+    --brand-on-primary: #ffffff;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply font-sans;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary ring-offset-2;
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  .skip-link {
+    @apply sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-ink focus:shadow-card;
+  }
+
+  .brand-mark {
+    @apply inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white;
+  }
+
+  .card {
+    @apply rounded-xl border border-line bg-white shadow-card;
+  }
+
+  /* ---------------------------------------------------------- Shell */
+  .sidebar {
+    @apply fixed inset-y-0 left-0 z-40 flex w-72 -translate-x-full flex-col bg-navy transition-transform duration-200 lg:static lg:translate-x-0;
+  }
+  .sidebar.is-open {
+    @apply translate-x-0;
+  }
+  .drawer-backdrop {
+    @apply fixed inset-0 z-30 bg-navy/50 lg:hidden;
+  }
+  .sidebar-link {
+    @apply flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white;
+  }
+  .sidebar-link.is-active {
+    @apply bg-primary text-white;
+  }
+  .topbar {
+    @apply sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-line bg-white/95 px-4 py-3 backdrop-blur sm:px-6 lg:px-8;
+  }
+  .avatar {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary-soft text-xs font-semibold text-primary-strong;
+  }
+  .admin-nav-link {
+    @apply rounded-md px-3 py-1.5 text-white/80 hover:bg-white/10 hover:text-white;
+  }
+  .lang-switch {
+    @apply rounded-md px-2 py-1 text-muted hover:text-ink;
+  }
+  .lang-switch.is-active {
+    @apply bg-surface font-semibold text-ink;
+  }
+  .step-number {
+    @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-semibold text-primary-strong;
+  }
+  .catalogue-heading {
+    @apply text-lg font-semibold text-ink;
+  }
+
+  /* ---------------------------------------------------------- Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .btn-md { @apply min-h-[44px] px-4 text-sm; }
+  .btn-sm { @apply min-h-[36px] px-3 text-sm; }
+  .btn-lg { @apply min-h-[52px] px-6 text-base; }
+  .btn-primary { @apply bg-primary text-white hover:bg-primary-strong; }
+  .btn-secondary { @apply border border-line bg-white text-ink hover:bg-surface; }
+  .btn-danger { @apply bg-danger text-white hover:bg-danger-strong; }
+  .btn-ghost { @apply text-ink hover:bg-surface; }
+  .icon-button {
+    @apply inline-flex h-11 w-11 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface hover:text-ink;
+  }
+
+  /* Booking page buttons follow the tenant brand (plan.md §8.8). */
+  .booking-page .btn-primary {
+    background-color: var(--brand-primary);
+    color: var(--brand-on-primary);
+  }
+
+  /* ---------------------------------------------------------- Forms (16px text: no iOS zoom) */
+  .field { @apply space-y-1.5; }
+  .field-label { @apply block text-sm font-medium text-ink; }
+  .field-help { @apply text-sm text-muted; }
+  .field-error { @apply flex items-center gap-1.5 text-sm font-medium text-danger-strong; }
+  .input {
+    @apply block min-h-[44px] w-full rounded-lg border border-line bg-white px-3 py-2 text-base text-ink placeholder:text-muted/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-surface;
+  }
+  .input.is-invalid { @apply border-danger focus:ring-danger/30; }
+  .select { @apply appearance-none bg-white pr-10; }
+  .checkbox, .radio {
+    @apply mt-0.5 h-5 w-5 shrink-0 border-line text-primary accent-primary focus:ring-primary;
+  }
+  .checkbox { @apply rounded; }
+  .password-toggle {
+    @apply absolute inset-y-0 right-0 flex w-11 items-center justify-center text-muted hover:text-ink;
+  }
+
+  /* ---------------------------------------------------------- Feedback */
+  .alert { @apply flex items-start gap-3 rounded-lg border px-4 py-3 text-sm; }
+  .alert-info { @apply border-primary/20 bg-primary-soft text-ink; }
+  .alert-success { @apply border-success/30 bg-success-soft text-ink; }
+  .alert-warning { @apply border-warning/40 bg-warning-soft text-ink; }
+  .alert-danger { @apply border-danger/30 bg-danger-soft text-ink; }
+  .alert-info > i { @apply text-primary-strong; }
+  .alert-success > i { @apply text-success-strong; }
+  .alert-warning > i { @apply text-warning-strong; }
+  .alert-danger > i { @apply text-danger-strong; }
+
+  .badge { @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold; }
+  .badge-dot { @apply h-1.5 w-1.5 rounded-full bg-current; }
+  .badge-neutral { @apply bg-surface text-muted; }
+  .badge-info { @apply bg-primary-soft text-primary-strong; }
+  .badge-success { @apply bg-success-soft text-success-strong; }
+  .badge-warning { @apply bg-warning-soft text-warning-strong; }
+  .badge-danger { @apply bg-danger-soft text-danger-strong; }
+
+  .spinner {
+    @apply inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent;
+  }
+
+  .empty-state {
+    @apply card flex flex-col items-center px-6 py-12 text-center;
+  }
+  .empty-state-icon {
+    @apply inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary-soft text-lg text-primary-strong;
+  }
+
+  .stat-icon {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary-soft text-primary-strong;
+  }
+  .trend-up { @apply text-success-strong; }
+  .trend-down { @apply text-danger-strong; }
+  .trend-flat { @apply text-muted; }
+
+  .modal {
+    @apply m-auto w-[calc(100%-2rem)] max-w-lg rounded-xl p-0 shadow-xl backdrop:bg-navy/50;
+  }
+  .modal-panel { @apply p-6; }
+
+  .toast-region {
+    @apply pointer-events-none fixed inset-x-0 bottom-4 z-50 flex flex-col items-center gap-2 px-4 sm:bottom-6 sm:items-end sm:px-6;
+  }
+  .toast {
+    @apply pointer-events-auto flex w-full max-w-sm items-center gap-3 rounded-lg bg-navy px-4 py-3 text-sm text-white shadow-xl;
+  }
+
+  /* ---------------------------------------------------------- Data table: cards on mobile */
+  .data-table { @apply w-full text-sm; }
+  .data-table thead { @apply hidden bg-surface md:table-header-group; }
+  .data-table th { @apply px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted; }
+  .data-table tbody tr { @apply block border-b border-line px-4 py-3 last:border-b-0 md:table-row md:p-0; }
+  .data-table td { @apply flex justify-between gap-4 py-1 text-ink md:table-cell md:px-4 md:py-3; }
+  .data-table td::before { content: attr(data-label); @apply font-medium text-muted md:hidden; }
+}

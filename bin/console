@@ -1,0 +1,30 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/*
+ * AlbaBook command line. Run `php bin/console` for the command list.
+ */
+
+use App\Console\Kernel;
+use App\Core\Config\ConfigurationException;
+
+$basePath = dirname(__DIR__);
+require $basePath . '/vendor/autoload.php';
+
+$args = array_slice($argv, 1);
+
+// key:generate must work before a valid APP_KEY exists.
+if (($args[0] ?? '') === 'key:generate') {
+    exit(Kernel::generateKey($basePath, in_array('--show', $args, true)));
+}
+
+try {
+    $app = (require $basePath . '/bootstrap/app.php')();
+} catch (ConfigurationException $e) {
+    fwrite(STDERR, $e->getMessage() . PHP_EOL);
+    exit(78); // EX_CONFIG
+}
+
+exit($app->container()->get(Kernel::class)->run($args));

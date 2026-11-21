@@ -1,0 +1,4 @@
+{# Params: id, message. Linked from the field via aria-describedby. #}
+{% if message|default('') %}
+  <p id="{{ id }}" class="field-error"><i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i> {{ message }}</p>
+{% endif %}

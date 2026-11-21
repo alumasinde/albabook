@@ -1,0 +1,14 @@
+{# Radio group in a fieldset. Params: name, legend, options: [{ value, label, help? }], value?, error? #}
+<fieldset class="field">
+  <legend class="field-label">{{ legend }}</legend>
+  <div class="space-y-2">
+    {% for option in options %}
+      {% set option_id = 'field-' ~ name ~ '-' ~ loop.index %}
+      <div class="flex items-start gap-3">
+        <input id="{{ option_id }}" name="{{ name }}" type="radio" value="{{ option.value }}" class="radio"{% if option.value == value|default('') %} checked{% endif %}>
+        <label for="{{ option_id }}" class="text-sm text-ink">{{ option.label }}{% if option.help is defined %}<span class="block text-muted">{{ option.help }}</span>{% endif %}</label>
+      </div>
+    {% endfor %}
+  </div>
+  {% include 'components/forms/form-error.twig' with { id: 'field-' ~ name ~ '-error', message: error|default('') } only %}
+</fieldset>

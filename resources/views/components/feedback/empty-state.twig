@@ -1,0 +1,11 @@
+{# Helpful first-use state (plan.md §22.1). Params: title, message, icon?, action_label?, action_href? #}
+<div class="empty-state">
+  <span class="empty-state-icon" aria-hidden="true"><i class="fa-solid {{ icon|default('fa-inbox') }}"></i></span>
+  <h3 class="mt-4 text-base font-semibold text-ink">{{ title }}</h3>
+  <p class="mt-1 max-w-sm text-sm text-muted">{{ message }}</p>
+  {% if action_label|default('') %}
+    <div class="mt-5">
+      {% include 'components/buttons/button.twig' with { label: action_label, href: action_href|default('#'), icon: 'fa-plus' } only %}
+    </div>
+  {% endif %}
+</div>

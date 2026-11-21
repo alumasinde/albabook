@@ -1,5 +1,9 @@
 -- 000_reference_data.sql
--- AlbaBook: migration bookkeeping and platform-wide lookup (reference) tables.
+-- AlbaBook: platform-wide lookup (reference) tables.
+--
+-- schema_migrations is owned by the migration runner
+-- (App\Core\Database\Migrations\MigrationRunner), which creates it before
+-- applying this file and records a checksum for every migration.
 --
 -- Lookup tables follow decisions.md D-023:
 --   * Primary key is a stable ASCII `code` (not an auto-increment id), so
@@ -16,12 +20,6 @@
 
 SET NAMES utf8mb4;
 SET time_zone = '+00:00';
-
-CREATE TABLE schema_migrations (
-    version     VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-    applied_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (version)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------------------------------
 -- Currencies (ISO 4217). `minor_unit_exponent` drives CurrencyFormatter and

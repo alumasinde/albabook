@@ -1,0 +1,17 @@
+{#
+  Params: page (current, 1-based), pages (total), base_url (query string appended as ?page=N)
+#}
+{% if pages > 1 %}
+  {% set separator = '?' in base_url ? '&' : '?' %}
+  <nav class="mt-4 flex items-center justify-between gap-2 text-sm" aria-label="{{ t('common.pagination') }}">
+    <p class="text-muted">{{ t('common.page_of', { page: page, pages: pages }) }}</p>
+    <div class="flex gap-2">
+      {% if page > 1 %}
+        <a class="btn btn-secondary btn-sm" href="{{ base_url ~ separator ~ 'page=' ~ (page - 1) }}" rel="prev">{{ t('common.previous') }}</a>
+      {% endif %}
+      {% if page < pages %}
+        <a class="btn btn-secondary btn-sm" href="{{ base_url ~ separator ~ 'page=' ~ (page + 1) }}" rel="next">{{ t('common.next') }}</a>
+      {% endif %}
+    </div>
+  </nav>
+{% endif %}

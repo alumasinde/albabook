@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  php:
+    name: PHP 8.3 · MySQL 8.4
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: albabook_test
+          MYSQL_USER: albabook
+          MYSQL_PASSWORD: albabook
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USERNAME: albabook
+      DB_PASSWORD: albabook
+      TEST_DB_REQUIRED: 1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, mbstring, openssl
+          coverage: none
+          tools: composer:v2
+
+      - name: Allow triggers without SUPER (audit_logs append-only)
+        run: mysql -h 127.0.0.1 -uroot -proot -e "SET GLOBAL log_bin_trust_function_creators = 1;"
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/composer
+          key: composer-${{ hashFiles('composer.lock') }}
+
+      - run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Code style
+        run: vendor/bin/php-cs-fixer fix --dry-run --diff
+
+      - name: Static analysis
+        run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G
+
+      - name: Tests (unit, integration on MySQL 8.4, feature)
+        run: vendor/bin/phpunit
+
+      - name: Migrations apply from scratch and report clean
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=
+          DB_DATABASE: albabook_test
+        run: |
+          php bin/console migrate:fresh
+          php bin/console migrate:status
+
+      - name: Translation gaps (report only; --strict before launch)
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=
+          DB_DATABASE: albabook_test
+        run: php bin/console lang:check
+
+  assets:
+    name: Front-end build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build

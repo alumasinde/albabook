@@ -1,0 +1,15 @@
+{# Params: message, tone? (info|success|warning|danger), title?, dismissible? #}
+{% set tone = tone|default('info') %}
+{% set icons = { info: 'fa-circle-info', success: 'fa-circle-check', warning: 'fa-triangle-exclamation', danger: 'fa-circle-xmark' } %}
+<div class="alert alert-{{ tone }}" role="{{ tone in ['danger', 'warning'] ? 'alert' : 'status' }}" data-alert>
+  <i class="fa-solid {{ icons[tone] }} mt-0.5" aria-hidden="true"></i>
+  <div class="flex-1">
+    {% if title|default('') %}<p class="font-semibold">{{ title }}</p>{% endif %}
+    <p>{{ message }}</p>
+  </div>
+  {% if dismissible|default(false) %}
+    <button type="button" class="icon-button -m-1" data-dismiss="alert" aria-label="{{ t('common.dismiss') }}">
+      <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+    </button>
+  {% endif %}
+</div>

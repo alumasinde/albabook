@@ -1,0 +1,17 @@
+{% extends 'layouts/public.twig' %}
+
+{% block title %}{{ t('booking.home_title') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+  <h1 class="text-3xl font-semibold text-ink">{{ t('booking.home_title') }}</h1>
+  <p class="mt-3 text-lg text-muted">{{ t('booking.home_body') }}</p>
+
+  <div class="mt-8 card p-6">
+    <h2 class="text-lg font-semibold">{{ t('booking.how_it_works') }}</h2>
+    <ol class="mt-4 space-y-3 text-base">
+      <li class="flex gap-3"><span class="step-number">1</span>{{ t('booking.step_service') }}</li>
+      <li class="flex gap-3"><span class="step-number">2</span>{{ t('booking.step_time') }}</li>
+      <li class="flex gap-3"><span class="step-number">3</span>{{ t('booking.step_confirm') }}</li>
+    </ol>
+  </div>
+{% endblock %}

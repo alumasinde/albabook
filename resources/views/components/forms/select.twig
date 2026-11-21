@@ -1,0 +1,17 @@
+{# Params: name, label, options: [{ value, label }], value?, error?, help?, required?, placeholder?, id? #}
+{% set id = id|default('field-' ~ name) %}
+{% set describedby = [help|default('') ? id ~ '-help' : null, error|default('') ? id ~ '-error' : null]|filter(v => v) %}
+<div class="field">
+  <label for="{{ id }}" class="field-label">{{ label }}{% if required|default(false) %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
+  <select id="{{ id }}" name="{{ name }}" class="input select{% if error|default('') %} is-invalid{% endif %}"
+    {%- if required|default(false) %} required aria-required="true"{% endif %}
+    {%- if error|default('') %} aria-invalid="true"{% endif %}
+    {%- if describedby is not empty %} aria-describedby="{{ describedby|join(' ') }}"{% endif %}>
+    {% if placeholder|default('') %}<option value="">{{ placeholder }}</option>{% endif %}
+    {% for option in options %}
+      <option value="{{ option.value }}"{% if option.value == value|default('') %} selected{% endif %}>{{ option.label }}</option>
+    {% endfor %}
+  </select>
+  {% if help|default('') %}<p id="{{ id }}-help" class="field-help">{{ help }}</p>{% endif %}
+  {% include 'components/forms/form-error.twig' with { id: id ~ '-error', message: error|default('') } only %}
+</div>

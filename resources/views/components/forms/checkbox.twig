@@ -1,0 +1,12 @@
+{# Params: name, label, checked?, value? (default "1"), help?, error?, id? #}
+{% set id = id|default('field-' ~ name) %}
+<div class="field">
+  <div class="flex items-start gap-3">
+    <input id="{{ id }}" name="{{ name }}" type="checkbox" value="{{ value|default('1') }}" class="checkbox"
+      {%- if checked|default(false) %} checked{% endif %}
+      {%- if help|default('') %} aria-describedby="{{ id }}-help"{% endif %}>
+    <label for="{{ id }}" class="text-sm text-ink">{{ label }}</label>
+  </div>
+  {% if help|default('') %}<p id="{{ id }}-help" class="field-help ml-8">{{ help }}</p>{% endif %}
+  {% include 'components/forms/form-error.twig' with { id: id ~ '-error', message: error|default('') } only %}
+</div>

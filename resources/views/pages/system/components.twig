@@ -1,0 +1,147 @@
+{#
+  Component catalogue: every shared component on the current host's shell.
+  Review here before building Phase 2 screens. 404 in production.
+#}
+{% extends shell %}
+
+{% set page_title = t('catalogue.title') %}
+{% set active_nav = 'components' %}
+
+{% block title %}{{ t('catalogue.title') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<div class="space-y-10">
+  <section aria-labelledby="cat-intro">
+    <h2 id="cat-intro" class="text-2xl font-semibold text-ink">{{ t('catalogue.title') }}</h2>
+    <p class="mt-1 text-muted">{{ t('catalogue.intro', { host: host_group() }) }}</p>
+  </section>
+
+  {# ---------------------------------------------------------------- Colour tokens #}
+  <section aria-labelledby="cat-colours" class="space-y-3">
+    <h3 id="cat-colours" class="catalogue-heading">{{ t('catalogue.colours') }}</h3>
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+      {% for swatch in [
+        { name: 'Navy', token: '--color-navy', class: 'bg-navy text-white' },
+        { name: 'Primary', token: '--color-primary', class: 'bg-primary text-white' },
+        { name: 'Success', token: '--color-success', class: 'bg-success text-white' },
+        { name: 'Warning', token: '--color-warning', class: 'bg-warning text-ink' },
+        { name: 'Danger', token: '--color-danger', class: 'bg-danger text-white' },
+        { name: 'Surface', token: '--color-surface', class: 'bg-surface text-ink border border-line' },
+      ] %}
+        <div class="rounded-lg p-4 {{ swatch.class }}">
+          <p class="text-sm font-semibold">{{ swatch.name }}</p>
+          <p class="mt-1 font-mono text-xs opacity-80">{{ swatch.token }}</p>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ---------------------------------------------------------------- Buttons #}
+  <section aria-labelledby="cat-buttons" class="space-y-3">
+    <h3 id="cat-buttons" class="catalogue-heading">{{ t('catalogue.buttons') }}</h3>
+    <div class="flex flex-wrap items-center gap-3">
+      {% include 'components/buttons/button.twig' with { label: 'New appointment', icon: 'fa-plus' } only %}
+      {% include 'components/buttons/button.twig' with { label: 'Secondary', variant: 'secondary' } only %}
+      {% include 'components/buttons/button.twig' with { label: 'Cancel booking', variant: 'danger', icon: 'fa-ban' } only %}
+      {% include 'components/buttons/button.twig' with { label: 'Ghost', variant: 'ghost' } only %}
+      {% include 'components/buttons/button.twig' with { label: 'Saving…', loading: true } only %}
+      {% include 'components/buttons/button.twig' with { label: 'Disabled', disabled: true, variant: 'secondary' } only %}
+      {% include 'components/buttons/button.twig' with { label: 'Small', size: 'sm', variant: 'secondary' } only %}
+      {% include 'components/buttons/icon.twig' with { icon: 'fa-ellipsis', label: 'More actions' } only %}
+    </div>
+  </section>
+
+  {# ---------------------------------------------------------------- Alerts & badges #}
+  <section aria-labelledby="cat-feedback" class="space-y-3">
+    <h3 id="cat-feedback" class="catalogue-heading">{{ t('catalogue.feedback') }}</h3>
+    <div class="grid gap-3 lg:grid-cols-2">
+      {% include 'components/feedback/alert.twig' with { tone: 'info', message: 'Five appointments are awaiting confirmation.' } only %}
+      {% include 'components/feedback/alert.twig' with { tone: 'success', message: 'Booking page published.', dismissible: true } only %}
+      {% include 'components/feedback/alert.twig' with { tone: 'warning', title: 'WhatsApp disconnected', message: 'Reconnect to keep sending reminders.' } only %}
+      {% include 'components/feedback/alert.twig' with { tone: 'danger', message: '3 notifications failed to deliver.' } only %}
+    </div>
+    <div class="flex flex-wrap gap-2">
+      {% for status in ['pending', 'confirmed', 'checked_in', 'completed', 'no_show', 'cancelled', 'rejected', 'expired'] %}
+        {% include 'components/feedback/status-badge.twig' with { status: status } only %}
+      {% endfor %}
+    </div>
+    <div class="flex flex-wrap items-center gap-6">
+      {% include 'components/feedback/loading.twig' only %}
+      {% include 'components/buttons/button.twig' with { label: 'Show toast', variant: 'secondary', attrs: { 'data-toast-demo': 'Changes saved.' } } only %}
+      {% include 'components/buttons/button.twig' with { label: 'Open modal', variant: 'secondary', attrs: { 'data-modal-open': 'demo-modal' } } only %}
+    </div>
+    {% embed 'components/feedback/modal.twig' with { id: 'demo-modal', title: 'Cancel this appointment?', description: 'The customer will be notified by WhatsApp and SMS.' } only %}
+      {% block body %}
+        <p class="text-sm text-ink">Jane W. · Hair styling · Sat 21 Nov, 09:00</p>
+      {% endblock %}
+      {% block footer %}
+        {% include 'components/buttons/button.twig' with { label: 'Keep appointment', variant: 'secondary', attrs: { 'data-modal-close': '' } } only %}
+        {% include 'components/buttons/button.twig' with { label: 'Cancel appointment', variant: 'danger', attrs: { 'data-modal-close': '' } } only %}
+      {% endblock %}
+    {% endembed %}
+  </section>
+
+  {# ---------------------------------------------------------------- Stat cards #}
+  <section aria-labelledby="cat-stats" class="space-y-3">
+    <h3 id="cat-stats" class="catalogue-heading">{{ t('catalogue.stats') }}</h3>
+    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {% include 'components/data/stat-card.twig' with { label: "Today's appointments", value: '24', icon: 'fa-calendar-check', trend: { direction: 'up', text: '+12% vs last Saturday' } } only %}
+      {% include 'components/data/stat-card.twig' with { label: 'Collected today', value: sample_amount|money, hint: 'Based on recorded payments', icon: 'fa-coins' } only %}
+      {% include 'components/data/stat-card.twig' with { label: 'Pending bookings', value: '5', hint: 'Require attention', icon: 'fa-hourglass-half' } only %}
+      {% include 'components/data/stat-card.twig' with { label: 'New customers', value: '12', trend: { direction: 'flat', text: 'Same as last week' }, icon: 'fa-user-plus' } only %}
+    </div>
+  </section>
+
+  {# ---------------------------------------------------------------- Table #}
+  <section aria-labelledby="cat-table" class="space-y-3">
+    <h3 id="cat-table" class="catalogue-heading">{{ t('catalogue.table') }}</h3>
+    {% embed 'components/data/table.twig' with {
+      caption: "Today's appointments",
+      columns: [
+        { key: 'time', label: 'Time' },
+        { key: 'customer', label: 'Customer' },
+        { key: 'service', label: 'Service' },
+        { key: 'staff', label: 'Staff' },
+        { key: 'status', label: 'Status' },
+      ],
+      rows: sample_rows,
+    } only %}
+      {% block cell %}
+        {% if column.key == 'status' %}
+          {% include 'components/feedback/status-badge.twig' with { status: row.status } only %}
+        {% else %}
+          {{ attribute(row, column.key) }}
+        {% endif %}
+      {% endblock %}
+    {% endembed %}
+    {% include 'components/data/pagination.twig' with { page: 2, pages: 5, base_url: '/_system/components' } only %}
+    {% include 'components/data/table.twig' with { caption: 'Empty table', columns: [{ key: 'x', label: 'X' }], rows: [], empty_title: 'No appointments yet', empty_message: 'Bookings from your page and dashboard will appear here.' } only %}
+  </section>
+
+  {# ---------------------------------------------------------------- Form #}
+  <section aria-labelledby="cat-form" class="space-y-3">
+    <h3 id="cat-form" class="catalogue-heading">{{ t('catalogue.form') }}</h3>
+    <p class="text-sm text-muted">{{ t('catalogue.form_intro') }}</p>
+    {% if success %}
+      {% include 'components/feedback/alert.twig' with { tone: 'success', message: success } only %}
+    {% elseif errors is not empty %}
+      {% include 'components/feedback/alert.twig' with { tone: 'danger', title: t('forms.fix_errors_title'), message: t('forms.fix_errors_body', { count: errors|length }) } only %}
+    {% endif %}
+    <form method="post" action="/_system/components/form" class="card max-w-xl space-y-5 p-6" novalidate>
+      {{ csrf_field() }}
+      {% include 'components/forms/input.twig' with { name: 'full_name', label: 'Full name', value: old.full_name, error: errors.full_name|default(''), required: true, autocomplete: 'name' } only %}
+      {% include 'components/forms/input.twig' with { name: 'email', label: 'Email', type: 'email', value: old.email, error: errors.email|default(''), required: true, autocomplete: 'email', help: 'We send the confirmation here.' } only %}
+      {% include 'components/forms/input.twig' with { name: 'phone', label: 'Phone', type: 'tel', inputmode: 'tel', placeholder: '0712 345 678', autocomplete: 'tel' } only %}
+      {% include 'components/forms/password.twig' with { name: 'password', label: 'Password', autocomplete: 'new-password', help: 'At least 12 characters.' } only %}
+      {% include 'components/forms/select.twig' with { name: 'branch', label: 'Branch', placeholder: 'Choose a branch', options: [{ value: 'westlands', label: 'Westlands' }, { value: 'cbd', label: 'Nairobi CBD' }] } only %}
+      {% include 'components/forms/radio.twig' with { name: 'staff_choice', legend: 'Staff', value: 'any', options: [{ value: 'any', label: 'Any available', help: 'Fastest option' }, { value: 'sarah', label: 'Sarah' }] } only %}
+      {% include 'components/forms/textarea.twig' with { name: 'notes', label: 'Notes for the business', value: old.notes, error: errors.notes|default(''), maxlength: 500 } only %}
+      {% include 'components/forms/checkbox.twig' with { name: 'reminders', label: 'Send me WhatsApp reminders', checked: true, help: 'You can opt out at any time.' } only %}
+      <div class="flex gap-3">
+        {% include 'components/buttons/button.twig' with { label: 'Submit', type: 'submit' } only %}
+        {% include 'components/buttons/button.twig' with { label: 'Reset', variant: 'ghost', href: '/_system/components' } only %}
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends 'layouts/app.twig' %}
+
+{% set page_title = t('nav.overview') %}
+{% set active_nav = 'overview' %}
+
+{% block title %}{{ t('nav.overview') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+  {% include 'components/feedback/alert.twig' with {
+    tone: 'info',
+    title: t('home.foundation_title'),
+    message: t('home.tenant_body'),
+  } only %}
+
+  <div class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    {% include 'components/data/stat-card.twig' with { label: t('home.kpi_appointments'), value: '—', hint: t('home.kpi_hint'), icon: 'fa-calendar-check' } only %}
+    {% include 'components/data/stat-card.twig' with { label: t('home.kpi_collected'), value: '—', hint: t('home.kpi_hint'), icon: 'fa-coins' } only %}
+    {% include 'components/data/stat-card.twig' with { label: t('home.kpi_pending'), value: '—', hint: t('home.kpi_hint'), icon: 'fa-hourglass-half' } only %}
+    {% include 'components/data/stat-card.twig' with { label: t('home.kpi_new_customers'), value: '—', hint: t('home.kpi_hint'), icon: 'fa-user-plus' } only %}
+  </div>
+
+  <div class="mt-6">
+    {% include 'components/feedback/empty-state.twig' with {
+      title: t('home.empty_title'),
+      message: t('home.empty_body'),
+      icon: 'fa-calendar-day',
+      action_label: t('home.view_components'),
+      action_href: '/_system/components',
+    } only %}
+  </div>
+{% endblock %}

@@ -1,0 +1,21 @@
+{#
+  Text-like input with label, help and error (auth.md §6, WCAG 2.2 AA).
+  Params: name, label, value?, type? (text|email|tel|number|date|time|search|url), error?, help?,
+          required?, autocomplete?, placeholder?, id?, inputmode?, disabled?
+#}
+{% set id = id|default('field-' ~ name) %}
+{% set describedby = [help|default('') ? id ~ '-help' : null, error|default('') ? id ~ '-error' : null]|filter(v => v) %}
+<div class="field">
+  <label for="{{ id }}" class="field-label">{{ label }}{% if required|default(false) %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
+  <input id="{{ id }}" name="{{ name }}" type="{{ type|default('text') }}" value="{{ value|default('') }}"
+    class="input{% if error|default('') %} is-invalid{% endif %}"
+    {%- if required|default(false) %} required aria-required="true"{% endif %}
+    {%- if autocomplete|default('') %} autocomplete="{{ autocomplete }}"{% endif %}
+    {%- if placeholder|default('') %} placeholder="{{ placeholder }}"{% endif %}
+    {%- if inputmode|default('') %} inputmode="{{ inputmode }}"{% endif %}
+    {%- if disabled|default(false) %} disabled{% endif %}
+    {%- if error|default('') %} aria-invalid="true"{% endif %}
+    {%- if describedby is not empty %} aria-describedby="{{ describedby|join(' ') }}"{% endif %}>
+  {% if help|default('') %}<p id="{{ id }}-help" class="field-help">{{ help }}</p>{% endif %}
+  {% include 'components/forms/form-error.twig' with { id: id ~ '-error', message: error|default('') } only %}
+</div>

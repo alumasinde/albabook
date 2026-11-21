@@ -1,0 +1,8 @@
+{#
+  Icon-only button for secondary actions (close, more). Always has an accessible name.
+  Params: icon, label (screen-reader text), attrs?
+#}
+{% set extra %}{% for key, attr_value in attrs|default({}) %} {{ key }}="{{ attr_value }}"{% endfor %}{% endset %}
+<button type="button" class="icon-button" aria-label="{{ label }}"{{ extra|raw }}>
+  <i class="fa-solid {{ icon }}" aria-hidden="true"></i>
+</button>

@@ -1,0 +1,29 @@
+/vendor/
+/node_modules/
+.env
+.env.*
+!.env.example
+
+# Built assets (npm run build)
+/public/assets/css/
+/public/assets/js/
+/public/assets/fonts/
+/public/assets/webfonts/
+/public/assets/vendor/
+
+# Runtime storage (directories are kept with .gitkeep)
+/storage/logs/*
+/storage/cache/*
+/storage/framework/*
+/storage/exports/*
+/storage/temporary/*
+/storage/private/*
+!/storage/**/.gitkeep
+
+/.phpunit.cache/
+/.php-cs-fixer.cache
+/coverage/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

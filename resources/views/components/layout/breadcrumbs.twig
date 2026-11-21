@@ -1,0 +1,15 @@
+{# Params: items: [{ label, href? }] — the last item is the current page. #}
+<nav aria-label="{{ t('common.breadcrumb') }}" class="mb-4 text-sm">
+  <ol class="flex flex-wrap items-center gap-1 text-muted">
+    {% for item in items %}
+      <li class="flex items-center gap-1">
+        {% if not loop.last and item.href is defined %}
+          <a href="{{ item.href }}" class="hover:text-ink hover:underline">{{ item.label }}</a>
+          <i class="fa-solid fa-chevron-right text-[10px]" aria-hidden="true"></i>
+        {% else %}
+          <span class="font-medium text-ink" aria-current="page">{{ item.label }}</span>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ol>
+</nav>

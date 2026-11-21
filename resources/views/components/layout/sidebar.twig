@@ -1,0 +1,35 @@
+{#
+  Sidebar navigation (dashboard.md §1).
+  Params: brand, workspace, active (item key), sections: [{ title, items: [{ key, label, icon, href }] }]
+  Desktop: fixed column. Mobile: off-canvas drawer toggled by [data-drawer-toggle="sidebar"].
+#}
+<aside id="sidebar" class="sidebar" data-drawer="sidebar" aria-label="{{ t('nav.main') }}">
+  <div class="flex items-center justify-between gap-2 px-5 py-5">
+    <div class="flex items-center gap-2 font-semibold text-white">
+      <span class="brand-mark" aria-hidden="true">A</span>{{ brand }}
+    </div>
+    <button type="button" class="icon-button text-white/70 hover:text-white lg:hidden" data-drawer-close="sidebar">
+      <i class="fa-solid fa-xmark" aria-hidden="true"></i><span class="sr-only">{{ t('common.close_menu') }}</span>
+    </button>
+  </div>
+  <div class="mx-4 mb-4 rounded-lg bg-white/5 px-3 py-2">
+    <p class="text-xs uppercase tracking-wide text-white/50">{{ t('nav.active_workspace') }}</p>
+    <p class="truncate text-sm font-medium text-white">{{ workspace }}</p>
+  </div>
+  <nav class="flex-1 overflow-y-auto px-3 pb-6">
+    {% for section in sections %}
+      <p class="px-2 pb-2 pt-4 text-xs font-semibold uppercase tracking-wide text-white/40">{{ section.title }}</p>
+      <ul class="space-y-0.5">
+        {% for item in section.items %}
+          <li>
+            <a href="{{ item.href }}" class="sidebar-link{% if item.key == active %} is-active{% endif %}"{% if item.key == active %} aria-current="page"{% endif %}>
+              <i class="fa-solid {{ item.icon }} w-5 text-center" aria-hidden="true"></i>
+              <span>{{ item.label }}</span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endfor %}
+  </nav>
+</aside>
+<div class="drawer-backdrop" data-drawer-backdrop="sidebar" hidden></div>

@@ -1,0 +1,38 @@
+{#
+  Error page for every host. Uses only base.twig so it renders even when a shell
+  would fail. Shows the request id so support can find the log line.
+  Params: status, code, message, request_id, debug (null unless APP_DEBUG outside production)
+#}
+{% extends 'layouts/base.twig' %}
+
+{% block title %}{{ status }} · {{ app_name }}{% endblock %}
+
+{% block body %}
+<main id="main" class="flex min-h-screen items-center justify-center px-4 py-16" tabindex="-1">
+  <div class="w-full max-w-lg text-center">
+    <p class="text-sm font-semibold uppercase tracking-wide text-primary">{{ t('errors.error') }} {{ status }}</p>
+    <h1 class="mt-2 text-3xl font-semibold text-ink">
+      {%- if status == 404 -%}{{ t('errors.not_found_title') }}
+      {%- elseif status == 419 -%}{{ t('errors.expired_title') }}
+      {%- elseif status == 503 -%}{{ t('errors.maintenance_title') }}
+      {%- elseif status >= 500 -%}{{ t('errors.server_title') }}
+      {%- else -%}{{ t('errors.generic_title') }}{%- endif -%}
+    </h1>
+    <p class="mt-3 text-base text-muted">{{ message }}</p>
+    <div class="mt-8 flex justify-center gap-3">
+      {% include 'components/buttons/button.twig' with { label: t('errors.go_home'), href: '/', variant: 'primary' } only %}
+    </div>
+    {% if request_id %}
+      <p class="mt-8 text-xs text-muted">{{ t('errors.reference') }}: <code class="font-mono">{{ request_id }}</code></p>
+    {% endif %}
+
+    {% if debug %}
+      <div class="mt-10 rounded-lg border border-danger/30 bg-danger-soft p-4 text-left text-sm">
+        <p class="font-semibold text-danger">{{ debug.exception }}: {{ debug.message }}</p>
+        <p class="mt-1 font-mono text-xs text-ink">{{ debug.location }}</p>
+        <pre class="mt-3 max-h-80 overflow-auto whitespace-pre-wrap font-mono text-xs text-ink">{{ debug.trace }}</pre>
+      </div>
+    {% endif %}
+  </div>
+</main>
+{% endblock %}

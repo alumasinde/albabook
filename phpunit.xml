@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/bootstrap.php"
+         colors="true"
+         cacheDirectory=".phpunit.cache"
+         executionOrder="depends,defects"
+         failOnRisky="true"
+         failOnWarning="true"
+         beStrictAboutOutputDuringTests="true">
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Integration">
+            <directory>tests/Integration</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+        <testsuite name="Security">
+            <directory>tests/Security</directory>
+        </testsuite>
+        <testsuite name="Concurrency">
+            <directory>tests/Concurrency</directory>
+        </testsuite>
+    </testsuites>
+
+    <source>
+        <include>
+            <directory>app</directory>
+        </include>
+    </source>
+
+    <php>
+        <ini name="date.timezone" value="UTC"/>
+        <env name="APP_ENV" value="testing" force="true"/>
+        <env name="APP_DEBUG" value="false" force="true"/>
+        <env name="APP_KEY" value="base64:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=" force="true"/>
+        <env name="APP_HOST_TENANT" value="app.albabook.test" force="true"/>
+        <env name="APP_HOST_BOOKING" value="book.albabook.test" force="true"/>
+        <env name="APP_HOST_API" value="api.albabook.test" force="true"/>
+        <env name="APP_HOST_ADMIN" value="admin.albabook.test" force="true"/>
+        <env name="DB_DATABASE" value="albabook_test" force="true"/>
+        <env name="TRUSTED_PROXIES" value="10.0.0.0/8" force="true"/>
+        <env name="SESSION_SECURE_COOKIE" value="false" force="true"/>
+        <env name="LOG_CHANNEL" value="file" force="true"/>
+        <env name="LOG_LEVEL" value="debug" force="true"/>
+        <!-- Set to 1 in CI so a missing database fails instead of skipping. -->
+        <env name="TEST_DB_REQUIRED" value="0"/>
+    </php>
+</phpunit>

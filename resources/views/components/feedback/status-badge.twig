@@ -1,0 +1,13 @@
+{#
+  Consistent status indicator (dashboard.md §5). Text is always visible; colour is never
+  the only signal (WCAG 1.4.1).
+  Params: status (appointment status code), label? — defaults to the translated lookup label.
+  Tones mirror appointment_statuses.badge_tone (000_reference_data.sql).
+#}
+{% set tones = {
+  pending: 'warning', confirmed: 'info', checked_in: 'info', completed: 'success',
+  no_show: 'danger', cancelled: 'neutral', rejected: 'neutral', expired: 'neutral',
+} %}
+<span class="badge badge-{{ tones[status]|default('neutral') }}">
+  <span class="badge-dot" aria-hidden="true"></span>{{ label|default(t('lookup.appointment_status.' ~ status)) }}
+</span>

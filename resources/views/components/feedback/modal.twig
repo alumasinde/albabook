@@ -1,0 +1,19 @@
+{#
+  Accessible modal built on <dialog> (focus trap and Esc handled by the browser).
+  Use with {% embed %} and fill the "body" and "footer" blocks.
+  Open with any element carrying data-modal-open="<id>"; close with data-modal-close.
+  Params: id, title, description?
+#}
+<dialog id="{{ id }}" class="modal" aria-labelledby="{{ id }}-title"{% if description|default('') %} aria-describedby="{{ id }}-desc"{% endif %}>
+  <div class="modal-panel">
+    <div class="flex items-start justify-between gap-4">
+      <h2 id="{{ id }}-title" class="text-lg font-semibold text-ink">{{ title }}</h2>
+      <button type="button" class="icon-button -m-1" data-modal-close aria-label="{{ t('common.close') }}">
+        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+      </button>
+    </div>
+    {% if description|default('') %}<p id="{{ id }}-desc" class="mt-1 text-sm text-muted">{{ description }}</p>{% endif %}
+    <div class="mt-4">{% block body %}{% endblock %}</div>
+    <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">{% block footer %}{% endblock %}</div>
+  </div>
+</dialog>

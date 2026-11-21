@@ -1,0 +1,33 @@
+{#
+  Customer booking shell (plan.md §7, §22.3): mobile-first single column, 16px+ body text.
+  Phase 7 layers the tenant theme on top via CSS custom properties in a nonce'd <style>.
+#}
+{% extends 'layouts/base.twig' %}
+
+{% block body_class %}min-h-full bg-white text-ink antialiased text-base{% endblock %}
+
+{% block body %}
+<div class="booking-page flex min-h-screen flex-col">
+  <header class="border-b border-line bg-white">
+    <div class="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-4">
+      <a href="/" class="flex items-center gap-2 font-semibold text-lg text-ink">
+        <span class="brand-mark" aria-hidden="true">A</span>
+        {{ business_name|default(app_name) }}
+      </a>
+      <nav aria-label="{{ t('common.language') }}" class="flex items-center gap-1 text-sm">
+        {% for code, label in { en: 'English', sw: 'Kiswahili' } %}
+          <a href="?lang={{ code }}" lang="{{ code }}" class="lang-switch{% if locale() == code %} is-active{% endif %}"{% if locale() == code %} aria-current="true"{% endif %}>{{ label }}</a>
+        {% endfor %}
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="mx-auto w-full max-w-3xl flex-1 px-4 py-8" tabindex="-1">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="border-t border-line py-6 text-center text-sm text-muted">
+    {{ t('common.powered_by') }}
+  </footer>
+</div>
+{% endblock %}

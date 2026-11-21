@@ -1,0 +1,33 @@
+{#
+  Responsive data table (plan.md §22.3): a real table from md up, stacked cards on mobile.
+  Use with {% embed %}; override the "cell" block to customise rendering.
+  Params: caption (visually hidden, for screen readers), columns: [{ key, label, align? }],
+          rows: [ { key: value } ], empty_title?, empty_message?
+#}
+{% if rows is empty %}
+  {% include 'components/feedback/empty-state.twig' with { title: empty_title|default(t('common.empty_title')), message: empty_message|default(t('common.empty_message')) } only %}
+{% else %}
+  <div class="card overflow-hidden">
+    <table class="data-table">
+      <caption class="sr-only">{{ caption }}</caption>
+      <thead>
+        <tr>
+          {% for column in columns %}
+            <th scope="col" class="{{ column.align|default('left') == 'right' ? 'text-right' : 'text-left' }}">{{ column.label }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            {% for column in columns %}
+              <td data-label="{{ column.label }}" class="{{ column.align|default('left') == 'right' ? 'md:text-right' : '' }}">
+                {% block cell %}{{ attribute(row, column.key) }}{% endblock %}
+              </td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}

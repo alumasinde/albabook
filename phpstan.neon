@@ -1,0 +1,20 @@
+parameters:
+    level: 8
+    paths:
+        - app
+        - bootstrap
+        - config
+        - routes
+        - public/index.php
+        - bin/console
+        - tests
+    tmpDir: storage/cache/phpstan
+    treatPhpDocTypesAsCertain: false
+    ignoreErrors:
+        # PDO::query() returns PDOStatement|false but ERRMODE_EXCEPTION makes false impossible.
+        - identifier: method.nonObject
+          path: app/Core/Database/*
+        - identifier: method.nonObject
+          path: app/Shared/Money/DatabaseCurrencyCatalog.php
+        - identifier: method.nonObject
+          path: tests/*
