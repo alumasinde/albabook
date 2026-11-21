@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Integration\Auth;
 
-use App\Auth\MembershipContext;
+use App\Modules\Auth\Context\MembershipContext;
 use App\Core\Http\Request;
 use App\Core\Http\RequestContext;
 use App\Core\Validation\ValidationException;

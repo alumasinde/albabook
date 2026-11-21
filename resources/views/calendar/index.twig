@@ -1,0 +1,86 @@
+{#
+  Calendar (dashboard.md §3). Week/day/month grid hydrates from
+  /api/calendar/events; appointment creation posts to /api/appointments.
+#}
+{% extends 'layouts/dashboard.twig' %}
+
+{% set page_title = t('nav.calendar') %}
+{% set active_nav = 'calendar' %}
+{% set workspace = tenant.name %}
+
+{% block title %}{{ t('nav.calendar') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<div data-page="calendar">
+  <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h2 class="flex items-center gap-2 text-2xl font-semibold text-ink">
+        <i class="fa-regular fa-calendar-days text-primary" aria-hidden="true"></i>{{ t('calendar.title') }}
+      </h2>
+      <p class="mt-1 text-sm text-muted">{{ t('calendar.subtitle') }}</p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <div class="inline-flex rounded-lg border border-line bg-white p-0.5" role="group" aria-label="{{ t('calendar.view_label') }}">
+        <button type="button" class="cal-toggle" data-cal-view="day">{{ t('calendar.day') }}</button>
+        <button type="button" class="cal-toggle is-active" data-cal-view="week">{{ t('calendar.week') }}</button>
+        <button type="button" class="cal-toggle" data-cal-view="month">{{ t('calendar.month') }}</button>
+      </div>
+      <select class="input select w-auto" data-cal-branch aria-label="{{ t('calendar.filter_branch') }}">
+        <option value="">{{ t('calendar.all_branches') }}</option>
+      </select>
+      <select class="input select w-auto" data-cal-staff aria-label="{{ t('calendar.filter_staff') }}">
+        <option value="">{{ t('calendar.all_staff') }}</option>
+      </select>
+      {% if membership.can('appointments.create') %}
+        <button type="button" class="btn btn-primary btn-md" data-modal-open="new-appointment-modal">
+          <i class="fa-solid fa-plus" aria-hidden="true"></i> {{ t('calendar.new_appointment') }}
+        </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center gap-2">
+      <button type="button" class="icon-button" data-cal-prev aria-label="{{ t('common.previous') }}"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>
+      <span data-cal-label class="min-w-48 text-sm font-semibold text-ink"></span>
+      <button type="button" class="icon-button" data-cal-next aria-label="{{ t('common.next') }}"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>
+    </div>
+    <ul class="flex flex-wrap items-center gap-3 text-xs text-muted" aria-label="{{ t('calendar.legend_label') }}">
+      <li><span class="badge badge-success"><span class="badge-dot"></span>{{ t('lookup.appointment_status.confirmed') }}</span></li>
+      <li><span class="badge badge-warning"><span class="badge-dot"></span>{{ t('lookup.appointment_status.pending') }}</span></li>
+      <li><span class="badge badge-info"><span class="badge-dot"></span>{{ t('lookup.appointment_status.checked_in') }}</span></li>
+      <li><span class="badge badge-info"><span class="badge-dot"></span>{{ t('lookup.appointment_status.completed') }}</span></li>
+      <li><span class="badge badge-danger"><span class="badge-dot"></span>{{ t('lookup.appointment_status.cancelled') }}</span></li>
+    </ul>
+  </div>
+
+  <div data-cal-grid aria-live="polite"></div>
+
+  {% if membership.can('appointments.create') %}
+  {% embed 'components/feedback/modal.twig' with { id: 'new-appointment-modal', title: t('calendar.new_appointment'), description: t('calendar.new_appointment_help') } %}
+    {% block body %}
+      <form id="new-appointment-form" method="post" action="/api/appointments" data-ajax-form data-ajax-close data-ajax-busy="{{ t('calendar.creating') }}">
+        {{ csrf_field() }}
+        <div class="grid gap-4 sm:grid-cols-2">
+          {% include 'components/forms/select.twig' with { name: 'branch_id', label: t('calendar.field_branch'), required: true, options: [], id: 'new-branch', placeholder: t('calendar.select_branch') } %}
+          {% include 'components/forms/select.twig' with { name: 'staff_id', label: t('calendar.field_staff'), required: true, options: [], id: 'new-staff', placeholder: t('calendar.select_staff') } %}
+          {% include 'components/forms/select.twig' with { name: 'service_id', label: t('calendar.field_service'), required: true, options: [], id: 'new-service', placeholder: t('calendar.select_service') } %}
+          {% include 'components/forms/input.twig' with { name: 'date', label: t('calendar.field_date'), type: 'date', required: true, id: 'new-date' } %}
+          {% include 'components/forms/input.twig' with { name: 'time', label: t('calendar.field_time'), type: 'time', required: true, id: 'new-time' } %}
+          {% include 'components/forms/input.twig' with { name: 'name', label: t('calendar.field_customer'), required: true, autocomplete: 'name', id: 'new-name' } %}
+          {% include 'components/forms/input.twig' with { name: 'phone', label: t('calendar.field_phone'), type: 'tel', autocomplete: 'tel', placeholder: '+2547XXXXXXXX', id: 'new-phone' } %}
+          {% include 'components/forms/input.twig' with { name: 'email', label: t('calendar.field_email'), type: 'email', autocomplete: 'email', id: 'new-email' } %}
+        </div>
+        <div class="mt-4">
+          {% include 'components/forms/textarea.twig' with { name: 'notes', label: t('calendar.field_notes'), rows: 3, maxlength: 1000, id: 'new-notes' } %}
+        </div>
+      </form>
+    {% endblock %}
+    {% block footer %}
+      <button type="button" class="btn btn-secondary btn-md" data-modal-close>{{ t('common.close') }}</button>
+      <button type="submit" form="new-appointment-form" class="btn btn-primary btn-md">{{ t('calendar.create') }}</button>
+    {% endblock %}
+  {% endembed %}
+  {% endif %}
+</div>
+{% endblock %}

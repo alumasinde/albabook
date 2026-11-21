@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Core\Database\Seeders;
 
-use App\Auth\TenantPermission;
+use App\Modules\Auth\TenantPermission;
 use App\Core\Database\Database;
 use App\Shared\Support\UuidFactory;
 

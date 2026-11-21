@@ -1,0 +1,50 @@
+{#
+  Tenant portal shell (dashboard.md §1): sidebar on desktop, drawer on mobile.
+  Navigation items are permission-aware from Phase 2; Phase 1 shows the structure.
+#}
+{% extends 'layouts/base.twig' %}
+
+{% block body %}
+{% include 'components/feedback/support-banner.twig' only %}
+{# Navigation is permission-aware (dashboard.md §1): a nav item is visible when
+   its permission is empty, when the membership holds it, or under a support
+   session (membership null). Server checks still gate every route. #}
+{% set workspace_items = [
+  { key: 'overview', label: t('nav.overview'), icon: 'fa-gauge', href: '/dashboard', permissions: ['dashboard.view'] },
+  { key: 'calendar', label: t('nav.calendar'), icon: 'fa-calendar-days', href: '/calendar', permissions: ['appointments.view', 'appointments.view_own'] },
+  { key: 'appointments', label: t('nav.appointments'), icon: 'fa-clipboard-list', href: '/appointments', permissions: ['appointments.view', 'appointments.view_own'] },
+  { key: 'services', label: t('nav.services'), icon: 'fa-scissors', href: '#', permissions: ['services.view'] },
+  { key: 'staff', label: t('nav.staff'), icon: 'fa-user-group', href: '#', permissions: ['staff.view'] },
+  { key: 'customers', label: t('nav.customers'), icon: 'fa-address-book', href: '#', permissions: ['customers.view'] },
+  { key: 'branches', label: t('nav.branches'), icon: 'fa-location-dot', href: '#', permissions: ['branches.view'] },
+  { key: 'resources', label: t('nav.resources'), icon: 'fa-couch', href: '#', permissions: ['resources.view'] },
+]|filter(item => membership is not defined or membership is null or item.permissions is empty or item.permissions|filter(p => membership.can(p)) is not empty) %}
+{% set management_items = [
+  { key: 'reports', label: t('nav.reports'), icon: 'fa-chart-line', href: '#', permissions: ['reports.view'] },
+  { key: 'notifications', label: t('nav.notifications'), icon: 'fa-bell', href: '#', permissions: ['notifications.view'] },
+  { key: 'booking_page', label: t('nav.booking_page'), icon: 'fa-globe', href: '#', permissions: ['booking_page.view'] },
+  { key: 'integrations', label: t('nav.integrations'), icon: 'fa-plug', href: '#', permissions: ['integrations.view'] },
+  { key: 'billing', label: t('nav.billing'), icon: 'fa-credit-card', href: '#', permissions: ['billing.view'] },
+  { key: 'team', label: t('nav.team'), icon: 'fa-user-shield', href: '/team', permissions: ['users.manage'] },
+  { key: 'settings', label: t('nav.settings'), icon: 'fa-gear', href: '#', permissions: ['settings.view'] },
+  { key: 'components', label: t('nav.components'), icon: 'fa-swatchbook', href: '/_system/components', permissions: [] },
+]|filter(item => membership is not defined or membership is null or item.permissions is empty or item.permissions|filter(p => membership.can(p)) is not empty) %}
+{% set sections = [] %}
+{% if workspace_items is not empty %}{% set sections = sections|merge([{ title: t('nav.workspace'), items: workspace_items }]) %}{% endif %}
+{% if management_items is not empty %}{% set sections = sections|merge([{ title: t('nav.management'), items: management_items }]) %}{% endif %}
+<div class="min-h-screen lg:flex">
+  {% include 'components/layout/sidebar.twig' with {
+    brand: app_name,
+    workspace: workspace|default(tenant.name|default(app_name)),
+    active: active_nav|default('overview'),
+    sections: sections,
+  } only %}
+
+  <div class="flex min-w-0 flex-1 flex-col">
+    {% include 'components/layout/header.twig' with { title: page_title|default(app_name) } only %}
+    <main id="main" class="flex-1 px-4 py-6 sm:px-6 lg:px-8" tabindex="-1">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% endblock %}

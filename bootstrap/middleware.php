@@ -10,6 +10,7 @@ use App\Middleware\MaintenanceMiddleware;
 use App\Middleware\PlatformAuthenticationMiddleware;
 use App\Middleware\RequestIdMiddleware;
 use App\Middleware\SecurityHeadersMiddleware;
+use App\Middleware\SpaFragmentMiddleware;
 use App\Middleware\TrustedHostMiddleware;
 
 /*
@@ -36,7 +37,7 @@ return [
         // Authentication runs after CSRF so a state-changing request is
         // rejected before any session work, and before route middleware so
         // RequireAuth/Tenant/Permission can rely on AuthContext.
-        'app' => [CsrfMiddleware::class, AuthenticationMiddleware::class],
+        'app' => [SpaFragmentMiddleware::class, CsrfMiddleware::class, AuthenticationMiddleware::class],
         'book' => [CsrfMiddleware::class],
         'admin' => [CsrfMiddleware::class, PlatformAuthenticationMiddleware::class],
         'api' => [],

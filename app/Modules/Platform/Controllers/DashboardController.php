@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Platform\Controllers;
 
-use App\Auth\PlatformPermission;
+use App\Modules\Auth\PlatformPermission;
 use App\Core\Http\Request;
 use App\Core\Http\Response;
 use App\Core\View\View;

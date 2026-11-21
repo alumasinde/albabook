@@ -66,7 +66,7 @@ final class ComponentCatalogueController
         $shell = match ($request->hostGroup()) {
             HostGroup::Booking => 'layouts/public.twig',
             HostGroup::Admin => 'layouts/admin.twig',
-            default => 'layouts/app.twig',
+            default => 'layouts/dashboard.twig',
         };
 
         return $this->view->response('pages/system/components.twig', [

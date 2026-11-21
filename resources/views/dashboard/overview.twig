@@ -1,0 +1,84 @@
+{#
+  Tenant dashboard overview (dashboard.md §2). Static shell renders instantly;
+  KPIs, schedule, chart and alerts hydrate from /api/dashboard/summary.
+#}
+{% extends 'layouts/dashboard.twig' %}
+
+{% set page_title = t('nav.overview') %}
+{% set active_nav = 'overview' %}
+{% set workspace = tenant.name %}
+
+{% block title %}{{ t('nav.overview') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<div data-page="dashboard">
+  <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h2 class="text-2xl font-semibold text-ink">
+        <span data-greeting>{{ t('dashboard.greeting') }}</span>{% if user %}, {{ user.displayName }}{% endif %}
+      </h2>
+      <p class="mt-1 text-sm text-muted">{{ t('dashboard.overview_subtitle', { business: tenant.name }) }}</p>
+    </div>
+    <a class="btn btn-primary btn-md" href="/calendar">{{ t('dashboard.view_calendar') }}</a>
+  </div>
+
+  <div data-alerts class="mb-4 space-y-2"></div>
+
+  <div data-kpi-cards class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-live="polite"></div>
+
+  <div class="mt-6 grid gap-4 xl:grid-cols-5">
+    <div class="card p-5 xl:col-span-3">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-semibold text-ink">{{ t('dashboard.today_schedule') }}</h3>
+        <a class="text-sm font-medium text-primary-strong hover:underline" href="/appointments">{{ t('common.view_all') }}</a>
+      </div>
+      <div data-today-schedule class="mt-2"></div>
+    </div>
+
+    <div class="card p-5 xl:col-span-2">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-semibold text-ink">{{ t('dashboard.bookings_overview') }}</h3>
+        <span class="text-sm text-muted">{{ t('dashboard.this_month') }}</span>
+      </div>
+      <div data-chart-wrap class="mt-4">
+        <canvas data-chart class="h-56 w-full" role="img" aria-label="{{ t('dashboard.bookings_overview') }}"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-6 grid gap-4 lg:grid-cols-3">
+    <div class="card p-5 lg:col-span-2">
+      <h3 class="text-base font-semibold text-ink">{{ t('dashboard.quick_actions') }}</h3>
+      <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <a href="/calendar" class="quick-action">
+          <span class="quick-action-icon"><i class="fa-solid fa-calendar-plus" aria-hidden="true"></i></span>
+          <span class="text-sm font-medium text-ink">{{ t('dashboard.action_add_appointment') }}</span>
+        </a>
+        <a href="/appointments" class="quick-action">
+          <span class="quick-action-icon"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i></span>
+          <span class="text-sm font-medium text-ink">{{ t('dashboard.action_manage_appointments') }}</span>
+        </a>
+        {% if membership and membership.can('users.manage') %}
+          <a href="/team" class="quick-action">
+            <span class="quick-action-icon"><i class="fa-solid fa-users-gear" aria-hidden="true"></i></span>
+            <span class="text-sm font-medium text-ink">{{ t('dashboard.action_manage_team') }}</span>
+          </a>
+        {% endif %}
+        <a href="/security" class="quick-action">
+          <span class="quick-action-icon"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></span>
+          <span class="text-sm font-medium text-ink">{{ t('dashboard.action_security') }}</span>
+        </a>
+      </div>
+    </div>
+    <div class="card flex flex-col justify-between gap-4 bg-primary-soft p-5">
+      <div>
+        <h3 class="flex items-center gap-2 text-base font-semibold text-ink">
+          <i class="fa-solid fa-crown text-primary" aria-hidden="true"></i>{{ t('dashboard.upgrade_title') }}
+        </h3>
+        <p class="mt-1 text-sm text-muted">{{ t('dashboard.upgrade_body') }}</p>
+      </div>
+      <a href="#" class="btn btn-primary btn-md self-start" data-no-spa>{{ t('dashboard.upgrade_cta') }}</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

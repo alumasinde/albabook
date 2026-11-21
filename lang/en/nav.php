@@ -18,6 +18,8 @@ return [
     'reports' => 'Reports',
     'notifications' => 'Notifications',
     'booking_page' => 'Booking page',
+    'integrations' => 'Integrations',
+    'billing' => 'Billing',
     'team' => 'Team',
     'settings' => 'Settings',
     'components' => 'Components',

@@ -1,0 +1,88 @@
+{#
+  Appointments list (dashboard.md §3). Shell renders the filter bar and table
+  skeleton; rows, stats and pagination hydrate from /api/appointments.
+#}
+{% extends 'layouts/dashboard.twig' %}
+
+{% set page_title = t('nav.appointments') %}
+{% set active_nav = 'appointments' %}
+{% set workspace = tenant.name %}
+
+{% block title %}{{ t('nav.appointments') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<div data-page="appointments">
+  <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h2 class="text-2xl font-semibold text-ink">{{ t('appointments.title') }}</h2>
+      <p class="mt-1 text-sm text-muted">{{ t('appointments.subtitle') }}</p>
+    </div>
+    {% if membership.can('appointments.create') %}
+      <a class="btn btn-primary btn-md" href="/calendar" data-cal-new-link>{{ t('appointments.new') }}</a>
+    {% endif %}
+  </div>
+
+  <div data-appt-stats class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-live="polite"></div>
+
+  <div class="card mt-6 p-4">
+    <div class="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div class="xl:col-span-2">
+        <label for="appt-q" class="field-label">{{ t('appointments.search_label') }}</label>
+        <input id="appt-q" type="search" class="input" placeholder="{{ t('appointments.search_placeholder') }}" data-appt-filter="q">
+      </div>
+      <div>
+        <label for="appt-status" class="field-label">{{ t('appointments.filter_status') }}</label>
+        <select id="appt-status" class="input select" data-appt-filter="status">
+          <option value="">{{ t('appointments.all_statuses') }}</option>
+          <option value="pending">{{ t('lookup.appointment_status.pending') }}</option>
+          <option value="confirmed">{{ t('lookup.appointment_status.confirmed') }}</option>
+          <option value="checked_in">{{ t('lookup.appointment_status.checked_in') }}</option>
+          <option value="completed">{{ t('lookup.appointment_status.completed') }}</option>
+          <option value="no_show">{{ t('lookup.appointment_status.no_show') }}</option>
+          <option value="cancelled">{{ t('lookup.appointment_status.cancelled') }}</option>
+        </select>
+      </div>
+      <div>
+        <label for="appt-service" class="field-label">{{ t('appointments.filter_service') }}</label>
+        <select id="appt-service" class="input select" data-appt-filter="service">
+          <option value="">{{ t('appointments.all_services') }}</option>
+        </select>
+      </div>
+      <div>
+        <label for="appt-staff" class="field-label">{{ t('appointments.filter_staff') }}</label>
+        <select id="appt-staff" class="input select" data-appt-filter="staff">
+          <option value="">{{ t('appointments.all_staff') }}</option>
+        </select>
+      </div>
+      <div>
+        <label for="appt-date" class="field-label">{{ t('appointments.filter_date') }}</label>
+        <input id="appt-date" type="date" class="input" data-appt-filter="date">
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt-4 overflow-hidden">
+    <table class="data-table">
+      <caption class="sr-only">{{ t('appointments.table_caption') }}</caption>
+      <thead>
+        <tr>
+          <th scope="col">{{ t('appointments.col_when') }}</th>
+          <th scope="col">{{ t('appointments.col_customer') }}</th>
+          <th scope="col">{{ t('appointments.col_service') }}</th>
+          <th scope="col">{{ t('appointments.col_staff') }}</th>
+          <th scope="col">{{ t('appointments.col_branch') }}</th>
+          <th scope="col">{{ t('appointments.col_status') }}</th>
+          <th scope="col">{{ t('appointments.col_payment') }}</th>
+          <th scope="col">{{ t('appointments.col_actions') }}</th>
+        </tr>
+      </thead>
+      <tbody data-appt-body></tbody>
+    </table>
+  </div>
+
+  <div class="mt-4 flex items-center justify-between gap-2">
+    <p data-appt-info class="text-sm text-muted"></p>
+    <div data-appt-pager class="flex items-center gap-2"></div>
+  </div>
+</div>
+{% endblock %}

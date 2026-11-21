@@ -1,8 +1,10 @@
 {#
   Base HTML document. Every shell extends this.
   No inline script or style: CSP allows only same-origin files (SecurityHeadersMiddleware).
+  SPA fragment mode (X-SPA: fragment): emit only the content block plus a title
+  marker; the client swaps it into the live document (spa.js).
 #}
-<!doctype html>
+{% if spa|default(false) %}<template data-spa-title>{{ block('title') }}</template>{{ block('content') }}{% else %}<!doctype html>
 <html lang="{{ locale() }}" class="h-full">
 <head>
   <meta charset="utf-8">
@@ -15,10 +17,18 @@
   <link rel="stylesheet" href="{{ asset('css/app.css') }}">
   {% block head %}{% endblock %}
   <script src="{{ asset('js/app.js') }}" defer></script>
+  <script src="{{ asset('js/api.js') }}" defer></script>
+  <script src="{{ asset('js/ui.js') }}" defer></script>
+  <script src="{{ asset('js/spa.js') }}" defer></script>
+  <script src="{{ asset('js/pages.js') }}" defer></script>
+  <script src="{{ asset('js/pages/dashboard.js') }}" defer></script>
+  <script src="{{ asset('js/pages/appointments.js') }}" defer></script>
+  <script src="{{ asset('js/pages/calendar.js') }}" defer></script>
+  <script src="{{ asset('js/pages/booking.js') }}" defer></script>
 </head>
 <body class="{% block body_class %}min-h-full bg-surface text-ink antialiased{% endblock %}">
   <a href="#main" class="skip-link">{{ t('common.skip_to_content') }}</a>
   {% block body %}{% endblock %}
   <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="false"></div>
 </body>
-</html>
+</html>{% endif %}

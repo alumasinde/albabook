@@ -36,6 +36,7 @@ final class AppExtension extends AbstractExtension implements GlobalsInterface
             'app_name' => $this->config->string('app.name', 'AlbaBook'),
             'app_debug' => $this->config->isDebug(),
             'support_session' => $this->context->supportSession,
+            'spa' => $this->context->isSpa,
         ];
     }
 

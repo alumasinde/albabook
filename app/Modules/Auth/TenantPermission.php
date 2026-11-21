@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Auth;
+namespace App\Modules\Auth;
 
 /**
  * Canonical tenant permission catalogue (plan.md §14.2). Seeded into the

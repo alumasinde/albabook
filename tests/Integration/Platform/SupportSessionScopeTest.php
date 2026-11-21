@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Integration\Platform;
 
-use App\Auth\PlatformPermission;
+use App\Modules\Auth\PlatformPermission;
 use App\Core\Config\ConfigValidator;
 use App\Core\Http\HttpException;
 use App\Core\Http\Request;

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Auth;
+namespace App\Modules\Auth\Context;
 
 /**
  * User-level authorization for one membership (multi-tenancy.md §4). Permission

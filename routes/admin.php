@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use App\Auth\PlatformPermission;
+use App\Modules\Auth\PlatformPermission;
 use App\Core\Routing\RouteRegistrar;
 use App\Middleware\PlatformGuestOnlyMiddleware;
 use App\Middleware\PlatformPermissionMiddleware;

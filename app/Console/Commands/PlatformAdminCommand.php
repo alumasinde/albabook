@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Auth\PlatformPermission;
+use App\Modules\Auth\PlatformPermission;
 use App\Console\Command;
 use App\Console\Output;
 use App\Modules\Platform\Repositories\PlatformUserRepository;

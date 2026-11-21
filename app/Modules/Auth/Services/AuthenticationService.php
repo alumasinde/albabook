@@ -181,7 +181,7 @@ final class AuthenticationService
         $this->attempts->record($email, $ip, false, $userAgent);
         $this->audit->record(new AuditEntry(
             action: AuditAction::LOGIN_FAILED,
-            actorType: $userId === null ? 'anonymous' : 'user',
+            actorType: $userId === null ? 'system' : 'tenant_user',
             actorId: $userId,
             targetType: $userId === null ? null : 'user',
             targetId: $userId === null ? null : (string) $userId,

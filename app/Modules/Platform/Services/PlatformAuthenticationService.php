@@ -138,7 +138,7 @@ final class PlatformAuthenticationService
     {
         $this->audit->record(new AuditEntry(
             action: AuditAction::PLATFORM_LOGIN_FAILED,
-            actorType: $platformUserId === null ? 'anonymous' : 'platform_user',
+            actorType: $platformUserId === null ? 'system' : 'platform_user',
             actorId: $platformUserId,
             targetType: $platformUserId === null ? null : 'platform_user',
             targetId: $platformUserId === null ? null : (string) $platformUserId,

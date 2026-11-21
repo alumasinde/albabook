@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Auth;
+namespace App\Modules\Auth;
 
 /**
  * Platform catalogue (plan.md §14.2). Stored with permissions.scope =

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Middleware;
+namespace App\Tenancy;
 
 use App\Core\Http\HttpException;
 use App\Core\Http\Request;

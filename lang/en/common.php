@@ -20,4 +20,8 @@ return [
     'empty_title' => 'Nothing here yet',
     'empty_message' => 'Records will appear here once they are created.',
     'powered_by' => 'Powered by AlbaBook',
+    'view_all' => 'View All',
+    'change' => 'Change',
+    'back' => 'Back',
+    'optional' => 'optional',
 ];

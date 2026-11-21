@@ -19,6 +19,7 @@ final class RequestContext
     public ?string $cspNonce = null;
     public ?string $csrfToken = null;
     public string $locale = 'en';
+    public bool $isSpa = false;
 
     /** @var array{reason: string, expires_at: int, write_allowed: bool}|null */
     public ?array $supportSession = null;
@@ -30,6 +31,7 @@ final class RequestContext
         $this->cspNonce = null;
         $this->csrfToken = null;
         $this->locale = 'en';
+        $this->isSpa = false;
         $this->supportSession = null;
     }
 }

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Integration\Tenancy;
 
-use App\Auth\TenantPermission;
+use App\Modules\Auth\TenantPermission;
 use App\Tenancy\TenantSettingsService;
 use Tests\Integration\Support\Phase2TestCase;
 

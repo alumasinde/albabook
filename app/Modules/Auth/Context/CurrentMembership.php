@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Auth\Context;
 
-use App\Auth\MembershipContext;
+use App\Modules\Auth\Context\MembershipContext;
 
 final class CurrentMembership
 {

@@ -10,6 +10,11 @@ use App\Core\Routing\Router;
  * never be reached from another host.
  */
 return static function (Router $router, string $basePath): void {
+    // Shared static routes are registered first: FastRoute rejects a static
+    // route declared after a variable route that would shadow it (the booking
+    // host's /{slug} pattern would otherwise shadow /health).
+    $router->everyHost(require $basePath . '/routes/shared.php');
+
     $files = [
         'web.php' => HostGroup::Tenant,
         'public.php' => HostGroup::Booking,
@@ -21,6 +26,4 @@ return static function (Router $router, string $basePath): void {
         $define = require $basePath . '/routes/' . $file;
         $router->group($group, $define);
     }
-
-    $router->everyHost(require $basePath . '/routes/shared.php');
 };

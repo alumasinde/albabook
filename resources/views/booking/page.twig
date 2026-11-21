@@ -1,0 +1,206 @@
+{#
+  Public booking page on the book.* host (plan.md §7, mockup "public booking").
+  Left column: business card + service grid. Right column: 4-step booking
+  wizard hydrated by resources/js/pages/booking.js — works without JS up to
+  service selection; booking itself requires JS (Fetch API).
+#}
+{% extends 'layouts/public.twig' %}
+
+{% block title %}{{ settings.seo_title|default(t('booking.page_title', { business: tenant.name })) }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+{% set first_branch = branches|first %}
+<div data-page="booking" data-slug="{{ tenant.slug }}" data-api-base="/{{ tenant.slug }}">
+
+  <section class="booking-hero">
+    <span class="inline-flex items-center gap-2 rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold text-primary-strong">
+      <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>{{ tenant.name }}
+    </span>
+    <h1 class="mt-4 text-3xl font-semibold text-ink sm:text-4xl">{{ t('booking.hero_title') }}</h1>
+    <p class="mt-2 text-lg text-muted">{{ t('booking.hero_subtitle') }}</p>
+    <ul class="mt-4 flex flex-wrap items-center gap-4 text-sm text-muted">
+      <li class="flex items-center gap-1.5"><i class="fa-solid fa-shield-halved text-success" aria-hidden="true"></i>{{ t('booking.trust_secure') }}</li>
+      <li class="flex items-center gap-1.5"><i class="fa-regular fa-clock text-primary" aria-hidden="true"></i>{{ t('booking.trust_easy') }}</li>
+      <li class="flex items-center gap-1.5"><i class="fa-regular fa-calendar-check text-accent" aria-hidden="true"></i>{{ t('booking.trust_instant') }}</li>
+    </ul>
+  </section>
+
+  <div class="mt-8 grid gap-6 lg:grid-cols-5">
+    <div class="space-y-6 lg:col-span-3">
+
+      <section id="about" class="card flex flex-col gap-5 p-6 sm:flex-row">
+        <div class="booking-hero-thumb" aria-hidden="true"><i class="fa-solid fa-spa"></i></div>
+        <div class="min-w-0 flex-1">
+          <h2 class="flex items-center gap-2 text-lg font-semibold text-ink">
+            {{ tenant.name }} <i class="fa-solid fa-circle-check text-primary" aria-hidden="true" title="{{ t('booking.verified') }}"></i>
+          </h2>
+          <p class="mt-2 text-sm leading-6 text-muted">
+            {{ settings.seo_description|default(t('booking.about_fallback')) }}
+          </p>
+          {% if first_branch %}
+            <p class="mt-3 flex items-center gap-1.5 text-sm text-muted">
+              <i class="fa-solid fa-location-dot text-primary" aria-hidden="true"></i>
+              {{ [first_branch.address_line1, first_branch.town, first_branch.county]|filter(v => v)|join(', ') }}
+            </p>
+            {% if first_branch.phone %}
+              <p class="mt-1 flex items-center gap-1.5 text-sm text-muted">
+                <i class="fa-solid fa-phone text-primary" aria-hidden="true"></i>{{ first_branch.phone }}
+              </p>
+            {% endif %}
+          {% endif %}
+        </div>
+        {% if opening_hours is not empty %}
+          <div class="shrink-0">
+            <h3 class="flex items-center gap-2 text-sm font-semibold text-ink">
+              <i class="fa-regular fa-clock text-primary" aria-hidden="true"></i>{{ t('booking.opening_hours') }}
+            </h3>
+            <dl class="mt-2 space-y-1 text-sm">
+              {% for row in opening_hours %}
+                <div class="flex justify-between gap-6">
+                  <dt class="text-muted">{{ t('booking.weekday_' ~ row.weekday) }}</dt>
+                  <dd class="font-medium text-ink">{{ row.opens_at|slice(0, 5) }} – {{ row.closes_at|slice(0, 5) }}</dd>
+                </div>
+              {% endfor %}
+            </dl>
+          </div>
+        {% endif %}
+      </section>
+
+      <section id="services">
+        <h2 class="text-xl font-semibold text-ink">{{ t('booking.our_services') }}</h2>
+        {% if services is empty %}
+          {% include 'components/feedback/empty-state.twig' with { title: t('booking.no_services_title'), message: t('booking.no_services_body'), icon: 'fa-calendar-xmark' } only %}
+        {% else %}
+          <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {% for service in services %}
+              <button type="button" class="service-card" data-service-card
+                data-service-id="{{ service.id }}" data-service-name="{{ service.name }}"
+                data-service-price="{{ service.price_label }}" data-service-duration="{{ service.duration_minutes }}">
+                <span class="service-card-thumb" aria-hidden="true"><i class="fa-solid fa-spa"></i></span>
+                <span class="block min-w-0">
+                  <span class="block truncate text-sm font-semibold text-ink">{{ service.name }}</span>
+                  {% if settings.show_prices %}
+                    <span class="block text-sm font-medium text-primary">{{ service.price_label }}</span>
+                  {% endif %}
+                  {% if settings.show_duration %}
+                    <span class="mt-0.5 flex items-center gap-1 text-xs text-muted">
+                      <i class="fa-regular fa-clock" aria-hidden="true"></i>{{ service.duration_minutes }} {{ t('booking.minutes') }}
+                    </span>
+                  {% endif %}
+                </span>
+                <span class="service-card-check" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
+              </button>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </section>
+    </div>
+
+    <aside id="book" class="lg:col-span-2">
+      <div class="card sticky top-6 p-5">
+        <h2 class="text-base font-semibold text-white -m-5 mb-4 rounded-t-xl bg-primary p-4">
+          {{ t('booking.panel_title') }}
+          <span class="block text-xs font-normal text-white/80">{{ t('booking.panel_subtitle') }}</span>
+        </h2>
+
+        <ol class="step-dots" aria-label="{{ t('booking.steps_label') }}">
+          <li class="step-dot" data-step-dot><span>1</span>{{ t('booking.step_service') }}</li>
+          <li class="step-dot" data-step-dot><span>2</span>{{ t('booking.step_time') }}</li>
+          <li class="step-dot" data-step-dot><span>3</span>{{ t('booking.step_details') }}</li>
+          <li class="step-dot" data-step-dot><span>4</span>{{ t('booking.step_confirm') }}</li>
+        </ol>
+
+        <div data-step="service">
+          <div data-selected-service class="rounded-lg border border-dashed border-line px-4 py-6 text-center text-sm text-muted">
+            {{ t('booking.pick_service_hint') }}
+          </div>
+        </div>
+
+        <div data-step="datetime" hidden>
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wide text-muted">{{ t('booking.selected_service') }}</p>
+              <p data-selected-service class="mt-1"></p>
+            </div>
+            <button type="button" class="text-sm font-medium text-primary-strong hover:underline" data-back="service">{{ t('common.change') }}</button>
+          </div>
+
+          {% if branches|length > 1 and settings.branch_selection != 'hidden' %}
+            <label class="field-label mt-4" for="booking-branch">{{ t('booking.field_branch') }}</label>
+            <select id="booking-branch" class="input select mt-1" data-booking-branch>
+              {% for branch in branches %}<option value="{{ branch.id }}">{{ branch.name }}</option>{% endfor %}
+            </select>
+          {% endif %}
+
+          <label class="field-label mt-4" for="booking-date">{{ t('booking.field_date') }}</label>
+          <input id="booking-date" type="date" class="input mt-1" data-booking-date
+            min="{{ 'now'|date('Y-m-d', tenant.timezone) }}" value="{{ 'now'|date('Y-m-d', tenant.timezone) }}">
+
+          <p class="field-label mt-4">{{ t('booking.field_time') }}</p>
+          <div data-slot-list class="mt-1"><p class="text-sm text-muted">{{ t('booking.pick_date_hint') }}</p></div>
+
+          {% if settings.staff_selection != 'hidden' %}
+            <label class="field-label mt-4" for="booking-staff">{{ t('booking.field_staff') }}</label>
+            <select id="booking-staff" class="input select mt-1" data-booking-staff data-empty-label="{{ t('booking.any_staff') }}">
+              <option value="">{{ t('booking.any_staff') }}</option>
+            </select>
+          {% endif %}
+
+          <button type="button" class="btn btn-primary btn-md mt-5 w-full" data-to-details disabled>
+            {{ t('booking.continue') }} <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+          </button>
+        </div>
+
+        <form data-step="details" hidden method="post" action="/{{ tenant.slug }}/book" data-booking-form>
+          {{ csrf_field() }}
+          <div data-review class="rounded-lg bg-primary-soft/50 px-4 py-3"></div>
+          <div class="mt-4 space-y-3">
+            <div>
+              <label class="field-label" for="booking-name">{{ t('booking.field_name') }}</label>
+              <input id="booking-name" name="name" type="text" class="input mt-1" required maxlength="150" autocomplete="name" data-field="name">
+            </div>
+            <div>
+              <label class="field-label" for="booking-phone">{{ t('booking.field_phone') }}</label>
+              <input id="booking-phone" name="phone" type="tel" class="input mt-1" maxlength="20" autocomplete="tel" placeholder="+2547XXXXXXXX" data-field="phone">
+            </div>
+            <div>
+              <label class="field-label" for="booking-email">{{ t('booking.field_email') }}</label>
+              <input id="booking-email" name="email" type="email" class="input mt-1" maxlength="254" autocomplete="email" data-field="email">
+            </div>
+            <div>
+              <label class="field-label" for="booking-notes">{{ t('booking.field_notes') }} <span class="font-normal text-muted">({{ t('common.optional') }})</span></label>
+              <textarea id="booking-notes" name="notes" class="input mt-1" rows="2" maxlength="1000" data-field="notes"></textarea>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-md mt-4 w-full">{{ t('booking.confirm_cta') }}</button>
+          <button type="button" class="btn btn-ghost btn-sm mt-2 w-full" data-back="datetime">{{ t('common.back') }}</button>
+        </form>
+
+        <div data-step="success" hidden class="text-center">
+          <span class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-success-soft text-success">
+            <i class="fa-solid fa-check text-2xl" aria-hidden="true"></i>
+          </span>
+          <h3 class="mt-3 text-lg font-semibold text-ink">{{ t('booking.success_title') }}</h3>
+          <p class="mt-1 text-sm text-muted">{{ t('booking.success_body') }}</p>
+          <dl class="mt-4 space-y-1 rounded-lg border border-line p-4 text-left text-sm">
+            <div class="flex justify-between gap-4"><dt class="text-muted">{{ t('booking.field_service') }}</dt><dd class="font-medium text-ink" data-booking-service></dd></div>
+            <div class="flex justify-between gap-4"><dt class="text-muted">{{ t('booking.field_when') }}</dt><dd class="font-medium text-ink" data-booking-when></dd></div>
+            <div class="flex justify-between gap-4"><dt class="text-muted">{{ t('booking.reference') }}</dt><dd class="font-mono font-semibold text-primary-strong" data-booking-reference></dd></div>
+          </dl>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <section class="mt-10 grid grid-cols-2 gap-4 border-t border-line pt-6 sm:grid-cols-4">
+    {% for item in [
+      { icon: 'fa-shield-halved', label: t('booking.trust_secure') },
+      { icon: 'fa-bolt', label: t('booking.trust_instant') },
+      { icon: 'fa-calendar-check', label: t('booking.trust_flexible') },
+      { icon: 'fa-headset', label: t('booking.trust_support') },
+    ] %}
+      <p class="flex items-center justify-center gap-2 text-sm text-muted"><i class="fa-solid {{ item.icon }} text-primary" aria-hidden="true"></i>{{ item.label }}</p>
+    {% endfor %}
+  </section>
+</div>
+{% endblock %}

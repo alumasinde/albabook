@@ -6,7 +6,9 @@ use App\Core\Routing\RouteRegistrar;
 use App\Middleware\GuestOnlyMiddleware;
 use App\Middleware\PermissionMiddleware;
 use App\Middleware\RequireAuthMiddleware;
-use App\Middleware\TenantMiddleware;
+use App\Tenancy\TenantMiddleware;
+use App\Modules\Appointments\Controllers\AppointmentsApiController;
+use App\Modules\Appointments\Controllers\AppointmentsPageController;
 use App\Modules\Auth\Controllers\EmailVerificationController;
 use App\Modules\Auth\Controllers\InvitationController;
 use App\Modules\Auth\Controllers\LoginController;
@@ -18,10 +20,11 @@ use App\Modules\Auth\Controllers\TeamController;
 use App\Modules\Auth\Controllers\TwoFactorController;
 use App\Modules\Auth\Controllers\TwoFactorEnrollmentController;
 use App\Modules\Auth\Controllers\WorkspaceController;
+use App\Modules\Dashboard\Controllers\DashboardApiController;
 use App\Modules\Dashboard\Controllers\DashboardController;
 use App\Modules\Platform\Controllers\SupportEntryController;
 use App\Modules\System\Controllers\HomeController;
-use App\Modules\Tenancy\Controllers\OnboardingController;
+use App\Modules\Tenants\Controllers\OnboardingController;
 
 // Tenant portal — app.albabook.co.ke (plan.md §18).
 return static function (RouteRegistrar $r): void {
@@ -62,6 +65,18 @@ return static function (RouteRegistrar $r): void {
     $r->post('/onboarding/business', [OnboardingController::class, 'create'], $auth, name: 'onboarding.business.store');
 
     $r->get('/dashboard', [DashboardController::class, 'index'], $workspace, name: 'dashboard');
+
+    $r->get('/appointments', [AppointmentsPageController::class, 'index'], [...$workspace, PermissionMiddleware::class], name: 'appointments', options: ['permission' => 'appointments.view']);
+    $r->get('/calendar', [AppointmentsPageController::class, 'calendar'], [...$workspace, PermissionMiddleware::class], name: 'calendar', options: ['permission' => 'appointments.view']);
+
+    // Private JSON API (session-authenticated, D-008: same host, UUID keys).
+    $r->get('/api/dashboard/summary', [DashboardApiController::class, 'summary'], $workspace, name: 'api.dashboard.summary');
+    $r->get('/api/filters', [AppointmentsApiController::class, 'filters'], $workspace, name: 'api.filters');
+    $r->get('/api/appointments', [AppointmentsApiController::class, 'list'], $workspace, name: 'api.appointments.list');
+    $r->post('/api/appointments', [AppointmentsApiController::class, 'create'], $workspace, name: 'api.appointments.create');
+    $r->get('/api/appointments/{uuid}', [AppointmentsApiController::class, 'show'], $workspace, name: 'api.appointments.show');
+    $r->post('/api/appointments/{uuid}/transition', [AppointmentsApiController::class, 'transition'], $workspace, name: 'api.appointments.transition');
+    $r->get('/api/calendar/events', [AppointmentsApiController::class, 'events'], $workspace, name: 'api.calendar.events');
 
     $r->get('/security', [SecurityController::class, 'index'], $auth, name: 'security');
     $r->post('/security/password', [SecurityController::class, 'changePassword'], $auth, name: 'security.password');

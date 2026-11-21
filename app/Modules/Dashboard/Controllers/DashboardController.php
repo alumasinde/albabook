@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Controllers;
 
-use App\Auth\MembershipContext;
+use App\Modules\Auth\Context\MembershipContext;
 use App\Core\Http\HttpException;
 use App\Core\Http\Request;
 use App\Core\Http\Response;
@@ -37,7 +37,7 @@ final class DashboardController
             throw new HttpException(403, 'FORBIDDEN', 'No workspace is available for this request.');
         }
 
-        return $this->view->response('dashboard/index.twig', [
+        return $this->view->response('dashboard/overview.twig', [
             'tenant' => $tenant,
             'membership' => $membership instanceof MembershipContext ? $membership : null,
             'user' => $user,

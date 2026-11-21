@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Auth;
 
-use App\Auth\MembershipContext;
+use App\Modules\Auth\Context\MembershipContext;
 use PHPUnit\Framework\TestCase;
 
 final class MembershipContextTest extends TestCase
