@@ -6,6 +6,10 @@
 -- (decisions.md D-007). roles.tenant_id IS NULL holds platform role templates
 -- that are copied into each tenant; the generated tenant_scope column keeps
 -- template slugs unique without nullable-unique tricks.
+--
+-- MySQL forbids CASCADE / SET NULL on a foreign key whose column is the base
+-- of a STORED generated column (roles.tenant_id -> tenant_scope). The tenant
+-- FK is RESTRICT, which D-024 requires anyway.
 
 SET NAMES utf8mb4;
 SET time_zone = '+00:00';
@@ -20,7 +24,7 @@ CREATE TABLE users (
     phone_e164          VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NULL,
     password_hash       VARCHAR(255) NOT NULL,
     email_verified_at   DATETIME NULL,
-    locale              CHAR(5) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'en',
+    locale              VARCHAR(10) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'en',
     status              ENUM('active', 'suspended') NOT NULL DEFAULT 'active',
     last_login_at       DATETIME NULL,
     created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -31,7 +35,9 @@ CREATE TABLE users (
     UNIQUE KEY uq_users_uuid (uuid),
     UNIQUE KEY uq_users_email (email),
     KEY idx_users_phone (phone_e164),
-    KEY idx_users_status (status)
+    KEY idx_users_status (status),
+    CONSTRAINT fk_users_locale
+        FOREIGN KEY (locale) REFERENCES locales (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE tenant_users (
@@ -82,106 +88,62 @@ CREATE TABLE roles (
     UNIQUE KEY uq_roles_scope_slug (tenant_scope, slug),
     CONSTRAINT fk_roles_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE
+        ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Permission scope is enforced declaratively (D-020): each link table carries
+-- a constant scope column, pinned by CHECK, and references permissions on
+-- (scope, id). A tenant role therefore cannot receive a platform permission and
+-- vice versa, even through direct SQL. This replaces the earlier BEFORE
+-- INSERT/UPDATE triggers, which needed DELIMITER (a mysql-client command that
+-- a PDO migration runner cannot execute).
 CREATE TABLE permissions (
     id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    scope       ENUM('tenant', 'platform') NOT NULL,
+    scope       VARCHAR(10) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     identifier  VARCHAR(100) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     name        VARCHAR(150) NOT NULL,
     description VARCHAR(255) NULL,
 
     PRIMARY KEY (id),
-    UNIQUE KEY uq_permissions_scope_identifier (scope, identifier)
+    UNIQUE KEY uq_permissions_scope_identifier (scope, identifier),
+    UNIQUE KEY uq_permissions_scope_id (scope, id),
+    CONSTRAINT chk_permissions_scope CHECK (scope IN ('tenant', 'platform'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE platform_user_permissions (
     platform_user_id            BIGINT UNSIGNED NOT NULL,
+    permission_scope            VARCHAR(10) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'platform',
     permission_id               BIGINT UNSIGNED NOT NULL,
     granted_by_platform_user_id BIGINT UNSIGNED NULL,
     granted_at                  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (platform_user_id, permission_id),
-    KEY idx_platform_user_permissions_permission (permission_id),
+    KEY idx_platform_user_permissions_permission (permission_scope, permission_id),
     CONSTRAINT fk_platform_user_permissions_user
         FOREIGN KEY (platform_user_id) REFERENCES platform_users (id)
         ON DELETE CASCADE,
     CONSTRAINT fk_platform_user_permissions_permission
-        FOREIGN KEY (permission_id) REFERENCES permissions (id)
-        ON DELETE RESTRICT,
+        FOREIGN KEY (permission_scope, permission_id) REFERENCES permissions (scope, id),
     CONSTRAINT fk_platform_user_permissions_granted_by
         FOREIGN KEY (granted_by_platform_user_id) REFERENCES platform_users (id)
-        ON DELETE SET NULL
+        ON DELETE SET NULL,
+    CONSTRAINT chk_platform_user_permissions_scope CHECK (permission_scope = 'platform')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE role_permissions (
-    role_id         BIGINT UNSIGNED NOT NULL,
-    permission_id   BIGINT UNSIGNED NOT NULL,
+    role_id             BIGINT UNSIGNED NOT NULL,
+    permission_scope    VARCHAR(10) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'tenant',
+    permission_id       BIGINT UNSIGNED NOT NULL,
 
     PRIMARY KEY (role_id, permission_id),
+    KEY idx_role_permissions_permission (permission_scope, permission_id),
     CONSTRAINT fk_role_permissions_role
         FOREIGN KEY (role_id) REFERENCES roles (id)
         ON DELETE CASCADE,
     CONSTRAINT fk_role_permissions_permission
-        FOREIGN KEY (permission_id) REFERENCES permissions (id)
-        ON DELETE RESTRICT
+        FOREIGN KEY (permission_scope, permission_id) REFERENCES permissions (scope, id),
+    CONSTRAINT chk_role_permissions_scope CHECK (permission_scope = 'tenant')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Permission scope is enforced in the database: tenant roles can only receive
--- tenant-scope permissions, and platform administrators can only receive
--- platform-scope permissions.
-DELIMITER $$
-
-CREATE TRIGGER trg_role_permissions_scope_insert
-BEFORE INSERT ON role_permissions
-FOR EACH ROW
-BEGIN
-    DECLARE v_scope VARCHAR(10);
-    SELECT scope INTO v_scope FROM permissions WHERE id = NEW.permission_id;
-    IF v_scope <> 'tenant' THEN
-        SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'role_permissions accepts tenant-scope permissions only';
-    END IF;
-END$$
-
-CREATE TRIGGER trg_role_permissions_scope_update
-BEFORE UPDATE ON role_permissions
-FOR EACH ROW
-BEGIN
-    DECLARE v_scope VARCHAR(10);
-    SELECT scope INTO v_scope FROM permissions WHERE id = NEW.permission_id;
-    IF v_scope <> 'tenant' THEN
-        SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'role_permissions accepts tenant-scope permissions only';
-    END IF;
-END$$
-
-CREATE TRIGGER trg_platform_user_permissions_scope_insert
-BEFORE INSERT ON platform_user_permissions
-FOR EACH ROW
-BEGIN
-    DECLARE v_scope VARCHAR(10);
-    SELECT scope INTO v_scope FROM permissions WHERE id = NEW.permission_id;
-    IF v_scope <> 'platform' THEN
-        SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'platform_user_permissions accepts platform-scope permissions only';
-    END IF;
-END$$
-
-CREATE TRIGGER trg_platform_user_permissions_scope_update
-BEFORE UPDATE ON platform_user_permissions
-FOR EACH ROW
-BEGIN
-    DECLARE v_scope VARCHAR(10);
-    SELECT scope INTO v_scope FROM permissions WHERE id = NEW.permission_id;
-    IF v_scope <> 'platform' THEN
-        SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'platform_user_permissions accepts platform-scope permissions only';
-    END IF;
-END$$
-
-DELIMITER ;
 
 CREATE TABLE membership_roles (
     tenant_id       BIGINT UNSIGNED NOT NULL,
@@ -219,7 +181,7 @@ CREATE TABLE user_sessions (
         ON DELETE CASCADE,
     CONSTRAINT fk_user_sessions_tenant
         FOREIGN KEY (active_tenant_id) REFERENCES tenants (id)
-        ON DELETE SET NULL
+        ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE remember_tokens (
@@ -339,7 +301,7 @@ CREATE TABLE tenant_invitations (
     KEY idx_tenant_invitations_email (tenant_id, email, accepted_at),
     CONSTRAINT fk_tenant_invitations_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE,
+        ON DELETE RESTRICT,
     CONSTRAINT fk_tenant_invitations_inviter
         FOREIGN KEY (invited_by_user_id) REFERENCES users (id)
         ON DELETE RESTRICT

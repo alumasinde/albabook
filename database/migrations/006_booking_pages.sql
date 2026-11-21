@@ -31,7 +31,7 @@ CREATE TABLE tenant_assets (
     KEY idx_tenant_assets_kind (tenant_id, kind, sort_position),
     CONSTRAINT fk_tenant_assets_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE,
+        ON DELETE RESTRICT,
     CONSTRAINT fk_tenant_assets_created_by
         FOREIGN KEY (created_by_user_id) REFERENCES users (id)
         ON DELETE SET NULL,
@@ -55,7 +55,7 @@ CREATE TABLE tenant_branding (
     PRIMARY KEY (tenant_id),
     CONSTRAINT fk_tenant_branding_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE,
+        ON DELETE RESTRICT,
     CONSTRAINT fk_tenant_branding_logo
         FOREIGN KEY (tenant_id, logo_asset_id)
         REFERENCES tenant_assets (tenant_id, id)
@@ -85,7 +85,7 @@ CREATE TABLE booking_page_settings (
     time_slot_presentation      ENUM('grid', 'list') NOT NULL DEFAULT 'grid',
     show_prices                 BOOLEAN NOT NULL DEFAULT TRUE,
     show_duration               BOOLEAN NOT NULL DEFAULT TRUE,
-    default_locale              CHAR(5) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'en',
+    default_locale              VARCHAR(10) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'en',
 
     updated_at                  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
                                     ON UPDATE CURRENT_TIMESTAMP,
@@ -93,30 +93,19 @@ CREATE TABLE booking_page_settings (
     PRIMARY KEY (tenant_id),
     CONSTRAINT fk_booking_page_settings_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE,
+        ON DELETE RESTRICT,
     CONSTRAINT fk_booking_page_settings_og_image
         FOREIGN KEY (tenant_id, og_image_asset_id)
         REFERENCES tenant_assets (tenant_id, id)
-        ON DELETE RESTRICT
+        ON DELETE RESTRICT,
+    CONSTRAINT fk_booking_page_settings_locale
+        FOREIGN KEY (default_locale) REFERENCES locales (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE booking_page_sections (
     id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     tenant_id       BIGINT UNSIGNED NOT NULL,
-    section_key     ENUM(
-                        'hero',
-                        'service_categories',
-                        'about',
-                        'services',
-                        'staff',
-                        'gallery',
-                        'testimonials',
-                        'locations',
-                        'opening_hours',
-                        'contact',
-                        'faqs',
-                        'social'
-                    ) NOT NULL,
+    section_key     VARCHAR(40) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     is_enabled      BOOLEAN NOT NULL DEFAULT TRUE,
     sort_position   SMALLINT UNSIGNED NOT NULL DEFAULT 0,
 
@@ -124,7 +113,9 @@ CREATE TABLE booking_page_sections (
     UNIQUE KEY uq_booking_page_sections_key (tenant_id, section_key),
     CONSTRAINT fk_booking_page_sections_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE
+        ON DELETE RESTRICT,
+    CONSTRAINT fk_booking_page_sections_type
+        FOREIGN KEY (section_key) REFERENCES booking_page_section_types (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE booking_page_faqs (
@@ -142,7 +133,7 @@ CREATE TABLE booking_page_faqs (
     KEY idx_booking_page_faqs_order (tenant_id, sort_position),
     CONSTRAINT fk_booking_page_faqs_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE
+        ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE booking_page_testimonials (
@@ -163,7 +154,7 @@ CREATE TABLE booking_page_testimonials (
     KEY idx_booking_page_testimonials_order (tenant_id, sort_position),
     CONSTRAINT fk_booking_page_testimonials_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE,
+        ON DELETE RESTRICT,
     CONSTRAINT chk_booking_page_testimonials_rating
         CHECK (rating IS NULL OR rating BETWEEN 1 AND 5)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -191,7 +182,7 @@ CREATE TABLE booking_page_versions (
     UNIQUE KEY uq_booking_page_versions_active (tenant_id, active_tenant_id),
     CONSTRAINT fk_booking_page_versions_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE,
+        ON DELETE RESTRICT,
     CONSTRAINT fk_booking_page_versions_publisher
         FOREIGN KEY (published_by_user_id) REFERENCES users (id)
         ON DELETE SET NULL,

@@ -60,7 +60,7 @@ CREATE TABLE tenant_categories (
     PRIMARY KEY (tenant_id, business_category_id),
     CONSTRAINT fk_tenant_categories_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE,
+        ON DELETE RESTRICT,
     CONSTRAINT fk_tenant_categories_category
         FOREIGN KEY (business_category_id) REFERENCES business_categories (id)
         ON DELETE RESTRICT
@@ -107,31 +107,37 @@ CREATE TABLE business_hours (
         CHECK (effective_to IS NULL OR effective_from IS NULL OR effective_to >= effective_from)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Policy columns are NULLable with no defaults: NULL means "inherit". A branch
+-- row inherits the tenant row column by column; a tenant row inherits
+-- config/booking.php (booking-engine.md §4.3). Defaults here would silently
+-- freeze platform defaults into every row and break inheritance.
+-- The engine-facing options stay ENUMs: code branches on every value, they are
+-- used only here, and CHECK constraints depend on them (D-023).
+-- fk_booking_policies_branch is RESTRICT because branch_id is the base column
+-- of the STORED generated branch_scope; MySQL rejects CASCADE there. Branches
+-- are deactivated, not deleted.
 CREATE TABLE booking_policies (
     id                                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     tenant_id                           BIGINT UNSIGNED NOT NULL,
     branch_id                           BIGINT UNSIGNED NULL,
 
-    slot_interval_minutes               SMALLINT UNSIGNED NOT NULL DEFAULT 15,
-    min_notice_minutes                  INT UNSIGNED NOT NULL DEFAULT 60,
-    max_advance_days                    SMALLINT UNSIGNED NOT NULL DEFAULT 60,
-    hold_ttl_seconds                    INT UNSIGNED NOT NULL DEFAULT 300,
-    confirmation_mode                   ENUM('auto', 'manual') NOT NULL DEFAULT 'auto',
-    pending_expiry_minutes              INT UNSIGNED NOT NULL DEFAULT 1440,
-    staff_assignment_strategy           ENUM('least_booked_day', 'round_robin', 'priority')
-                                            NOT NULL DEFAULT 'least_booked_day',
-    customer_changes                    ENUM('self_service', 'request', 'disabled')
-                                            NOT NULL DEFAULT 'self_service',
-    cancellation_cutoff_minutes         INT UNSIGNED NOT NULL DEFAULT 1440,
-    reschedule_cutoff_minutes           INT UNSIGNED NOT NULL DEFAULT 1440,
-    max_reschedules                     TINYINT UNSIGNED NOT NULL DEFAULT 2,
-    deposit_mode                        ENUM('none', 'fixed', 'percent') NOT NULL DEFAULT 'none',
+    slot_interval_minutes               SMALLINT UNSIGNED NULL,
+    min_notice_minutes                  INT UNSIGNED NULL,
+    max_advance_days                    SMALLINT UNSIGNED NULL,
+    hold_ttl_seconds                    INT UNSIGNED NULL,
+    confirmation_mode                   ENUM('auto', 'manual') NULL,
+    pending_expiry_minutes              INT UNSIGNED NULL,
+    staff_assignment_strategy           ENUM('least_booked_day', 'round_robin', 'priority') NULL,
+    customer_changes                    ENUM('self_service', 'request', 'disabled') NULL,
+    cancellation_cutoff_minutes         INT UNSIGNED NULL,
+    reschedule_cutoff_minutes           INT UNSIGNED NULL,
+    max_reschedules                     TINYINT UNSIGNED NULL,
+    deposit_mode                        ENUM('none', 'fixed', 'percent') NULL,
     deposit_value                       BIGINT NULL,
-    deposit_due_minutes                 INT UNSIGNED NOT NULL DEFAULT 30,
-    customer_verification               ENUM('none', 'otp_phone', 'otp_email') NOT NULL DEFAULT 'none',
-    max_active_bookings_per_contact     TINYINT UNSIGNED NOT NULL DEFAULT 3,
-    customer_match                      ENUM('phone', 'email', 'phone_or_email', 'none')
-                                            NOT NULL DEFAULT 'phone',
+    deposit_due_minutes                 INT UNSIGNED NULL,
+    customer_verification               ENUM('none', 'otp_phone', 'otp_email') NULL,
+    max_active_bookings_per_contact     TINYINT UNSIGNED NULL,
+    customer_match                      ENUM('phone', 'email', 'phone_or_email', 'none') NULL,
     policy_version                      INT UNSIGNED NOT NULL DEFAULT 1,
 
     branch_scope                        BIGINT UNSIGNED GENERATED ALWAYS AS (IFNULL(branch_id, 0)) STORED,
@@ -144,15 +150,22 @@ CREATE TABLE booking_policies (
     UNIQUE KEY uq_booking_policies_scope (tenant_id, branch_scope),
     CONSTRAINT fk_booking_policies_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE,
+        ON DELETE RESTRICT,
     CONSTRAINT fk_booking_policies_branch
         FOREIGN KEY (tenant_id, branch_id)
         REFERENCES branches (tenant_id, id)
-        ON DELETE CASCADE,
+        ON DELETE RESTRICT,
+    CONSTRAINT chk_booking_policies_slot_interval
+        CHECK (slot_interval_minutes IS NULL OR slot_interval_minutes BETWEEN 5 AND 240),
+    -- deposit_mode and deposit_value are set (or inherited) together.
+    -- Explicit IS NOT NULL: a CHECK that evaluates to NULL counts as passing,
+    -- so `deposit_value > 0` alone would accept 'fixed' with no amount.
     CONSTRAINT chk_booking_policies_deposit CHECK (
-        (deposit_mode = 'none' AND deposit_value IS NULL)
-        OR (deposit_mode = 'fixed' AND deposit_value > 0)
-        OR (deposit_mode = 'percent' AND deposit_value BETWEEN 1 AND 10000)
+        (deposit_mode IS NULL AND deposit_value IS NULL)
+        OR (deposit_mode = 'none' AND deposit_value IS NULL)
+        OR (deposit_mode = 'fixed' AND deposit_value IS NOT NULL AND deposit_value > 0)
+        OR (deposit_mode = 'percent' AND deposit_value IS NOT NULL
+            AND deposit_value BETWEEN 1 AND 10000)
     )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -174,7 +187,7 @@ CREATE TABLE service_categories (
     KEY idx_service_categories_tenant (tenant_id, is_active, sort_position),
     CONSTRAINT fk_service_categories_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE
+        ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE services (
@@ -209,11 +222,13 @@ CREATE TABLE services (
     KEY idx_services_category (tenant_id, service_category_id),
     CONSTRAINT fk_services_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE,
+        ON DELETE RESTRICT,
     CONSTRAINT fk_services_category
         FOREIGN KEY (tenant_id, service_category_id)
         REFERENCES service_categories (tenant_id, id)
         ON DELETE RESTRICT,
+    CONSTRAINT fk_services_currency
+        FOREIGN KEY (currency) REFERENCES currencies (code),
     CONSTRAINT chk_services_duration CHECK (duration_minutes > 0),
     CONSTRAINT chk_services_price CHECK (
         (price_type = 'fixed'
@@ -247,6 +262,8 @@ CREATE TABLE service_variants (
     PRIMARY KEY (id),
     UNIQUE KEY uq_service_variants_uuid (uuid),
     UNIQUE KEY uq_service_variants_tenant_id (tenant_id, id),
+    -- Lets children prove the variant belongs to the same service.
+    UNIQUE KEY uq_service_variants_service_id (tenant_id, service_id, id),
     KEY idx_service_variants_service (tenant_id, service_id, is_active),
     CONSTRAINT fk_service_variants_service
         FOREIGN KEY (tenant_id, service_id)
@@ -316,7 +333,7 @@ CREATE TABLE resource_types (
     UNIQUE KEY uq_resource_types_name (tenant_id, name),
     CONSTRAINT fk_resource_types_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE
+        ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE resources (
@@ -384,9 +401,10 @@ CREATE TABLE service_resource_requirements (
         FOREIGN KEY (tenant_id, service_id)
         REFERENCES services (tenant_id, id)
         ON DELETE CASCADE,
+    -- (tenant_id, service_id, variant_id): a variant of another service is rejected.
     CONSTRAINT fk_service_requirements_variant
-        FOREIGN KEY (tenant_id, variant_id)
-        REFERENCES service_variants (tenant_id, id)
+        FOREIGN KEY (tenant_id, service_id, variant_id)
+        REFERENCES service_variants (tenant_id, service_id, id)
         ON DELETE CASCADE,
     CONSTRAINT fk_service_requirements_type
         FOREIGN KEY (tenant_id, resource_type_id)
@@ -423,7 +441,7 @@ CREATE TABLE staff (
     KEY idx_staff_tenant (tenant_id, status, is_bookable_online),
     CONSTRAINT fk_staff_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE,
+        ON DELETE RESTRICT,
     CONSTRAINT fk_staff_membership
         FOREIGN KEY (tenant_id, tenant_user_id)
         REFERENCES tenant_users (tenant_id, id)
@@ -487,14 +505,14 @@ CREATE TABLE staff_schedules (
 
     PRIMARY KEY (id),
     KEY idx_staff_schedules_staff (tenant_id, staff_id, weekday),
-    CONSTRAINT fk_staff_schedules_staff
-        FOREIGN KEY (tenant_id, staff_id)
-        REFERENCES staff (tenant_id, id)
+    KEY idx_staff_schedules_branch (tenant_id, branch_id, weekday),
+    -- A shift can only exist at a branch the staff member is assigned to.
+    -- Removing the assignment removes those shifts; StaffService must first
+    -- check future appointments (booking-engine.md §9.6).
+    CONSTRAINT fk_staff_schedules_assignment
+        FOREIGN KEY (tenant_id, staff_id, branch_id)
+        REFERENCES staff_branches (tenant_id, staff_id, branch_id)
         ON DELETE CASCADE,
-    CONSTRAINT fk_staff_schedules_branch
-        FOREIGN KEY (tenant_id, branch_id)
-        REFERENCES branches (tenant_id, id)
-        ON DELETE RESTRICT,
     CONSTRAINT chk_staff_schedules_weekday CHECK (weekday BETWEEN 1 AND 7),
     CONSTRAINT chk_staff_schedules_times CHECK (starts_at <> ends_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -520,13 +538,35 @@ CREATE TABLE staff_breaks (
     CONSTRAINT chk_staff_breaks_times CHECK (starts_at <> ends_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Leave types differ per business (study leave, maternity, training...), so
+-- they are a tenant-scoped lookup rather than an ENUM (D-023). Defaults are
+-- copied in at tenant creation, like role templates.
+CREATE TABLE staff_leave_types (
+    id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    tenant_id       BIGINT UNSIGNED NOT NULL,
+    code            VARCHAR(40) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    name            VARCHAR(80) NOT NULL,
+    is_paid         BOOLEAN NOT NULL DEFAULT TRUE,
+    requires_approval BOOLEAN NOT NULL DEFAULT TRUE,
+    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_position   SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_staff_leave_types_tenant_id (tenant_id, id),
+    UNIQUE KEY uq_staff_leave_types_code (tenant_id, code),
+    CONSTRAINT fk_staff_leave_types_tenant
+        FOREIGN KEY (tenant_id) REFERENCES tenants (id)
+        ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE staff_leave (
     id                      BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     tenant_id               BIGINT UNSIGNED NOT NULL,
     staff_id                BIGINT UNSIGNED NOT NULL,
     starts_at               DATETIME NOT NULL,
     ends_at                 DATETIME NOT NULL,
-    type                    ENUM('annual', 'sick', 'unpaid', 'other') NOT NULL DEFAULT 'annual',
+    leave_type_id           BIGINT UNSIGNED NOT NULL,
     status                  ENUM('requested', 'approved', 'rejected', 'cancelled')
                                 NOT NULL DEFAULT 'requested',
     reason                  VARCHAR(255) NULL,
@@ -542,6 +582,10 @@ CREATE TABLE staff_leave (
         FOREIGN KEY (tenant_id, staff_id)
         REFERENCES staff (tenant_id, id)
         ON DELETE CASCADE,
+    CONSTRAINT fk_staff_leave_type
+        FOREIGN KEY (tenant_id, leave_type_id)
+        REFERENCES staff_leave_types (tenant_id, id)
+        ON DELETE RESTRICT,
     CONSTRAINT chk_staff_leave_window CHECK (ends_at > starts_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -689,7 +733,7 @@ CREATE TABLE customer_consents (
     id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     tenant_id   BIGINT UNSIGNED NOT NULL,
     customer_id BIGINT UNSIGNED NOT NULL,
-    channel     ENUM('sms', 'whatsapp', 'email', 'phone') NOT NULL,
+    channel     VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     purpose     ENUM('transactional', 'marketing') NOT NULL,
     granted     BOOLEAN NOT NULL,
     source      VARCHAR(50) NULL,
@@ -702,5 +746,7 @@ CREATE TABLE customer_consents (
     CONSTRAINT fk_customer_consents_customer
         FOREIGN KEY (tenant_id, customer_id)
         REFERENCES customers (tenant_id, id)
-        ON DELETE CASCADE
+        ON DELETE CASCADE,
+    CONSTRAINT fk_customer_consents_channel
+        FOREIGN KEY (channel) REFERENCES communication_channels (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

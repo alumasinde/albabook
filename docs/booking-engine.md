@@ -68,7 +68,7 @@ Column lists are the minimum. All tables carry `tenant_id`, a `UNIQUE (tenant_id
 | `staff_breaks` | `staff_id, weekday, starts_at, ends_at, effective_from, effective_to` | Recurring breaks. |
 | `schedule_overrides` | `branch_id NULL, staff_id NULL, resource_id NULL, local_date, is_closed, opens_at, closes_at` | Date-specific hours: public holidays, late openings, one-off shifts. Replaces the recurring rule for that date. Exactly one scope column is set (`CHECK` constraint), and each is a composite tenant FK. |
 | `blocked_periods` | `branch_id NULL, staff_id NULL, resource_id NULL, starts_at, ends_at (UTC), reason, created_by_user_id` | Ad-hoc blocks, maintenance. Replaces the separate `blocked_dates` idea. Exactly one scope column is set, same as overrides. |
-| `staff_leave` | `staff_id, starts_at, ends_at (UTC), type, status (requested, approved, rejected, cancelled)` | Only `approved` leave blocks time. |
+| `staff_leave` | `staff_id, starts_at, ends_at (UTC), leave_type_id, status (requested, approved, rejected, cancelled)` | Only `approved` leave blocks time. Leave types are the tenant-scoped `staff_leave_types` lookup (`decisions.md` D-023). |
 
 ### 4.2 What a service needs
 
@@ -372,6 +372,8 @@ A scheduled `BookingIntegrityCheck` job scans recent and future occupancies for 
 
 `rescheduled` is an **event**, not a status. The reference stays the same.
 
+These statuses are seeded in the `appointment_statuses` lookup table with `blocks_time` and `is_terminal` flags (`decisions.md` D-023). `appointments.status`, `appointment_events.from_status` and `to_status` reference it. The occupancy queries still filter with a literal `status IN ('pending', 'confirmed', 'checked_in')` taken from the PHP `AppointmentStatus` enum (no join on the hot path); a test asserts the enum's time-blocking cases equal the rows where `blocks_time = TRUE`.
+
 Separate columns, separate concerns:
 
 - `status` — lifecycle above.
@@ -476,7 +478,9 @@ payments
   match_state           -- n/a, unmatched, matched, dismissed (C2B only)
   matched_by_user_id NULL, matched_at NULL
   notes
-  UNIQUE (tenant_id, provider, provider_reference)
+  UNIQUE (tenant_id, method, provider_reference)   -- a manually typed M-Pesa code and
+                                                   -- its C2B callback collide, so the
+                                                   -- callback reconciles, never double-counts
   UNIQUE (tenant_id, id)
   UNIQUE (tenant_id, idempotency_key)   -- NULLs allowed; manual/API writes only
 

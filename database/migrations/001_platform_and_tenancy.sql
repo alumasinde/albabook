@@ -8,15 +8,13 @@
 --   * Tenant-owned tables carry tenant_id and UNIQUE (tenant_id, id) so children
 --     can use composite tenant-aware foreign keys.
 --   * Money is BIGINT minor units with an explicit ISO 4217 currency (D-006).
+--   * Status/category columns that are shared, carry metadata or are extended
+--     without a deploy reference lookup tables from 000 (D-023).
+--   * Tenants are never hard-deleted (archived, then anonymised per D-012), so
+--     every foreign key to tenants is ON DELETE RESTRICT (D-024).
 
 SET NAMES utf8mb4;
 SET time_zone = '+00:00';
-
-CREATE TABLE schema_migrations (
-    version     VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-    applied_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (version)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE tenants (
     id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -24,18 +22,11 @@ CREATE TABLE tenants (
     name                VARCHAR(150) NOT NULL,
     slug                VARCHAR(100) NOT NULL,
 
-    status              ENUM(
-                            'pending',
-                            'trial',
-                            'active',
-                            'suspended',
-                            'cancelled',
-                            'archived'
-                        ) NOT NULL DEFAULT 'pending',
+    status              VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'pending',
 
     timezone            VARCHAR(64) NOT NULL DEFAULT 'Africa/Nairobi',
     currency            CHAR(3) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'KES',
-    default_locale      CHAR(5) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'en',
+    default_locale      VARCHAR(10) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'en',
 
     vat_registered      BOOLEAN NOT NULL DEFAULT FALSE,
     tax_rate_bp         SMALLINT UNSIGNED NOT NULL DEFAULT 0,
@@ -52,6 +43,12 @@ CREATE TABLE tenants (
     UNIQUE KEY uq_tenants_slug (slug),
     KEY idx_tenants_status (status),
 
+    CONSTRAINT fk_tenants_status
+        FOREIGN KEY (status) REFERENCES tenant_statuses (code),
+    CONSTRAINT fk_tenants_currency
+        FOREIGN KEY (currency) REFERENCES currencies (code),
+    CONSTRAINT fk_tenants_locale
+        FOREIGN KEY (default_locale) REFERENCES locales (code),
     CONSTRAINT chk_tenants_slug_format CHECK (
         CHAR_LENGTH(slug) BETWEEN 3 AND 60
         AND slug REGEXP '^[a-z0-9]+(-[a-z0-9]+)*$'
@@ -62,19 +59,14 @@ CREATE TABLE tenants (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE tenant_status_policies (
-    status      ENUM(
-                    'pending',
-                    'trial',
-                    'active',
-                    'suspended',
-                    'cancelled',
-                    'archived'
-                ) NOT NULL,
+    status      VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     operation   VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     allowed     BOOLEAN NOT NULL DEFAULT FALSE,
     updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
                     ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (status, operation)
+    PRIMARY KEY (status, operation),
+    CONSTRAINT fk_tenant_status_policies_status
+        FOREIGN KEY (status) REFERENCES tenant_statuses (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE tenant_settings (
@@ -91,7 +83,7 @@ CREATE TABLE tenant_settings (
     PRIMARY KEY (tenant_id),
     CONSTRAINT fk_tenant_settings_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE
+        ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE tenant_slug_history (

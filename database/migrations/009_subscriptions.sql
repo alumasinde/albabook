@@ -27,6 +27,8 @@ CREATE TABLE plans (
     PRIMARY KEY (id),
     UNIQUE KEY uq_plans_uuid (uuid),
     UNIQUE KEY uq_plans_code (code),
+    CONSTRAINT fk_plans_currency
+        FOREIGN KEY (currency) REFERENCES currencies (code),
     CONSTRAINT chk_plans_price CHECK (price_minor >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -42,6 +44,8 @@ CREATE TABLE plan_features (
     CONSTRAINT fk_plan_features_plan
         FOREIGN KEY (plan_id) REFERENCES plans (id)
         ON DELETE CASCADE,
+    CONSTRAINT fk_plan_features_feature
+        FOREIGN KEY (feature_key) REFERENCES features (code),
     CONSTRAINT chk_plan_features_limit CHECK (limit_value IS NULL OR limit_value >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -87,7 +91,9 @@ CREATE TABLE tenant_feature_overrides (
     PRIMARY KEY (tenant_id, feature_key),
     CONSTRAINT fk_tenant_feature_overrides_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE,
+        ON DELETE RESTRICT,
+    CONSTRAINT fk_tenant_feature_overrides_feature
+        FOREIGN KEY (feature_key) REFERENCES features (code),
     CONSTRAINT chk_tenant_feature_overrides_limit
         CHECK (limit_value IS NULL OR limit_value >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -105,7 +111,9 @@ CREATE TABLE usage_records (
     UNIQUE KEY uq_usage_records_period (tenant_id, metric_key, period_start),
     CONSTRAINT fk_usage_records_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE,
+        ON DELETE RESTRICT,
+    CONSTRAINT fk_usage_records_metric
+        FOREIGN KEY (metric_key) REFERENCES features (code),
     CONSTRAINT chk_usage_records_quantity CHECK (quantity >= 0),
     CONSTRAINT chk_usage_records_period CHECK (period_end >= period_start)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -159,6 +167,8 @@ CREATE TABLE subscription_invoices (
         FOREIGN KEY (tenant_id, subscription_id)
         REFERENCES tenant_subscriptions (tenant_id, id)
         ON DELETE RESTRICT,
+    CONSTRAINT fk_subscription_invoices_currency
+        FOREIGN KEY (currency) REFERENCES currencies (code),
     CONSTRAINT chk_subscription_invoices_money CHECK (
         subtotal_minor >= 0 AND tax_minor >= 0
         AND total_minor = subtotal_minor + tax_minor
@@ -175,7 +185,7 @@ CREATE TABLE subscription_payments (
     invoice_id          BIGINT UNSIGNED NOT NULL,
     amount_minor        BIGINT NOT NULL,
     currency            CHAR(3) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'KES',
-    method              ENUM('mpesa', 'bank_transfer', 'card', 'other') NOT NULL,
+    method              VARCHAR(30) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,  -- payment_methods where for_subscriptions
     provider_reference  VARCHAR(100) NULL,
     status              ENUM('pending', 'succeeded', 'failed', 'cancelled')
                             NOT NULL DEFAULT 'pending',
@@ -200,6 +210,10 @@ CREATE TABLE subscription_payments (
     CONSTRAINT fk_subscription_payments_recorded_by
         FOREIGN KEY (recorded_by_user_id) REFERENCES platform_users (id)
         ON DELETE SET NULL,
+    CONSTRAINT fk_subscription_payments_method
+        FOREIGN KEY (method) REFERENCES payment_methods (code),
+    CONSTRAINT fk_subscription_payments_currency
+        FOREIGN KEY (currency) REFERENCES currencies (code),
     CONSTRAINT chk_subscription_payments_amount CHECK (amount_minor > 0),
     CONSTRAINT chk_subscription_payments_paid CHECK (
         status <> 'succeeded' OR paid_at IS NOT NULL

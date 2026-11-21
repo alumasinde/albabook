@@ -30,16 +30,10 @@ CREATE TABLE appointments (
     customer_id                 BIGINT UNSIGNED NULL,
 
     reference                   CHAR(8) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-    status                      ENUM(
-                                    'pending',
-                                    'confirmed',
-                                    'checked_in',
-                                    'completed',
-                                    'no_show',
-                                    'cancelled',
-                                    'rejected',
-                                    'expired'
-                                ) NOT NULL DEFAULT 'pending',
+    -- Lookup FK (appointment_statuses carries blocks_time / is_terminal, and the
+    -- same codes are referenced by appointment_events). payment_status and
+    -- booking_source stay ENUMs: single-table, code-driven, no metadata (D-023).
+    status                      VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'pending',
     payment_status              ENUM(
                                     'not_required',
                                     'unpaid',
@@ -65,7 +59,7 @@ CREATE TABLE appointments (
     customer_name_snapshot      VARCHAR(255) NOT NULL,
     customer_phone_snapshot     VARCHAR(20) NULL,
     customer_email_snapshot     VARCHAR(254) NULL,
-    locale                      CHAR(5) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'en',
+    locale                      VARCHAR(10) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'en',
 
     total_amount_minor          BIGINT NOT NULL DEFAULT 0,
     deposit_amount_minor        BIGINT NOT NULL DEFAULT 0,
@@ -114,6 +108,12 @@ CREATE TABLE appointments (
     CONSTRAINT fk_appointments_created_by
         FOREIGN KEY (created_by_user_id) REFERENCES users (id)
         ON DELETE SET NULL,
+    CONSTRAINT fk_appointments_status
+        FOREIGN KEY (status) REFERENCES appointment_statuses (code),
+    CONSTRAINT fk_appointments_currency
+        FOREIGN KEY (currency) REFERENCES currencies (code),
+    CONSTRAINT fk_appointments_locale
+        FOREIGN KEY (locale) REFERENCES locales (code),
 
     CONSTRAINT chk_appointments_window CHECK (end_at > start_at),
     CONSTRAINT chk_appointments_money CHECK (
@@ -173,10 +173,13 @@ CREATE TABLE appointment_items (
         FOREIGN KEY (tenant_id, service_id)
         REFERENCES services (tenant_id, id)
         ON DELETE RESTRICT,
+    -- (tenant_id, service_id, variant_id): the variant must belong to the item's service.
     CONSTRAINT fk_appointment_items_variant
-        FOREIGN KEY (tenant_id, variant_id)
-        REFERENCES service_variants (tenant_id, id)
+        FOREIGN KEY (tenant_id, service_id, variant_id)
+        REFERENCES service_variants (tenant_id, service_id, id)
         ON DELETE RESTRICT,
+    CONSTRAINT fk_appointment_items_currency
+        FOREIGN KEY (currency) REFERENCES currencies (code),
     CONSTRAINT fk_appointment_items_staff
         FOREIGN KEY (tenant_id, staff_id)
         REFERENCES staff (tenant_id, id)
@@ -188,8 +191,15 @@ CREATE TABLE appointment_items (
     ),
     CONSTRAINT chk_appointment_items_money CHECK (
         unit_amount_minor >= 0 AND tax_amount_minor >= 0
-        AND (min_amount_minor IS NULL OR min_amount_minor >= 0)
-        AND (max_amount_minor IS NULL OR max_amount_minor >= min_amount_minor)
+        AND tax_amount_minor <= unit_amount_minor * quantity
+    ),
+    -- Same shape rule as services.price_type, written NULL-safe.
+    CONSTRAINT chk_appointment_items_price_shape CHECK (
+        (price_type = 'fixed' AND min_amount_minor IS NULL AND max_amount_minor IS NULL)
+        OR (price_type = 'from' AND min_amount_minor IS NOT NULL AND min_amount_minor >= 0
+            AND max_amount_minor IS NULL)
+        OR (price_type = 'range' AND min_amount_minor IS NOT NULL AND min_amount_minor >= 0
+            AND max_amount_minor IS NOT NULL AND max_amount_minor >= min_amount_minor)
     )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -234,8 +244,8 @@ CREATE TABLE appointment_events (
                         'customer'
                     ) NULL,
     actor_id        BIGINT UNSIGNED NULL,
-    from_status     VARCHAR(30) NULL,
-    to_status       VARCHAR(30) NULL,
+    from_status     VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NULL,
+    to_status       VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NULL,
     reason          VARCHAR(255) NULL,
     metadata        JSON NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -245,7 +255,11 @@ CREATE TABLE appointment_events (
     CONSTRAINT fk_appointment_events_appointment
         FOREIGN KEY (tenant_id, appointment_id)
         REFERENCES appointments (tenant_id, id)
-        ON DELETE CASCADE
+        ON DELETE CASCADE,
+    CONSTRAINT fk_appointment_events_from_status
+        FOREIGN KEY (from_status) REFERENCES appointment_statuses (code),
+    CONSTRAINT fk_appointment_events_to_status
+        FOREIGN KEY (to_status) REFERENCES appointment_statuses (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE appointment_access_tokens (
@@ -286,7 +300,7 @@ CREATE TABLE booking_verification_codes (
     KEY idx_booking_verification_expiry (expires_at),
     CONSTRAINT fk_booking_verification_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE,
+        ON DELETE RESTRICT,
     CONSTRAINT fk_booking_verification_branch
         FOREIGN KEY (tenant_id, branch_id)
         REFERENCES branches (tenant_id, id)
@@ -317,7 +331,7 @@ CREATE TABLE booking_holds (
     KEY idx_booking_holds_expiry (tenant_id, status, expires_at),
     CONSTRAINT fk_booking_holds_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE,
+        ON DELETE RESTRICT,
     CONSTRAINT fk_booking_holds_branch
         FOREIGN KEY (tenant_id, branch_id)
         REFERENCES branches (tenant_id, id)
@@ -391,7 +405,7 @@ CREATE TABLE booking_idempotency_keys (
     KEY idx_booking_idempotency_expiry (expires_at),
     CONSTRAINT fk_booking_idempotency_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE
+        ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE scheduled_notifications (
@@ -399,7 +413,7 @@ CREATE TABLE scheduled_notifications (
     tenant_id           BIGINT UNSIGNED NOT NULL,
     appointment_id      BIGINT UNSIGNED NOT NULL,
     appointment_version INT UNSIGNED NOT NULL,
-    kind                VARCHAR(40) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    kind                VARCHAR(50) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,  -- notification_events.code where is_reminder
     send_at             DATETIME NOT NULL,
     status              ENUM('pending', 'processing', 'sent', 'failed', 'cancelled', 'skipped')
                             NOT NULL DEFAULT 'pending',
@@ -414,7 +428,9 @@ CREATE TABLE scheduled_notifications (
     CONSTRAINT fk_scheduled_notifications_appointment
         FOREIGN KEY (tenant_id, appointment_id)
         REFERENCES appointments (tenant_id, id)
-        ON DELETE CASCADE
+        ON DELETE CASCADE,
+    CONSTRAINT fk_scheduled_notifications_kind
+        FOREIGN KEY (kind) REFERENCES notification_events (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE outbox_events (
@@ -439,5 +455,5 @@ CREATE TABLE outbox_events (
     KEY idx_outbox_events_tenant (tenant_id, created_at),
     CONSTRAINT fk_outbox_events_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE SET NULL
+        ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

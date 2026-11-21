@@ -115,7 +115,7 @@ If a tenant is not found, suspended, inactive or otherwise unauthorized, the che
 
 Keep tenant status rules configurable through a centralized access policy rather than scattering status checks throughout controllers.
 
-The six statuses are a fixed state machine in code (and an `ENUM` in the database). What each status allows is data in `tenant_status_policies (status, operation, allowed)`, seeded from code defaults, editable by platform admins and cached (`decisions.md` D-010). "Policy-dependent" for `cancelled` means: read-only dashboard, billing and data export for a configurable grace period (default 30 days), then blocked.
+The six statuses are a fixed state machine in code, stored in the `tenant_statuses` lookup table that both `tenants.status` and `tenant_status_policies.status` reference (`decisions.md` D-023). What each status allows is data in `tenant_status_policies (status, operation, allowed)`, seeded from code defaults, editable by platform admins and cached (`decisions.md` D-010). "Policy-dependent" for `cancelled` means: read-only dashboard, billing and data export for a configurable grace period (default 30 days), then blocked.
 
 Allowed transitions:
 
@@ -134,6 +134,8 @@ Every transition is made by `TenantLifecycleService`, audited, and emits an outb
 
 ### Tenants table
 
+Simplified excerpt; `database/migrations/001_platform_and_tenancy.sql` is the source of truth. `status`, `currency` and `default_locale` reference the lookup tables seeded in `000_reference_data.sql`, and every foreign key to `tenants` is `ON DELETE RESTRICT` (`decisions.md` D-023, D-024).
+
 ```sql
 CREATE TABLE tenants (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -141,18 +143,11 @@ CREATE TABLE tenants (
     name VARCHAR(150) NOT NULL,
     slug VARCHAR(100) NOT NULL UNIQUE,
 
-    status ENUM(
-        'pending',
-        'trial',
-        'active',
-        'suspended',
-        'cancelled',
-        'archived'
-    ) NOT NULL DEFAULT 'pending',
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',     -- FK tenant_statuses (code)
 
     timezone VARCHAR(64) NOT NULL DEFAULT 'Africa/Nairobi',
-    currency CHAR(3) NOT NULL DEFAULT 'KES',
-    default_locale CHAR(5) NOT NULL DEFAULT 'en',
+    currency CHAR(3) NOT NULL DEFAULT 'KES',          -- FK currencies (code)
+    default_locale VARCHAR(10) NOT NULL DEFAULT 'en', -- FK locales (code)
 
     vat_registered BOOLEAN NOT NULL DEFAULT FALSE,
     tax_rate_bp SMALLINT UNSIGNED NOT NULL DEFAULT 0,

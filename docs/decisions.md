@@ -85,6 +85,7 @@ Format: **context → decision → consequences.** Status is *Accepted* unless n
 - **Context:** `plan.md` §5.5 said statuses are "configurable"; `multi-tenancy.md` used an `ENUM` and a hardcoded policy array.
 - **Decision:** The set of statuses is a fixed, code-level state machine (`pending`, `trial`, `active`, `suspended`, `cancelled`, `archived`) because code branches on them. What each status *allows* is data: `tenant_status_policies (status, operation, allowed)`, editable by platform admins, cached, with code defaults. See `multi-tenancy.md` §3.
 - **Consequences:** Adding a new status is a code change and a migration; changing what a status permits is not.
+- **Amended by D-023:** the status set is stored in the `tenant_statuses` lookup table (referenced by `tenants.status` and `tenant_status_policies.status`) instead of two copies of the same `ENUM`. It is still a code-level state machine: the PHP enum mirrors the seeded codes.
 
 ### D-011 Platform support access is explicit and audited
 
@@ -163,8 +164,8 @@ Format: **context → decision → consequences.** Status is *Accepted* unless n
 ### D-020 Platform administration has its own sessions and permission scope
 
 - **Context:** `auth.md` gave platform administrators a separate cookie and login but no session table, and `plan.md` §14.2 listed only tenant permissions while `auth.md` referenced `platform.support.write`.
-- **Decision:** `platform_sessions` stores platform admin sessions separately from `user_sessions`. `permissions` carries `scope ENUM('tenant','platform')`; the platform catalogue in `plan.md` §14.2 (`platform.tenants.manage`, `platform.support.read`, `platform.support.write`, `platform.billing.manage`, `platform.integrations.manage`, `platform.audit.view`, `platform.config.manage`) is seeded with `scope = 'platform'` and can never be assigned to `membership_roles`. Platform permissions are granted per administrator through `platform_user_permissions` rather than through tenant-style roles. `webhook_endpoints.secret_encrypted` holds each endpoint's signing secret.
-- **Consequences:** Admin authorization never falls back to tenant permissions, and support write access is an explicit, revocable platform permission. Because grants live in a separate table keyed by `platform_user_id`, they cannot leak into `role_permissions` or `membership_roles` by mistake. Triggers on `role_permissions` and `platform_user_permissions` reject a permission whose `scope` does not match the link table, so the separation holds even for direct SQL.
+- **Decision:** `platform_sessions` stores platform admin sessions separately from `user_sessions`. `permissions` carries `scope` (`'tenant'` or `'platform'`, enforced by `CHECK`); the platform catalogue in `plan.md` §14.2 (`platform.tenants.manage`, `platform.support.read`, `platform.support.write`, `platform.billing.manage`, `platform.integrations.manage`, `platform.audit.view`, `platform.config.manage`) is seeded with `scope = 'platform'` and can never be assigned to `membership_roles`. Platform permissions are granted per administrator through `platform_user_permissions` rather than through tenant-style roles. `webhook_endpoints.secret_encrypted` holds each endpoint's signing secret.
+- **Consequences:** Admin authorization never falls back to tenant permissions, and support write access is an explicit, revocable platform permission. Because grants live in a separate table keyed by `platform_user_id`, they cannot leak into `role_permissions` or `membership_roles` by mistake. The separation is declarative: `role_permissions` and `platform_user_permissions` each carry a `permission_scope` column pinned by `CHECK` (`'tenant'` / `'platform'`) and reference `permissions (scope, id)`, so a mismatched grant fails even for direct SQL. (This replaced the original `BEFORE INSERT/UPDATE` triggers, which needed `DELIMITER` — a mysql-client command a PDO migration runner cannot run.)
 
 ### D-021 Schedule scopes are typed foreign keys, not polymorphic pairs
 
@@ -177,6 +178,51 @@ Format: **context → decision → consequences.** Status is *Accepted* unless n
 - **Context:** `booking-engine.md` §14.2a named an "unmatched payments review queue" without defining storage.
 - **Decision:** An unmatched C2B confirmation is a `payments` row with `status = 'unmatched'`, `appointment_id NULL` and `match_state` tracking `unmatched`/`matched`/`dismissed`. The queue is a filtered query. Unmatched rows are excluded from collected revenue and payment-status derivation until resolved.
 - **Consequences:** One payment table, one audit trail. Resolution is an ordinary `payments.record`-style action with the matched appointment recorded.
+
+---
+
+### D-023 Lookup tables vs ENUMs
+
+- **Context:** The first migrations used `ENUM` for nearly every coded value. Some of those were duplicated across tables (`tenants.status` and `tenant_status_policies.status`; the channel list in six notification tables), some needed metadata the schema could not hold (which appointment statuses block time, a currency's decimal places), and some were free-text `VARCHAR` with no integrity at all (`event_key`, `feature_key`, `metric_key`, `appointment_events.to_status`), where a typo silently disables behaviour. Changing an `ENUM` also means an `ALTER TABLE` on every table that repeats it.
+- **Decision:** A coded value becomes a **lookup table** when **at least one** of these holds:
+  1. it is referenced by more than one table;
+  2. it carries behaviour or display metadata (flags, exponent, default order, entitlement);
+  3. platform admins or tenants add values without a deploy;
+  4. values differ per tenant (then the lookup is tenant-scoped).
+
+  Otherwise it stays an `ENUM` (or a `CHECK`): a small, single-table, internal state that only code changes — processing statuses, token purposes, hold status, TLS status, policy options with dependent `CHECK`s.
+
+  Lookup-table conventions:
+  - Platform lookups use a stable ASCII `code` as the primary key, so referencing columns stay readable (`status = 'confirmed'`) and hot queries need no join. Tenant-scoped lookups use `(tenant_id, id)` with a `UNIQUE (tenant_id, code)`.
+  - `name` is only the English default; the UI translates via `lookup.<table>.<code>` keys (D-017).
+  - Rows are seeded in the migration (`000_reference_data.sql`) because the schema depends on them; they are not seeders.
+  - Codes are never renamed or deleted once used; retire with `is_active = FALSE`.
+  - Where code branches on the values, a PHP backed enum mirrors the codes and a test asserts the enum equals the seeded rows.
+
+  Resulting lookups:
+
+  | Lookup | Replaces | Why |
+  | ------ | -------- | --- |
+  | `currencies` | free `CHAR(3)` in 9 tables | shared; `minor_unit_exponent` drives `CurrencyFormatter` (D-006) |
+  | `locales` | free `CHAR(5)` in 5 tables | shared; customer-facing vs dashboard flags (D-017) |
+  | `tenant_statuses` | duplicated `ENUM` | shared; `is_terminal` |
+  | `appointment_statuses` | `ENUM` + unchecked `VARCHAR` in events | shared; `blocks_time`, `is_terminal`, badge tone |
+  | `communication_channels` | `ENUM` in 6 tables | shared |
+  | `notification_events` | free-text `event_key` / `kind` | shared; transactional vs marketing, reminder flag |
+  | `payment_methods` | two different `ENUM`s | shared by customer and subscription payments; new methods (Airtel Money) are data |
+  | `payment_providers` | `ENUM('mpesa')` + free `VARCHAR`s | shared by accounts, payments, callbacks |
+  | `features` | free-text `feature_key` / `metric_key` | shared; limit vs boolean; metered flag |
+  | `booking_page_section_types` | `ENUM` | default order, default visibility, optional entitlement |
+  | `staff_leave_types` (tenant-scoped) | `ENUM('annual','sick',…)` | differs per business |
+
+  Kept as `ENUM` on purpose: `payment_status`, `booking_source`, `cancelled_by`, `actor_type`, every `booking_policies` option, hold/idempotency/queue/outbox/webhook processing statuses, token purposes, `tls_status`, domain status, resource/staff/user status, asset `kind`, consent `purpose`, `price_type`.
+- **Consequences:** Adding a payment method, notification event, feature or currency is an `INSERT`, not an `ALTER`. Typos in event and feature keys fail at write time. Reference rows must be present before any tenant data, which is why they live in migration `000`.
+
+### D-024 Tenants are never hard-deleted; tenant foreign keys are RESTRICT
+
+- **Context:** Foreign keys to `tenants` mixed `CASCADE`, `SET NULL` and `RESTRICT`. A single `DELETE FROM tenants` could have silently wiped a business's services, assets and API credentials while failing on appointments — the worst of both. Separately, MySQL rejects `CASCADE`/`SET NULL` on a foreign key whose column is the base of a `STORED` generated column, which broke `roles`, `booking_page_versions` and `notification_templates` (all generate a column from `tenant_id`), and `booking_policies` (from `branch_id`).
+- **Decision:** Tenants are archived and later anonymised (D-012), never deleted. **Every** foreign key to `tenants` is `ON DELETE RESTRICT`. Branches are deactivated (`is_active = FALSE`), not deleted, so `booking_policies → branches` is also `RESTRICT`. `CASCADE` remains only between a tenant-owned parent and its own detail rows (appointment → items, hold → hold items).
+- **Consequences:** Accidental tenant deletion fails loudly. Data removal for a cancelled tenant is an explicit, audited retention job, not a cascade.
 
 ---
 

@@ -13,13 +13,15 @@ CREATE TABLE notification_providers (
     id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     code        VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     name        VARCHAR(100) NOT NULL,
-    channel     ENUM('sms', 'whatsapp', 'email') NOT NULL,
+    channel     VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     is_active   BOOLEAN NOT NULL DEFAULT TRUE,
     config      JSON NULL,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (id),
-    UNIQUE KEY uq_notification_providers_code (code)
+    UNIQUE KEY uq_notification_providers_code (code),
+    CONSTRAINT fk_notification_providers_channel
+        FOREIGN KEY (channel) REFERENCES communication_channels (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE tenant_notification_accounts (
@@ -38,7 +40,7 @@ CREATE TABLE tenant_notification_accounts (
     UNIQUE KEY uq_tenant_notification_accounts_provider (tenant_id, provider_id),
     CONSTRAINT fk_tenant_notification_accounts_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE,
+        ON DELETE RESTRICT,
     CONSTRAINT fk_tenant_notification_accounts_provider
         FOREIGN KEY (provider_id) REFERENCES notification_providers (id)
         ON DELETE RESTRICT
@@ -47,7 +49,7 @@ CREATE TABLE tenant_notification_accounts (
 CREATE TABLE notification_preferences (
     id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     tenant_id   BIGINT UNSIGNED NOT NULL,
-    channel     ENUM('sms', 'whatsapp', 'email') NOT NULL,
+    channel     VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     event_key   VARCHAR(50) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     is_enabled  BOOLEAN NOT NULL DEFAULT TRUE,
     updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -57,15 +59,19 @@ CREATE TABLE notification_preferences (
     UNIQUE KEY uq_notification_preferences (tenant_id, channel, event_key),
     CONSTRAINT fk_notification_preferences_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE
+        ON DELETE RESTRICT,
+    CONSTRAINT fk_notification_preferences_channel
+        FOREIGN KEY (channel) REFERENCES communication_channels (code),
+    CONSTRAINT fk_notification_preferences_event
+        FOREIGN KEY (event_key) REFERENCES notification_events (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE notification_templates (
     id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     tenant_id       BIGINT UNSIGNED NULL,
-    channel         ENUM('sms', 'whatsapp', 'email') NOT NULL,
+    channel         VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     event_key       VARCHAR(50) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-    locale          CHAR(5) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'en',
+    locale          VARCHAR(10) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'en',
     subject         VARCHAR(200) NULL,
     body            TEXT NOT NULL,
     is_active       BOOLEAN NOT NULL DEFAULT TRUE,
@@ -80,9 +86,16 @@ CREATE TABLE notification_templates (
     UNIQUE KEY uq_notification_templates_tenant_id (tenant_id, id),
     UNIQUE KEY uq_notification_templates_scope
         (tenant_scope, channel, event_key, locale),
+    -- RESTRICT is required: tenant_id is the base of STORED tenant_scope.
     CONSTRAINT fk_notification_templates_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE
+        ON DELETE RESTRICT,
+    CONSTRAINT fk_notification_templates_channel
+        FOREIGN KEY (channel) REFERENCES communication_channels (code),
+    CONSTRAINT fk_notification_templates_event
+        FOREIGN KEY (event_key) REFERENCES notification_events (code),
+    CONSTRAINT fk_notification_templates_locale
+        FOREIGN KEY (locale) REFERENCES locales (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE notification_queue (
@@ -90,7 +103,7 @@ CREATE TABLE notification_queue (
     uuid            CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     tenant_id       BIGINT UNSIGNED NOT NULL,
     appointment_id  BIGINT UNSIGNED NULL,
-    channel         ENUM('sms', 'whatsapp', 'email') NOT NULL,
+    channel         VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     recipient       VARCHAR(254) NOT NULL,
     template_id     BIGINT UNSIGNED NULL,
     payload         JSON NOT NULL,
@@ -108,21 +121,23 @@ CREATE TABLE notification_queue (
     KEY idx_notification_queue_appointment (tenant_id, appointment_id),
     CONSTRAINT fk_notification_queue_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE,
+        ON DELETE RESTRICT,
     CONSTRAINT fk_notification_queue_appointment
         FOREIGN KEY (tenant_id, appointment_id)
         REFERENCES appointments (tenant_id, id)
         ON DELETE RESTRICT,
     CONSTRAINT fk_notification_queue_template
         FOREIGN KEY (template_id) REFERENCES notification_templates (id)
-        ON DELETE SET NULL
+        ON DELETE SET NULL,
+    CONSTRAINT fk_notification_queue_channel
+        FOREIGN KEY (channel) REFERENCES communication_channels (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE notification_logs (
     id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     tenant_id           BIGINT UNSIGNED NOT NULL,
     queue_id            BIGINT UNSIGNED NULL,
-    channel             ENUM('sms', 'whatsapp', 'email') NOT NULL,
+    channel             VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     recipient_masked    VARCHAR(254) NOT NULL,
     template_id         BIGINT UNSIGNED NULL,
     status              ENUM('sent', 'failed', 'delivered', 'undelivered') NOT NULL,
@@ -135,13 +150,15 @@ CREATE TABLE notification_logs (
     KEY idx_notification_logs_provider_id (provider_message_id),
     CONSTRAINT fk_notification_logs_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE,
+        ON DELETE RESTRICT,
     CONSTRAINT fk_notification_logs_queue
         FOREIGN KEY (queue_id) REFERENCES notification_queue (id)
         ON DELETE SET NULL,
     CONSTRAINT fk_notification_logs_template
         FOREIGN KEY (template_id) REFERENCES notification_templates (id)
-        ON DELETE SET NULL
+        ON DELETE SET NULL,
+    CONSTRAINT fk_notification_logs_channel
+        FOREIGN KEY (channel) REFERENCES communication_channels (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE notification_delivery_events (

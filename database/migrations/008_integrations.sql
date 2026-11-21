@@ -28,7 +28,7 @@ CREATE TABLE api_credentials (
     KEY idx_api_credentials_tenant (tenant_id, revoked_at),
     CONSTRAINT fk_api_credentials_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE,
+        ON DELETE RESTRICT,
     CONSTRAINT fk_api_credentials_created_by
         FOREIGN KEY (created_by_user_id) REFERENCES users (id)
         ON DELETE SET NULL
@@ -54,7 +54,7 @@ CREATE TABLE webhook_endpoints (
     KEY idx_webhook_endpoints_tenant (tenant_id, is_active),
     CONSTRAINT fk_webhook_endpoints_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE,
+        ON DELETE RESTRICT,
     CONSTRAINT chk_webhook_endpoints_url CHECK (url LIKE 'https://%')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -99,5 +99,5 @@ CREATE TABLE integration_events (
     KEY idx_integration_events_unprocessed (processed_at, received_at),
     CONSTRAINT fk_integration_events_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE CASCADE
+        ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

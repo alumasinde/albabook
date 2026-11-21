@@ -1719,9 +1719,26 @@ Recommended conventions:
 - "utf8mb4".
 - Foreign keys.
 - Composite tenant-aware relationships.
+- Every foreign key to "tenants" is "ON DELETE RESTRICT"; tenants are archived and anonymised, never deleted ("decisions.md" D-024).
+- Coded values that are shared, carry metadata, are extended without a deploy, or differ per tenant use lookup tables; small single-table internal states stay "ENUM" ("decisions.md" D-023).
 - Migrations for every schema change.
 
-The following is the recommended logical schema. Implement it as ordered migrations, reviewing nullability, deletion policies and indexes for each relationship.
+The following is the recommended logical schema. Implement it as ordered migrations, reviewing nullability, deletion policies and indexes for each relationship. The migrations live in "database/migrations/" ("000_reference_data.sql" … "010_audit.sql").
+
+13.0 Reference data (lookup tables, seeded in "000_reference_data.sql")
+
+currencies                   (with minor_unit_exponent)
+locales
+tenant_statuses
+appointment_statuses         (with blocks_time, is_terminal)
+communication_channels
+notification_events
+payment_methods
+payment_providers
+features                     (subscription features and metered usage)
+booking_page_section_types
+
+Tenant-scoped lookup: "staff_leave_types" (13.3).
 
 13.1 Platform and tenancy tables
 
@@ -1798,6 +1815,7 @@ staff_branches
 staff_services
 staff_schedules
 staff_breaks
+staff_leave_types            (tenant-scoped lookup, defaults copied at tenant creation)
 staff_leave
 customers
 customer_match_keys           (policy-driven unique identity lookups)
@@ -2013,7 +2031,7 @@ roles.manage
 billing.view
 billing.manage
 
-Platform administrators use a separate catalogue stored in "permissions" with "scope = 'platform'". These identifiers never grant tenant permissions and are never assigned to tenant roles. Administrators receive them through "platform_user_permissions"; database triggers reject a platform-scope permission in "role_permissions" and a tenant-scope permission in "platform_user_permissions" ("decisions.md" D-020):
+Platform administrators use a separate catalogue stored in "permissions" with "scope = 'platform'". These identifiers never grant tenant permissions and are never assigned to tenant roles. Administrators receive them through "platform_user_permissions"; a composite foreign key on "(permission_scope, permission_id)" plus a "CHECK" on each link table rejects a platform-scope permission in "role_permissions" and a tenant-scope permission in "platform_user_permissions" ("decisions.md" D-020):
 
 platform.tenants.manage
 platform.support.read

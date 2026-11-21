@@ -14,7 +14,7 @@ CREATE TABLE tenant_payment_accounts (
     uuid                    CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     tenant_id               BIGINT UNSIGNED NOT NULL,
     branch_id               BIGINT UNSIGNED NULL,
-    provider                ENUM('mpesa') NOT NULL,
+    provider                VARCHAR(30) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     account_type            ENUM('till', 'paybill') NOT NULL,
     shortcode               VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     display_name            VARCHAR(120) NOT NULL,
@@ -36,7 +36,9 @@ CREATE TABLE tenant_payment_accounts (
     CONSTRAINT fk_tenant_payment_accounts_branch
         FOREIGN KEY (tenant_id, branch_id)
         REFERENCES branches (tenant_id, id)
-        ON DELETE RESTRICT
+        ON DELETE RESTRICT,
+    CONSTRAINT fk_tenant_payment_accounts_provider
+        FOREIGN KEY (provider) REFERENCES payment_providers (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE payments (
@@ -48,9 +50,10 @@ CREATE TABLE payments (
     customer_id         BIGINT UNSIGNED NULL,
 
     kind                ENUM('deposit', 'balance', 'full', 'other') NOT NULL DEFAULT 'full',
-    method              ENUM('cash', 'mpesa', 'card', 'bank_transfer', 'other') NOT NULL,
-    provider            VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NULL,
-    provider_reference  VARCHAR(100) NULL,
+    method              VARCHAR(30) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    provider            VARCHAR(30) CHARACTER SET ascii COLLATE ascii_bin NULL,  -- set when an integration created the row
+    -- Transaction code (e.g. M-Pesa receipt). Upper-cased by PaymentService.
+    provider_reference  VARCHAR(100) CHARACTER SET ascii COLLATE ascii_bin NULL,
     amount_minor        BIGINT NOT NULL,
     currency            CHAR(3) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     status              ENUM('pending', 'succeeded', 'failed', 'cancelled', 'unmatched')
@@ -71,7 +74,11 @@ CREATE TABLE payments (
     PRIMARY KEY (id),
     UNIQUE KEY uq_payments_uuid (uuid),
     UNIQUE KEY uq_payments_tenant_id (tenant_id, id),
-    UNIQUE KEY uq_payments_provider_reference (tenant_id, provider, provider_reference),
+    -- Keyed on method, not provider: a receptionist typing an M-Pesa code
+    -- (provider NULL) and the C2B callback for the same code (provider
+    -- 'mpesa_daraja') collide here, so the callback reconciles with the manual
+    -- entry instead of double-counting revenue.
+    UNIQUE KEY uq_payments_method_reference (tenant_id, method, provider_reference),
     UNIQUE KEY uq_payments_idempotency (tenant_id, idempotency_key),
     KEY idx_payments_tenant_received (tenant_id, status, received_at),
     KEY idx_payments_appointment (tenant_id, appointment_id),
@@ -98,6 +105,12 @@ CREATE TABLE payments (
     CONSTRAINT fk_payments_matched_by
         FOREIGN KEY (matched_by_user_id) REFERENCES users (id)
         ON DELETE SET NULL,
+    CONSTRAINT fk_payments_method
+        FOREIGN KEY (method) REFERENCES payment_methods (code),
+    CONSTRAINT fk_payments_provider
+        FOREIGN KEY (provider) REFERENCES payment_providers (code),
+    CONSTRAINT fk_payments_currency
+        FOREIGN KEY (currency) REFERENCES currencies (code),
 
     CONSTRAINT chk_payments_amount CHECK (amount_minor >= 0),
     CONSTRAINT chk_payments_unmatched_shape CHECK (
@@ -137,6 +150,8 @@ CREATE TABLE refunds (
     CONSTRAINT fk_refunds_recorded_by
         FOREIGN KEY (recorded_by_user_id) REFERENCES users (id)
         ON DELETE SET NULL,
+    CONSTRAINT fk_refunds_currency
+        FOREIGN KEY (currency) REFERENCES currencies (code),
     CONSTRAINT chk_refunds_amount CHECK (amount_minor > 0),
     CONSTRAINT chk_refunds_status_time CHECK (
         status <> 'succeeded' OR refunded_at IS NOT NULL
@@ -146,7 +161,7 @@ CREATE TABLE refunds (
 CREATE TABLE payment_provider_events (
     id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     tenant_id           BIGINT UNSIGNED NULL,
-    provider            VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    provider            VARCHAR(30) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     provider_event_id   VARCHAR(100) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     signature_valid     BOOLEAN NOT NULL DEFAULT FALSE,
     payload             JSON NOT NULL,
@@ -158,5 +173,7 @@ CREATE TABLE payment_provider_events (
     KEY idx_provider_events_tenant (tenant_id, received_at),
     CONSTRAINT fk_provider_events_tenant
         FOREIGN KEY (tenant_id) REFERENCES tenants (id)
-        ON DELETE SET NULL
+        ON DELETE RESTRICT,
+    CONSTRAINT fk_provider_events_provider
+        FOREIGN KEY (provider) REFERENCES payment_providers (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
