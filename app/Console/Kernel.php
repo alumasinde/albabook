@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console;
 
 use App\Console\Commands\DbSeedCommand;
+use App\Console\Commands\DemoSeedCommand;
 use App\Console\Commands\DownCommand;
 use App\Console\Commands\LangCheckCommand;
 use App\Console\Commands\MigrateCommand;
@@ -27,6 +28,7 @@ final class Kernel
         MigrateStatusCommand::class,
         MigrateFreshCommand::class,
         DbSeedCommand::class,
+        DemoSeedCommand::class,
         LangCheckCommand::class,
         PlatformAdminCommand::class,
         DownCommand::class,

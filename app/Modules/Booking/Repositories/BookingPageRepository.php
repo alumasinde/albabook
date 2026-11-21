@@ -117,10 +117,10 @@ final class BookingPageRepository
         $stmt = $this->db->pdo()->prepare(
             'SELECT opens_at, closes_at FROM business_hours
              WHERE tenant_id = :t AND branch_id = :b AND weekday = :w
-               AND (effective_from IS NULL OR effective_from <= :d)
-               AND (effective_to IS NULL OR effective_to >= :d)',
+               AND (effective_from IS NULL OR effective_from <= :d1)
+               AND (effective_to IS NULL OR effective_to >= :d2)',
         );
-        $stmt->execute(['t' => $tenantId, 'b' => $branchId, 'w' => $weekday, 'd' => $date]);
+        $stmt->execute(['t' => $tenantId, 'b' => $branchId, 'w' => $weekday, 'd1' => $date, 'd2' => $date]);
 
         return array_values($stmt->fetchAll());
     }
@@ -157,10 +157,10 @@ final class BookingPageRepository
         $stmt = $this->db->pdo()->prepare(
             "SELECT staff_id, starts_at, ends_at FROM staff_schedules
              WHERE tenant_id = :t AND staff_id IN ({$in}) AND branch_id = :b AND weekday = :w
-               AND (effective_from IS NULL OR effective_from <= :d)
-               AND (effective_to IS NULL OR effective_to >= :d)",
+               AND (effective_from IS NULL OR effective_from <= :d1)
+               AND (effective_to IS NULL OR effective_to >= :d2)",
         );
-        $stmt->execute(['t' => $tenantId, 'b' => $branchId, 'w' => $weekday, 'd' => $date]);
+        $stmt->execute(['t' => $tenantId, 'b' => $branchId, 'w' => $weekday, 'd1' => $date, 'd2' => $date]);
 
         return array_values($stmt->fetchAll());
     }
@@ -178,10 +178,10 @@ final class BookingPageRepository
         $stmt = $this->db->pdo()->prepare(
             "SELECT staff_id, starts_at, ends_at FROM staff_breaks
              WHERE tenant_id = :t AND staff_id IN ({$in}) AND weekday = :w
-               AND (effective_from IS NULL OR effective_from <= :d)
-               AND (effective_to IS NULL OR effective_to >= :d)",
+               AND (effective_from IS NULL OR effective_from <= :d1)
+               AND (effective_to IS NULL OR effective_to >= :d2)",
         );
-        $stmt->execute(['t' => $tenantId, 'w' => $weekday, 'd' => $date]);
+        $stmt->execute(['t' => $tenantId, 'w' => $weekday, 'd1' => $date, 'd2' => $date]);
 
         return array_values($stmt->fetchAll());
     }

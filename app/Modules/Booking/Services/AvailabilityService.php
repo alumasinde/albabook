@@ -103,19 +103,22 @@ final class AvailabilityService
 
             foreach ($free as [$wStart, $wEnd]) {
                 for ($t = $wStart; $t + $duration <= $wEnd; $t += $interval) {
-                    $startLocal = $this->localDateTime($date, $t, $branchTz);
-                    $endLocal = $this->localDateTime($date, $t + $duration, $branchTz);
-                    if ($endLocal <= $earliest || $startLocal > $dayEnd) {
+                    $startUtc = $this->localDateTime($date, $t, $branchTz);
+                    $endUtc = $this->localDateTime($date, $t + $duration, $branchTz);
+                    if ($endUtc <= $earliest || $startUtc > $dayEnd) {
                         continue;
                     }
-                    $key = $startLocal->format('H:i');
+                    // start_time/end_time are branch-local wall-clock labels;
+                    // the client submits them back for slotAvailableForStaff.
+                    $key = sprintf('%02d:%02d', intdiv($t, 60), $t % 60);
                     if ($staffId === null && isset($seen[$key])) {
                         continue; // earlier-priority staff already covers this time
                     }
                     $seen[$key] = true;
+                    $endT = $t + $duration;
                     $slots[] = [
                         'start_time' => $key,
-                        'end_time' => $endLocal->format('H:i'),
+                        'end_time' => sprintf('%02d:%02d', intdiv($endT, 60) % 24, $endT % 60),
                         'staff_id' => $sid,
                         'staff_name' => (string) $member['display_name'],
                     ];

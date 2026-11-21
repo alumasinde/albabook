@@ -165,7 +165,7 @@ final class BookingPageController
             'email' => trim((string) ($body['email'] ?? '')) ?: null,
             'notes' => trim((string) ($body['notes'] ?? '')) ?: null,
         ];
-        $locale = in_array($body['locale'] ?? 'en', ['en', 'sw'], true) ? (string) $body['locale'] : 'en';
+        $locale = in_array($body['locale'] ?? 'en', ['en', 'sw'], true) ? (string) ($body['locale'] ?? 'en') : 'en';
 
         $fields = [];
         if ($serviceId <= 0) {
