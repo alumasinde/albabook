@@ -52,7 +52,11 @@ final class ServiceRepository
                     s.buffer_before_minutes, s.buffer_after_minutes, s.price_type,
                     s.price_amount_minor, s.min_amount_minor, s.max_amount_minor,
                     s.currency, s.is_active, s.is_bookable_online, s.sort_position,
-                    s.service_category_id, c.name AS category_name
+                    s.service_category_id, c.name AS category_name,
+                    (SELECT rt.name FROM service_resource_requirements srr
+                        JOIN resource_types rt ON rt.tenant_id = srr.tenant_id AND rt.id = srr.resource_type_id
+                     WHERE srr.tenant_id = s.tenant_id AND srr.service_id = s.id
+                     ORDER BY rt.name LIMIT 1) AS resource_name
              FROM services s
              LEFT JOIN service_categories c ON c.tenant_id = s.tenant_id AND c.id = s.service_category_id
              WHERE {$whereSql}

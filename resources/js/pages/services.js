@@ -56,7 +56,7 @@
     function skeleton() {
       const tr = el('tr');
       const td = el('td');
-      td.colSpan = 7;
+      td.colSpan = 8;
       td.append(ui.skeletonRows(6));
       tr.append(td);
       body.replaceChildren(tr);
@@ -73,7 +73,7 @@
         .catch((error) => {
           const tr = el('tr');
           const td = el('td');
-          td.colSpan = 7;
+          td.colSpan = 8;
           td.append(ui.errorState(error.message, load));
           tr.append(td);
           body.replaceChildren(tr);
@@ -90,7 +90,7 @@
       if (!rows.length) {
         const tr = el('tr');
         const td = el('td');
-        td.colSpan = 7;
+        td.colSpan = 8;
         td.append(ui.emptyState({
           icon: 'fa-scissors',
           title: 'No services yet',
@@ -114,6 +114,7 @@
           el('td', 'text-muted', row.category || '—'),
           el('td', 'text-muted', row.duration_label),
           el('td', null, row.price_label),
+          el('td', 'text-muted', row.resource_name || '—'),
           onlineTd,
           statusTd,
         );

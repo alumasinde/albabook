@@ -1,0 +1,40 @@
+{#
+  Shared "New appointment" modal — rendered on the Appointments list and the
+  Calendar so both entry points open the same form in place. Option lists
+  (branches, staff, services, rooms) hydrate via AlbaBook.appointmentModal;
+  the room select appears only for services with a resource requirement.
+#}
+{% embed 'components/feedback/modal.twig' with { id: 'new-appointment-modal', title: t('calendar.new_appointment'), description: t('calendar.new_appointment_help') } %}
+  {% block body %}
+    <form id="new-appointment-form" method="post" action="/api/appointments" data-ajax-form data-ajax-close data-ajax-busy="{{ t('calendar.creating') }}">
+      {{ csrf_field() }}
+      <div class="mb-4">
+        {% include 'components/forms/checkbox.twig' with { name: 'walk_in', label: t('calendar.walk_in'), id: 'new-walkin', help: t('calendar.walk_in_help') } %}
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2">
+        {% include 'components/forms/select.twig' with { name: 'branch_id', label: t('calendar.field_branch'), required: true, options: [], id: 'new-branch', placeholder: t('calendar.select_branch') } %}
+        {% include 'components/forms/select.twig' with { name: 'staff_id', label: t('calendar.field_staff'), required: true, options: [], id: 'new-staff', placeholder: t('calendar.select_staff') } %}
+        {% include 'components/forms/select.twig' with { name: 'service_id', label: t('calendar.field_service'), required: true, options: [], id: 'new-service', placeholder: t('calendar.select_service') } %}
+        <div id="new-room-wrap" hidden>
+          {% include 'components/forms/select.twig' with { name: 'resource_id', label: t('calendar.field_room'), options: [], id: 'new-room', placeholder: t('calendar.room_auto'), help: t('calendar.room_auto_help') } %}
+        </div>
+        <div id="new-date-wrap">
+          {% include 'components/forms/input.twig' with { name: 'date', label: t('calendar.field_date'), type: 'date', required: true, id: 'new-date' } %}
+        </div>
+        <div id="new-time-wrap">
+          {% include 'components/forms/input.twig' with { name: 'time', label: t('calendar.field_time'), type: 'time', required: true, id: 'new-time' } %}
+        </div>
+        {% include 'components/forms/input.twig' with { name: 'name', label: t('calendar.field_customer'), required: true, autocomplete: 'name', id: 'new-name' } %}
+        {% include 'components/forms/input.twig' with { name: 'phone', label: t('calendar.field_phone'), type: 'tel', autocomplete: 'tel', placeholder: '+2547XXXXXXXX', id: 'new-phone' } %}
+        {% include 'components/forms/input.twig' with { name: 'email', label: t('calendar.field_email'), type: 'email', autocomplete: 'email', id: 'new-email' } %}
+      </div>
+      <div class="mt-4">
+        {% include 'components/forms/textarea.twig' with { name: 'notes', label: t('calendar.field_notes'), rows: 3, maxlength: 1000, id: 'new-notes' } %}
+      </div>
+    </form>
+  {% endblock %}
+  {% block footer %}
+    <button type="button" class="btn btn-secondary btn-md" data-modal-close>{{ t('common.close') }}</button>
+    <button type="submit" form="new-appointment-form" class="btn btn-primary btn-md">{{ t('calendar.create') }}</button>
+  {% endblock %}
+{% endembed %}

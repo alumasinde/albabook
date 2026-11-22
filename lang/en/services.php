@@ -18,6 +18,7 @@ return [
     'col_category' => 'Category',
     'col_duration' => 'Duration',
     'col_price' => 'Price',
+    'col_resource' => 'Resource',
     'col_online' => 'Online',
     'col_status' => 'Status',
     'col_actions' => 'Actions',

@@ -217,14 +217,6 @@
     }
 
     /* -------------------------------------------- new appointment modal */
-    const form = root.querySelector('form[data-ajax-form]');
-    if (form) {
-      form.addEventListener('albabook:ajax-success', () => {
-        AlbaBook.toast('Appointment created.', 'success');
-        reload();
-      });
-    }
-
     AlbaBook.api.get('/api/filters').then((f) => {
       filters = f;
       const fill = (select, items, allLabel) => {
@@ -238,14 +230,16 @@
       };
       fill(branchSel, filters.branches, 'All Branches');
       fill(staffSel, filters.staff, 'All Staff');
-
-      const modalBranch = root.querySelector('#new-branch');
-      const modalStaff = root.querySelector('#new-staff');
-      const modalService = root.querySelector('#new-service');
-      if (modalBranch) filters.branches.forEach((b) => modalBranch.append(Object.assign(el('option', '', b.name), { value: b.id })));
-      if (modalStaff) filters.staff.forEach((s) => modalStaff.append(Object.assign(el('option', '', s.name), { value: s.id })));
-      if (modalService) (filters.services || []).forEach((s) => modalService.append(Object.assign(el('option', '', s.name + ' · ' + s.duration_minutes + ' min'), { value: s.id })));
     }).catch(() => {});
+
+    if (AlbaBook.appointmentModal) {
+      AlbaBook.appointmentModal.init(root, {
+        onSuccess: () => {
+          AlbaBook.toast('Appointment created.', 'success');
+          reload();
+        },
+      });
+    }
 
     reload();
     timer = setInterval(() => {

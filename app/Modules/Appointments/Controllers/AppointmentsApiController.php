@@ -211,11 +211,30 @@ final class AppointmentsApiController
     {
         [$tenant, $membership] = $this->context($request);
         $branches = $this->appointments->branchesFor($tenant->tenantId, $membership->branchIds);
+        $staffLinks = $this->appointments->staffLinkMaps($tenant->tenantId);
+        $serviceLinks = $this->appointments->serviceLinkMaps($tenant->tenantId);
 
         return ApiResponse::ok([
             'branches' => array_map(fn($b) => ['id' => (int) $b['id'], 'name' => $b['name']], $branches),
-            'staff' => array_map(fn($s) => ['id' => (int) $s['id'], 'name' => $s['name']], $this->appointments->staffFor($tenant->tenantId)),
-            'services' => array_map(fn($s) => ['id' => (int) $s['id'], 'name' => $s['name'], 'duration_minutes' => (int) $s['duration_minutes']], $this->appointments->servicesFor($tenant->tenantId)),
+            'staff' => array_map(fn($s) => [
+                'id' => (int) $s['id'],
+                'name' => $s['name'],
+                'branch_ids' => $staffLinks['branch_ids'][(int) $s['id']] ?? [],
+                'service_ids' => $staffLinks['service_ids'][(int) $s['id']] ?? [],
+            ], $this->appointments->staffFor($tenant->tenantId)),
+            'services' => array_map(fn($s) => [
+                'id' => (int) $s['id'],
+                'name' => $s['name'],
+                'duration_minutes' => (int) $s['duration_minutes'],
+                'branch_ids' => $serviceLinks['branch_ids'][(int) $s['id']] ?? [],
+                'required_resource_type_id' => $serviceLinks['resource_type'][(int) $s['id']] ?? null,
+            ], $this->appointments->servicesFor($tenant->tenantId)),
+            'resources' => array_map(fn($r) => [
+                'id' => (int) $r['id'],
+                'name' => $r['name'],
+                'branch_id' => (int) $r['branch_id'],
+                'resource_type_id' => (int) $r['resource_type_id'],
+            ], $this->appointments->resourcesFor($tenant->tenantId, $membership->branchIds)),
         ]);
     }
 
@@ -237,14 +256,19 @@ final class AppointmentsApiController
         $phone = trim((string) ($body['phone'] ?? ''));
         $email = trim((string) ($body['email'] ?? ''));
         $notes = trim((string) ($body['notes'] ?? ''));
+        $resourceId = (int) ($body['resource_id'] ?? 0);
+        $walkIn = !empty($body['walk_in']);
 
         $fields = [];
         if ($branchId <= 0) $fields['branch_id'] = 'Choose a branch.';
         elseif (!$membership->canAccessBranch($branchId)) $fields['branch_id'] = 'Branch out of scope.';
         if ($staffId <= 0) $fields['staff_id'] = 'Choose a staff member.';
         if ($serviceId <= 0) $fields['service_id'] = 'Choose a service.';
-        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) $fields['date'] = 'Pick a valid date.';
-        if (!preg_match('/^\d{2}:\d{2}$/', $time)) $fields['time'] = 'Pick a valid time.';
+        if ($resourceId < 0) $fields['resource_id'] = 'Choose a valid room.';
+        if (!$walkIn) {
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) $fields['date'] = 'Pick a valid date.';
+            if (!preg_match('/^\d{2}:\d{2}$/', $time)) $fields['time'] = 'Pick a valid time.';
+        }
         if ($name === '' || mb_strlen($name) > 255) $fields['name'] = 'Customer name is required.';
         if ($phone !== '' && !preg_match('/^\+[1-9]\d{6,14}$/', $phone)) $fields['phone'] = 'Use E.164 format, e.g. +254712345678.';
         if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) $fields['email'] = 'Invalid email address.';
@@ -267,11 +291,13 @@ final class AppointmentsApiController
                 $date,
                 $time,
                 ['name' => $name, 'phone' => $phone !== '' ? $phone : null, 'email' => $email !== '' ? $email : null, 'notes' => $notes !== '' ? $notes : null],
-                'dashboard',
+                $walkIn ? 'walk_in' : 'dashboard',
                 'en',
                 $tenant->currency,
                 $membership->actorUserId(),
                 'tenant_user',
+                $membership->can('appointments.override_policy'),
+                $resourceId > 0 ? $resourceId : null,
             );
         } catch (TransitionException $e) {
             return ApiResponse::error($e->apiCode, $e->getMessage(), $e->status, $e->fields ?: null);

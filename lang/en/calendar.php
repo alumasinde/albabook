@@ -19,6 +19,7 @@ return [
     'field_branch' => 'Branch',
     'field_staff' => 'Staff',
     'field_service' => 'Service',
+    'field_room' => 'Room',
     'field_date' => 'Date',
     'field_time' => 'Time',
     'field_customer' => 'Customer name',
@@ -28,6 +29,10 @@ return [
     'select_branch' => 'Select branch',
     'select_staff' => 'Select staff',
     'select_service' => 'Select service',
+    'room_auto' => 'Auto-assign',
+    'room_auto_help' => 'Leave on Auto-assign and the first free room is used.',
+    'walk_in' => 'Walk-in — the customer is here now',
+    'walk_in_help' => 'Starts immediately; skips the booking notice rule.',
     'creating' => 'Creating…',
     'create' => 'Create appointment',
 ];

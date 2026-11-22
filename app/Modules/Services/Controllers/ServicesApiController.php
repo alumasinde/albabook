@@ -312,6 +312,7 @@ final class ServicesApiController
             'uuid' => $row['uuid'],
             'name' => $row['name'],
             'category' => $row['category_name'],
+            'resource_name' => $row['resource_name'] ?? null,
             'duration_minutes' => (int) $row['duration_minutes'],
             'duration_label' => $this->duration((int) $row['duration_minutes']),
             'price_type' => $row['price_type'],

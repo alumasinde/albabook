@@ -339,6 +339,15 @@
       fill('branch', f.branches, (b) => b.name);
     }).catch(() => {});
 
+    if (AlbaBook.appointmentModal) {
+      AlbaBook.appointmentModal.init(root, {
+        onSuccess: () => {
+          AlbaBook.toast('Appointment created.', 'success');
+          reload();
+        },
+      });
+    }
+
     reload();
   });
 })();

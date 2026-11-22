@@ -186,6 +186,68 @@ final class AvailabilityService
     }
 
     /**
+     * Whether a concrete service span fits inside the staff member's
+     * working window on a local date — the same arithmetic the slot grid
+     * uses: (staff shift or staff override ∩ business hours or branch
+     * override) − staff breaks. The write path calls this so a staff
+     * booking cannot land outside hours in a slot the public grid never
+     * showed. Conflicts, leave and blocked periods are separate checks.
+     */
+    public function fitsWorkingWindow(
+        int $tenantId,
+        int $branchId,
+        int $staffId,
+        string $date,
+        int $startMinute,
+        int $durationMinutes,
+        string $branchTz,
+    ): bool {
+        $localDay = \DateTimeImmutable::createFromFormat('!Y-m-d', $date, new \DateTimeZone($branchTz));
+        if ($localDay === false) {
+            return false;
+        }
+        $weekday = (int) $localDay->format('N');
+
+        $branchOverride = $this->pages->branchOverride($tenantId, $branchId, $date);
+        if ($branchOverride !== null && (int) $branchOverride['is_closed'] === 1) {
+            return false;
+        }
+        $business = $branchOverride !== null && $branchOverride['opens_at'] !== null && $branchOverride['closes_at'] !== null
+            ? [['opens_at' => $branchOverride['opens_at'], 'closes_at' => $branchOverride['closes_at']]]
+            : $this->pages->businessHours($tenantId, $branchId, $weekday, $date);
+
+        $staffWindows = [];
+        foreach ($this->pages->staffSchedules($tenantId, [$staffId], $branchId, $weekday, $date) as $row) {
+            $staffWindows[] = [(int) $this->minutes($row['starts_at']), (int) $this->minutes($row['ends_at'])];
+        }
+        foreach ($this->pages->staffOverrides($tenantId, [$staffId], $date) as $override) {
+            $staffWindows = (int) $override['is_closed'] === 1
+                ? []
+                : [[$this->minutes((string) $override['opens_at']), $this->minutes((string) $override['closes_at'])]];
+        }
+
+        $businessWindows = array_map(
+            fn($row): array => $this->window((int) $this->minutes($row['opens_at']), (int) $this->minutes($row['closes_at'])),
+            $business,
+        );
+        $free = $this->subtract(
+            $this->intersect($staffWindows, $businessWindows),
+            array_map(
+                fn($row): array => [(int) $this->minutes($row['starts_at']), (int) $this->minutes($row['ends_at'])],
+                $this->pages->staffBreaks($tenantId, [$staffId], $weekday, $date),
+            ),
+        );
+
+        foreach ($free as [$wStart, $wEnd]) {
+            if ($startMinute >= $wStart && $startMinute + $durationMinutes <= $wEnd) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Every resource type the service requires has a free, schedulable
      * resource at this slot. Non-mutating mirror of the write-path check —
      * slot listing cannot know guest_count, so per_guest occupancy is

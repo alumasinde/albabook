@@ -98,6 +98,11 @@
         onlineTd.append(row.is_bookable_online ? badge('Online', 'success') : el('span', 'text-muted', '—'));
         const statusTd = el('td');
         statusTd.append(badge(row.status === 'active' ? 'Active' : 'Inactive', row.status === 'active' ? 'success' : 'neutral'));
+        const servicesTd = el('td', 'text-muted');
+        servicesTd.append(el('span', null, String(row.services)));
+        if (row.status === 'active' && Number(row.services) === 0) {
+          servicesTd.append(el('span', 'badge badge-warning ml-1', 'Not bookable'));
+        }
         const actions = el('td');
         const open = el('button', 'btn btn-ghost btn-sm', 'View');
         open.type = 'button';
@@ -107,7 +112,7 @@
           el('td', null, row.display_name),
           contact,
           el('td', 'text-muted', row.branches || '—'),
-          el('td', 'text-muted', String(row.services)),
+          servicesTd,
           onlineTd,
           statusTd,
           actions,

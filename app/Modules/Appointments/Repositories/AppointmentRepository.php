@@ -352,6 +352,53 @@ final class AppointmentRepository
     }
 
     /**
+     * Staff is assigned to this branch (staff_branches row exists) — a
+     * precondition for any booking at that branch, not overridable.
+     */
+    public function staffAssignedToBranch(int $tenantId, int $staffId, int $branchId): bool
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT COUNT(*) FROM staff_branches WHERE tenant_id = :t AND staff_id = :s AND branch_id = :b',
+        );
+        $stmt->execute(['t' => $tenantId, 's' => $staffId, 'b' => $branchId]);
+
+        return (int) $stmt->fetchColumn() > 0;
+    }
+
+    /**
+     * A staff_services row links the staff member to the service. The
+     * is_bookable_online flag is a public-visibility concern, not a
+     * capability gate — dashboard bookings only need the link to exist.
+     */
+    public function staffCanPerform(int $tenantId, int $staffId, int $serviceId): bool
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT COUNT(*) FROM staff_services WHERE tenant_id = :t AND staff_id = :s AND service_id = :v',
+        );
+        $stmt->execute(['t' => $tenantId, 's' => $staffId, 'v' => $serviceId]);
+
+        return (int) $stmt->fetchColumn() > 0;
+    }
+
+    /**
+     * Live appointments for a customer overlapping [fromUtc, toUtc). A
+     * person cannot attend two visits at once; the public page rejects a
+     * second booking for the same matched customer in that window.
+     */
+    public function customerOverlaps(int $tenantId, int $customerId, string $fromUtc, string $toUtc): int
+    {
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT COUNT(*) FROM appointments
+              WHERE tenant_id = :t AND customer_id = :c
+                AND status IN ('pending', 'confirmed', 'checked_in', 'in_service')
+                AND start_at < :to AND end_at > :from",
+        );
+        $stmt->execute(['t' => $tenantId, 'c' => $customerId, 'to' => $toUtc, 'from' => $fromUtc]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
+    /**
      * Lock the staff row (D-009 anchor) inside a transaction.
      * @return array<string, mixed>|null
      */
@@ -532,12 +579,112 @@ final class AppointmentRepository
     }
 
     /**
+     * Staff link maps for dependent pickers: which branches each staff
+     * member is assigned to and which services they can perform.
+     * @return array{branch_ids: array<int, list<int>>, service_ids: array<int, list<int>>}
+     */
+    public function staffLinkMaps(int $tenantId): array
+    {
+        $branchStmt = $this->db->pdo()->prepare(
+            'SELECT staff_id, branch_id FROM staff_branches WHERE tenant_id = :t',
+        );
+        $branchStmt->execute(['t' => $tenantId]);
+        $branchIds = [];
+        foreach ($branchStmt->fetchAll() as $row) {
+            $branchIds[(int) $row['staff_id']][] = (int) $row['branch_id'];
+        }
+        $serviceStmt = $this->db->pdo()->prepare(
+            'SELECT staff_id, service_id FROM staff_services WHERE tenant_id = :t',
+        );
+        $serviceStmt->execute(['t' => $tenantId]);
+        $serviceIds = [];
+        foreach ($serviceStmt->fetchAll() as $row) {
+            $serviceIds[(int) $row['staff_id']][] = (int) $row['service_id'];
+        }
+
+        return ['branch_ids' => $branchIds, 'service_ids' => $serviceIds];
+    }
+
+    /**
+     * Service link maps for dependent pickers: which branches offer each
+     * service and the single resource type a service requires, if any.
+     * @return array{branch_ids: array<int, list<int>>, resource_type: array<int, int>}
+     */
+    public function serviceLinkMaps(int $tenantId): array
+    {
+        $branchStmt = $this->db->pdo()->prepare(
+            'SELECT service_id, branch_id FROM service_branches WHERE tenant_id = :t',
+        );
+        $branchStmt->execute(['t' => $tenantId]);
+        $branchIds = [];
+        foreach ($branchStmt->fetchAll() as $row) {
+            $branchIds[(int) $row['service_id']][] = (int) $row['branch_id'];
+        }
+        $resourceStmt = $this->db->pdo()->prepare(
+            'SELECT service_id, MIN(resource_type_id) AS rt FROM service_resource_requirements
+             WHERE tenant_id = :t GROUP BY service_id',
+        );
+        $resourceStmt->execute(['t' => $tenantId]);
+        $resourceTypes = [];
+        foreach ($resourceStmt->fetchAll() as $row) {
+            $resourceTypes[(int) $row['service_id']] = (int) $row['rt'];
+        }
+
+        return ['branch_ids' => $branchIds, 'resource_type' => $resourceTypes];
+    }
+
+    /**
+     * Active resources for the booking modal's room picker, scoped to the
+     * member's branches like branchesFor.
+     * @param array<int>|null $branchIds
+     * @return list<array<string, mixed>>
+     */
+    public function resourcesFor(int $tenantId, ?array $branchIds): array
+    {
+        $where = "tenant_id = :t AND status = 'active'";
+        $params = ['t' => $tenantId];
+        if ($branchIds !== null) {
+            if ($branchIds === []) {
+                return [];
+            }
+            $marks = [];
+            foreach (array_values($branchIds) as $i => $id) {
+                $marks[] = ':b' . $i;
+                $params['b' . $i] = $id;
+            }
+            $where .= ' AND branch_id IN (' . implode(', ', $marks) . ')';
+        }
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT id, name, branch_id, resource_type_id FROM resources
+             WHERE {$where} ORDER BY name",
+        );
+        $stmt->execute($params);
+
+        return array_values($stmt->fetchAll());
+    }
+
+    /**
+     * The resource_type_id of a tenant resource (also proves tenant scope).
+     */
+    public function resourceTypeOf(int $tenantId, int $resourceId): ?int
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT resource_type_id FROM resources WHERE tenant_id = :t AND id = :r',
+        );
+        $stmt->execute(['t' => $tenantId, 'r' => $resourceId]);
+        $type = $stmt->fetchColumn();
+
+        return $type === false ? null : (int) $type;
+    }
+
+    /**
      * First active resource of a type at a branch with free capacity for
      * [fromUtc, toUtc): the summed quantity of overlapping allocations on
      * time-blocking statuses plus overlapping unexpired holds plus $quantity
      * must fit within the resource's capacity — and, when the resource
      * defines availability windows, a schedule row must cover
-     * [localStart, localEnd] on $weekday (ISO, 1=Mon).
+     * [localStart, localEnd] on $weekday (ISO, 1=Mon). $onlyResourceId
+     * restricts the search to one explicit room choice.
      */
     public function freeResourceForType(
         int $tenantId,
@@ -550,11 +697,13 @@ final class AppointmentRepository
         string $localEnd,
         int $quantity = 1,
         ?string $localDate = null,
+        ?int $onlyResourceId = null,
     ): ?int {
         $stmt = $this->db->pdo()->prepare(
             "SELECT r.id FROM resources r
              WHERE r.tenant_id = :t AND r.branch_id = :b AND r.resource_type_id = :rt
                AND r.status = 'active'
+               AND (:rid_a = 0 OR r.id = :rid_b)
                AND NOT EXISTS (SELECT 1 FROM blocked_periods bp
                                 WHERE bp.tenant_id = :t5 AND bp.resource_id = r.id
                                   AND bp.starts_at < :to3 AND bp.ends_at > :from3)
@@ -587,6 +736,7 @@ final class AppointmentRepository
         );
         $stmt->execute([
             't' => $tenantId, 'b' => $branchId, 'rt' => $typeId,
+            'rid_a' => $onlyResourceId ?? 0, 'rid_b' => $onlyResourceId ?? 0,
             't3' => $tenantId, 't4' => $tenantId,
             'wd' => $weekday, 'lstart' => $localStart, 'lend' => $localEnd,
             't1' => $tenantId, 'from1' => $fromUtc, 'to1' => $toUtc,

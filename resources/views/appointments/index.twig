@@ -18,9 +18,8 @@
       <p class="mt-1 text-sm text-muted">{{ t('appointments.subtitle') }}</p>
     </div>
     {% if membership.can('appointments.create') %}
-      <a class="btn btn-primary btn-md{% if booking_cap.reached %} opacity-50 pointer-events-none{% endif %}"
-         href="/calendar" data-cal-new-link
-         {% if booking_cap.reached %}aria-disabled="true" title="{{ t('appointments.limit_title') }}"{% endif %}>{{ t('appointments.new') }}</a>
+      <button type="button" class="btn btn-primary btn-md" data-modal-open="new-appointment-modal"
+        {% if booking_cap.reached %}disabled title="{{ t('appointments.limit_title') }}"{% endif %}>{{ t('appointments.new') }}</button>
     {% endif %}
   </div>
 
@@ -96,5 +95,9 @@
     <p data-appt-info class="text-sm text-muted"></p>
     <div data-appt-pager class="flex items-center gap-2"></div>
   </div>
+
+  {% if membership.can('appointments.create') %}
+    {% include 'components/appointments/new-modal.twig' %}
+  {% endif %}
 </div>
 {% endblock %}
