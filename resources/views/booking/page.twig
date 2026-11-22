@@ -15,7 +15,7 @@
 
 {% block content %}
 {% set first_branch = branches|first %}
-<div data-page="booking" data-slug="{{ tenant.slug }}" data-api-base="/{{ tenant.slug }}">
+<div data-page="booking" data-slug="{{ tenant.slug }}" data-api-base="{{ api_base }}"{% if embed %} data-embed="1"{% endif %}>
 
 {% if sections.hero is not defined or sections.hero %}
   <section class="booking-hero">
@@ -179,7 +179,7 @@
           </button>
         </div>
 
-        <form data-step="details" hidden method="post" action="/{{ tenant.slug }}/book" data-booking-form>
+        <form data-step="details" hidden method="post" action="{{ api_base }}/book" data-booking-form>
           {{ csrf_field() }}
           <div data-review class="rounded-lg bg-primary-soft/50 px-4 py-3"></div>
           <div class="mt-4 space-y-3">
@@ -215,6 +215,7 @@
             <div class="flex justify-between gap-4"><dt class="text-muted">{{ t('booking.field_when') }}</dt><dd class="font-medium text-ink" data-booking-when></dd></div>
             <div class="flex justify-between gap-4"><dt class="text-muted">{{ t('booking.reference') }}</dt><dd class="font-mono font-semibold text-primary-strong" data-booking-reference></dd></div>
           </dl>
+          <a href="#" data-booking-manage hidden class="btn-outline mt-4 inline-block text-sm">{{ t('booking.manage_link') }}</a>
         </div>
       </div>
     </aside>

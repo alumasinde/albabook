@@ -71,6 +71,7 @@ AlbaBook.pages.register('booking-page', function (root) {
       renderSections(data.sections);
       renderFaqs(data.faqs);
       renderVersions(data.versions);
+      loadDomains();
     })
     .catch((error) => {
       root.querySelectorAll('[data-editor-form]').forEach((form) => {
@@ -85,6 +86,159 @@ AlbaBook.pages.register('booking-page', function (root) {
     link.classList.remove('hidden');
     link.classList.add('inline-flex');
     link.querySelector('[data-live-url-text]').textContent = url;
+    renderEmbed(url);
+  }
+
+  // Widget embed snippet (plan.md §12.2): <script src="{origin}/_/widget.js"
+  // data-business="{slug}"> — shown for copy/paste onto the tenant's site.
+  function renderEmbed(bookingUrl) {
+    const pre = root.querySelector('[data-embed-snippet]');
+    const copyBtn = root.querySelector('[data-embed-copy]');
+    if (!pre || !copyBtn) return;
+    const parsed = new URL(bookingUrl);
+    const slug = parsed.pathname.replace(/^\/+|\/+$/g, '');
+    const snippet = '<div id="albabook-widget"></div>\n'
+      + '<script src="' + parsed.origin + '/_/widget.js"\n'
+      + '        data-business="' + slug + '" defer><' + '/script>';
+    pre.textContent = snippet;
+    pre.classList.remove('hidden');
+    copyBtn.classList.remove('hidden');
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(snippet)
+        .then(() => AlbaBook.toast('Embed snippet copied.'))
+        .catch(() => AlbaBook.toast('Copy failed — select the code manually.', 'danger'));
+    });
+  }
+
+  // Custom domains (multi-tenancy.md §4): add → TXT verify → activate.
+  // The verification token is shown once, at issue/regeneration.
+  const STATUS_CHIP = {
+    pending_verification: ['Pending verification', 'chip chip-muted'],
+    verified: ['Verified', 'chip chip-success'],
+    active: ['Active', 'chip chip-success'],
+    failed: ['Failed', 'chip chip-danger'],
+    disabled: ['Disabled', 'chip chip-muted'],
+  };
+
+  function loadDomains() {
+    const list = root.querySelector('[data-domains-list]');
+    if (!list) return;
+    api.get('/api/booking-page/domains')
+      .then((data) => {
+        renderDomains(data.domains || []);
+        if (data.feature_enabled === false) {
+          const note = root.querySelector('[data-domains-note]');
+          const form = root.querySelector('[data-domains-form]');
+          if (note) {
+            note.textContent = 'Custom domains are not included in your plan.';
+            note.classList.remove('hidden');
+          }
+          if (form) {
+            form.querySelector('[data-domain-input]').disabled = true;
+            form.querySelector('[data-domain-add]').disabled = true;
+          }
+        }
+      })
+      .catch(() => { list.replaceChildren(el('p', 'text-sm text-muted', 'Domains could not be loaded.')); });
+  }
+
+  function domainError(msg) {
+    const err = root.querySelector('[data-domains-error]');
+    if (err) err.textContent = msg || '';
+  }
+
+  function renderDomains(domains) {
+    const list = root.querySelector('[data-domains-list]');
+    if (!list) return;
+    list.replaceChildren();
+    if (domains.length === 0) {
+      list.append(el('p', 'text-sm text-muted', 'No custom domains yet.'));
+      return;
+    }
+    domains.forEach((d) => list.append(domainRow(d)));
+  }
+
+  function domainRow(d) {
+    const row = el('div', 'rounded-lg border border-line p-4');
+    const head = el('div', 'flex items-center justify-between gap-3');
+    head.append(el('span', 'font-medium text-ink', d.domain + (d.is_primary ? ' ★' : '')));
+    const chipInfo = STATUS_CHIP[d.status] || [d.status, 'chip chip-muted'];
+    head.append(el('span', chipInfo[1], chipInfo[0]));
+    row.append(head);
+
+    const meta = el('p', 'mt-1 text-xs text-muted');
+    meta.textContent = 'TXT ' + d.record;
+    row.append(meta);
+
+    if (!canManage) return row;
+
+    const actions = el('div', 'mt-3 flex flex-wrap gap-2');
+    const btn = (label, fn) => {
+      const b = el('button', 'btn btn-secondary btn-sm', label);
+      b.type = 'button';
+      b.addEventListener('click', fn);
+      return b;
+    };
+
+    if (d.status === 'pending_verification' || d.status === 'failed') {
+      actions.append(
+        btn('Verify DNS', () => domainAction(d.id + '/verify')),
+        btn('Regenerate token', () => domainAction(d.id + '/rotate-token')),
+      );
+    }
+    if (d.status === 'verified') {
+      actions.append(btn('Activate', () => domainAction(d.id + '/activate')));
+    }
+    if (d.status === 'active' && !d.is_primary) {
+      actions.append(btn('Make primary', () => domainAction(d.id + '/primary')));
+    }
+    if (d.status === 'active' || d.status === 'verified') {
+      actions.append(btn('Disable', () => domainAction(d.id + '/disable')));
+    }
+    actions.append(btn('Remove', () => {
+      if (!window.confirm('Remove ' + d.domain + '?')) return;
+      api.del('/api/booking-page/domains/' + d.id)
+        .then(loadDomains)
+        .catch((e) => domainError(e.message));
+    }));
+    row.append(actions);
+    return row;
+  }
+
+  function domainAction(suffix) {
+    domainError('');
+    api.post('/api/booking-page/domains/' + suffix, {})
+      .then((data) => {
+        if (data.verification) showVerification(data.verification);
+        loadDomains();
+      })
+      .catch((e) => domainError(e.message));
+  }
+
+  function showVerification(v) {
+    const list = root.querySelector('[data-domains-list]');
+    if (!list) return;
+    const box = el('pre', 'overflow-x-auto rounded-lg bg-surface p-3 font-mono text-xs text-ink');
+    box.textContent = 'Add this DNS record, then click "Verify DNS":\n\n  ' + v.type + '  ' + v.record + '\n  value: ' + v.token;
+    list.prepend(box);
+  }
+
+  const addBtn = root.querySelector('[data-domain-add]');
+  if (addBtn) {
+    addBtn.addEventListener('click', () => {
+      const inputEl = root.querySelector('[data-domain-input]');
+      domainError('');
+      api.post('/api/booking-page/domains', { domain: inputEl.value })
+        .then((data) => {
+          inputEl.value = '';
+          if (data.verification) showVerification(data.verification);
+          loadDomains();
+        })
+        .catch((e) => {
+          domainError(e.message);
+          loadDomains();
+        });
+    });
   }
 
   function renderForm(settings, options, locales) {

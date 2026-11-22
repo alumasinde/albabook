@@ -13,6 +13,7 @@ use App\Modules\Billing\Controllers\BillingApiController;
 use App\Modules\Billing\Controllers\BillingPageController;
 use App\Modules\Booking\Controllers\BookingEditorApiController;
 use App\Modules\Booking\Controllers\BookingEditorPageController;
+use App\Modules\Booking\Controllers\DomainsApiController;
 use App\Modules\Integrations\Controllers\IntegrationsApiController;
 use App\Modules\Integrations\Controllers\IntegrationsPageController;
 use App\Modules\Notifications\Controllers\NotificationsApiController;
@@ -112,6 +113,8 @@ return static function (RouteRegistrar $r): void {
     $r->post('/api/appointments', [AppointmentsApiController::class, 'create'], $workspace, name: 'api.appointments.create');
     $r->get('/api/appointments/{uuid}', [AppointmentsApiController::class, 'show'], $workspace, name: 'api.appointments.show');
     $r->post('/api/appointments/{uuid}/transition', [AppointmentsApiController::class, 'transition'], $workspace, name: 'api.appointments.transition');
+    $r->post('/api/appointments/{uuid}/reschedule', [AppointmentsApiController::class, 'reschedule'], $workspace, name: 'api.appointments.reschedule');
+    $r->post('/api/appointments/{uuid}/manage-link', [AppointmentsApiController::class, 'manageLink'], $workspace, name: 'api.appointments.manage_link');
     $r->get('/api/appointments/{uuid}/ticket', [TillApiController::class, 'ticket'], $workspace, name: 'api.till.ticket');
     $r->post('/api/appointments/{uuid}/items', [TillApiController::class, 'addItem'], $workspace, name: 'api.till.item.add');
     $r->patch('/api/appointments/{uuid}/items/{id}', [TillApiController::class, 'updateItem'], $workspace, name: 'api.till.item.update');
@@ -171,6 +174,15 @@ return static function (RouteRegistrar $r): void {
     $r->patch('/api/booking-page/faqs/{id}', [BookingEditorApiController::class, 'updateFaq'], $workspace, name: 'api.booking_page.faqs.update');
     $r->delete('/api/booking-page/faqs/{id}', [BookingEditorApiController::class, 'deleteFaq'], $workspace, name: 'api.booking_page.faqs.delete');
     $r->post('/api/booking-page/publish', [BookingEditorApiController::class, 'publish'], $workspace, name: 'api.booking_page.publish');
+    // Custom booking domains — TXT verification before a domain may activate.
+    $r->get('/api/booking-page/domains', [DomainsApiController::class, 'list'], $workspace, name: 'api.booking_page.domains.list');
+    $r->post('/api/booking-page/domains', [DomainsApiController::class, 'create'], $workspace, name: 'api.booking_page.domains.create');
+    $r->post('/api/booking-page/domains/{id}/rotate-token', [DomainsApiController::class, 'rotateToken'], $workspace, name: 'api.booking_page.domains.rotate');
+    $r->post('/api/booking-page/domains/{id}/verify', [DomainsApiController::class, 'verify'], $workspace, name: 'api.booking_page.domains.verify');
+    $r->post('/api/booking-page/domains/{id}/activate', [DomainsApiController::class, 'activate'], $workspace, name: 'api.booking_page.domains.activate');
+    $r->post('/api/booking-page/domains/{id}/disable', [DomainsApiController::class, 'disable'], $workspace, name: 'api.booking_page.domains.disable');
+    $r->post('/api/booking-page/domains/{id}/primary', [DomainsApiController::class, 'primary'], $workspace, name: 'api.booking_page.domains.primary');
+    $r->delete('/api/booking-page/domains/{id}', [DomainsApiController::class, 'destroy'], $workspace, name: 'api.booking_page.domains.delete');
     $r->get('/api/notifications', [NotificationsApiController::class, 'list'], $workspace, name: 'api.notifications.list');
     $r->post('/api/notifications/{uuid}/retry', [NotificationsApiController::class, 'retry'], $workspace, name: 'api.notifications.retry');
     $r->post('/api/notifications/{uuid}/cancel', [NotificationsApiController::class, 'cancel'], $workspace, name: 'api.notifications.cancel');
@@ -180,6 +192,11 @@ return static function (RouteRegistrar $r): void {
     $r->post('/api/integrations', [IntegrationsApiController::class, 'create'], $workspace, name: 'api.integrations.create');
     $r->patch('/api/integrations/{uuid}', [IntegrationsApiController::class, 'update'], $workspace, name: 'api.integrations.update');
     $r->delete('/api/integrations/{uuid}', [IntegrationsApiController::class, 'destroy'], $workspace, name: 'api.integrations.destroy');
+    // Private API credentials — separate literal segment so they are never
+    // shadowed by the {uuid} webhook routes above.
+    $r->post('/api/integrations/credentials', [IntegrationsApiController::class, 'createCredential'], $workspace, name: 'api.integrations.credentials.create');
+    $r->post('/api/integrations/credentials/{uuid}/rotate', [IntegrationsApiController::class, 'rotateCredential'], $workspace, name: 'api.integrations.credentials.rotate');
+    $r->delete('/api/integrations/credentials/{uuid}', [IntegrationsApiController::class, 'destroyCredential'], $workspace, name: 'api.integrations.credentials.destroy');
     $r->get('/api/billing', [BillingApiController::class, 'show'], $workspace, name: 'api.billing.show');
     $r->get('/api/resources/meta', [ResourcesApiController::class, 'meta'], $workspace, name: 'api.resources.meta');
     $r->get('/api/resources', [ResourcesApiController::class, 'list'], $workspace, name: 'api.resources.list');

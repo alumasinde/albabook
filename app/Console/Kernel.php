@@ -8,6 +8,7 @@ use App\Console\Commands\AuditDailyCommand;
 use App\Console\Commands\DbSeedCommand;
 use App\Console\Commands\DemoSeedCommand;
 use App\Console\Commands\DownCommand;
+use App\Console\Commands\IntegrityCheckCommand;
 use App\Console\Commands\LangCheckCommand;
 use App\Console\Commands\MigrateCommand;
 use App\Console\Commands\MigrateFreshCommand;
@@ -26,6 +27,7 @@ final class Kernel
     /** @var list<class-string<Command>> */
     private const COMMANDS = [
         AuditDailyCommand::class,
+        IntegrityCheckCommand::class,
         MigrateCommand::class,
         MigrateStatusCommand::class,
         MigrateFreshCommand::class,

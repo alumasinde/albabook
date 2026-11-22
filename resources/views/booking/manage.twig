@@ -1,0 +1,125 @@
+{#
+  Customer self-service booking page (booking-engine.md §18). Reached via the
+  manage token in the confirmation — the token is the capability, so no
+  login is required. Cancel/reschedule are enforced server-side against
+  booking_policies cutoffs; the buttons only hint at availability.
+#}
+{% extends 'layouts/public.twig' %}
+
+{% block title %}{{ t('booking.manage_title') }} · {{ tenant.name }}{% endblock %}
+
+{% block content %}
+<div data-page="manage-booking"
+     data-slug="{{ tenant.slug }}"
+     data-token="{{ token }}"
+     data-base="{{ base }}"
+     data-branch="{{ view.branch_id }}"
+     data-service="{{ view.service_id }}"
+     data-staff="{{ view.staff_id }}"
+     data-can-cancel="{{ view.can_cancel ? '1' : '0' }}"
+     data-can-reschedule="{{ view.can_reschedule ? '1' : '0' }}">
+
+  <div class="mx-auto max-w-2xl">
+    <header class="text-center">
+      <span class="inline-flex items-center gap-2 rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold text-primary-strong">
+        {{ tenant.name }}
+      </span>
+      <h1 class="mt-4 text-3xl font-semibold text-ink">{{ t('booking.manage_title') }}</h1>
+      <p class="mt-2 text-muted">{{ t('booking.manage_subtitle') }}</p>
+    </header>
+
+    <section class="card mt-8 p-6">
+      <div class="flex items-center justify-between gap-3">
+        <h2 class="text-lg font-semibold text-ink">{{ t('booking.manage_details') }}</h2>
+        <span class="badge" data-manage-status>{{ view.status }}</span>
+      </div>
+      <dl class="mt-4 space-y-3 text-sm">
+        <div class="flex justify-between gap-4">
+          <dt class="text-muted">{{ t('booking.reference') }}</dt>
+          <dd class="font-mono font-semibold text-primary-strong">{{ view.reference }}</dd>
+        </div>
+        <div class="flex justify-between gap-4">
+          <dt class="text-muted">{{ t('booking.service') }}</dt>
+          <dd class="font-medium text-ink" data-manage-service>{{ view.service_name }}</dd>
+        </div>
+        <div class="flex justify-between gap-4">
+          <dt class="text-muted">{{ t('booking.staff') }}</dt>
+          <dd class="font-medium text-ink" data-manage-staff>{{ view.staff_name ?: t('booking.staff_any') }}</dd>
+        </div>
+        <div class="flex justify-between gap-4">
+          <dt class="text-muted">{{ t('booking.field_when') }}</dt>
+          <dd class="font-medium text-ink" data-manage-when>{{ view.date_label }} · {{ view.time_label }}</dd>
+        </div>
+        <div class="flex justify-between gap-4">
+          <dt class="text-muted">{{ t('booking.duration') }}</dt>
+          <dd class="font-medium text-ink">{{ view.duration }} {{ t('booking.minutes') }}</dd>
+        </div>
+        <div class="flex justify-between gap-4">
+          <dt class="text-muted">{{ t('booking.price') }}</dt>
+          <dd class="font-medium text-ink">{{ view.price_label }}</dd>
+        </div>
+      </dl>
+
+      {% if view.reschedules_left is not null %}
+        <p class="mt-4 text-xs text-muted">{{ t('booking.manage_reschedules_left', { count: view.reschedules_left }) }}</p>
+      {% endif %}
+    </section>
+
+    <div class="mt-6 flex flex-col gap-3 sm:flex-row" data-manage-actions>
+      {% if view.can_reschedule %}
+        <button type="button" class="btn-primary flex-1" data-manage-open-reschedule>
+          <i class="fa-regular fa-calendar" aria-hidden="true"></i> {{ t('booking.manage_reschedule') }}
+        </button>
+      {% endif %}
+      {% if view.can_cancel %}
+        <button type="button" class="btn-outline flex-1 text-danger" data-manage-open-cancel>
+          <i class="fa-regular fa-circle-xmark" aria-hidden="true"></i> {{ t('booking.manage_cancel') }}
+        </button>
+      {% endif %}
+      {% if not view.can_cancel and not view.can_reschedule %}
+        <p class="text-sm text-muted">{{ t('booking.manage_locked') }}</p>
+      {% endif %}
+    </div>
+
+    {# Reschedule panel — slots come from the same availability endpoint as booking #}
+    <section class="card mt-6 hidden p-6" data-manage-reschedule-panel>
+      <h2 class="text-lg font-semibold text-ink">{{ t('booking.manage_pick_time') }}</h2>
+      <div class="mt-4 grid gap-4 sm:grid-cols-2">
+        <label class="block text-sm font-medium text-ink">
+          {{ t('booking.field_date') }}
+          <input type="date" class="input mt-1" data-manage-date>
+        </label>
+      </div>
+      <div class="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4" data-manage-slots role="listbox" aria-label="{{ t('booking.manage_pick_time') }}"></div>
+      <p class="mt-2 text-sm text-muted" data-manage-slots-empty hidden>{{ t('booking.manage_no_slots') }}</p>
+      <p class="mt-2 text-sm text-danger" data-manage-error hidden></p>
+      <div class="mt-6 flex gap-3">
+        <button type="button" class="btn-primary flex-1" data-manage-confirm-reschedule disabled>{{ t('booking.manage_confirm') }}</button>
+        <button type="button" class="btn-outline" data-manage-close>{{ t('common.cancel') }}</button>
+      </div>
+    </section>
+
+    {# Cancel panel #}
+    <section class="card mt-6 hidden p-6" data-manage-cancel-panel>
+      <h2 class="text-lg font-semibold text-ink">{{ t('booking.manage_cancel_title') }}</h2>
+      <p class="mt-2 text-sm text-muted">{{ t('booking.manage_cancel_body') }}</p>
+      <label class="mt-4 block text-sm font-medium text-ink">
+        {{ t('booking.manage_cancel_reason') }}
+        <input type="text" maxlength="255" class="input mt-1" data-manage-reason placeholder="{{ t('common.optional') }}">
+      </label>
+      <p class="mt-2 text-sm text-danger" data-manage-cancel-error hidden></p>
+      <div class="mt-6 flex gap-3">
+        <button type="button" class="btn-primary flex-1 bg-danger" data-manage-confirm-cancel>{{ t('booking.manage_cancel_confirm') }}</button>
+        <button type="button" class="btn-outline" data-manage-close>{{ t('common.back') }}</button>
+      </div>
+    </section>
+
+    {# Done state #}
+    <section class="card mt-6 hidden p-6 text-center" data-manage-done>
+      <i class="fa-solid fa-circle-check text-3xl text-success" aria-hidden="true"></i>
+      <h2 class="mt-3 text-lg font-semibold text-ink" data-manage-done-title></h2>
+      <p class="mt-1 text-sm text-muted" data-manage-done-body></p>
+    </section>
+  </div>
+</div>
+{% endblock %}

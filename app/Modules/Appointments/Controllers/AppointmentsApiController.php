@@ -32,6 +32,7 @@ final class AppointmentsApiController
         private readonly ManualBookingService $bookings,
         private readonly DateTimeService $dates,
         private readonly CurrencyFormatter $currency,
+        private readonly \App\Core\Config\Config $config,
     ) {}
 
     /** @param array<string, string> $params */
@@ -139,6 +140,12 @@ final class AppointmentsApiController
             'notes' => $row['notes'] ?? null,
             'allowed_transitions' => $allowed,
             'transition_states' => $transitionStates,
+            'can_reschedule' => $membership->can('appointments.reschedule')
+                && in_array((string) $row['status'], ['pending', 'confirmed'], true),
+            'can_manage_link' => $membership->can('appointments.view'),
+            'branch_id' => (int) $row['branch_id'],
+            'service_id' => (int) ($items[0]['service_id'] ?? 0),
+            'staff_id' => (int) ($items[0]['staff_id'] ?? 0),
             'history' => array_map(fn(array $event) => [
                 'label' => $this->eventLabel($event),
                 'at' => (string) $event['created_at'],
@@ -174,6 +181,92 @@ final class AppointmentsApiController
             'uuid' => $row['uuid'],
             'status' => $row['status'],
             'version' => (int) $row['version'],
+        ]);
+    }
+
+    /** @param array<string, string> $params */
+    public function reschedule(Request $request, array $params): Response
+    {
+        [$tenant, $membership] = $this->context($request);
+        if (!$membership->can('appointments.reschedule')) {
+            return ApiResponse::error('FORBIDDEN', 'You do not have permission to reschedule appointments.', 403);
+        }
+        $uuid = (string) ($params['uuid'] ?? '');
+        $row = $this->appointments->findByUuid($tenant->tenantId, $uuid);
+        if ($row === null) {
+            return ApiResponse::error('NOT_FOUND', 'Appointment not found.', 404);
+        }
+        if (!$membership->canAccessBranch((int) $row['branch_id'])) {
+            return ApiResponse::error('FORBIDDEN', 'Branch out of scope.', 403);
+        }
+
+        $body = $request->body();
+        $date = (string) ($body['date'] ?? '');
+        $time = (string) ($body['time'] ?? '');
+        $staffId = isset($body['staff_id']) && (int) $body['staff_id'] > 0 ? (int) $body['staff_id'] : null;
+        $resourceId = isset($body['resource_id']) && (int) $body['resource_id'] > 0 ? (int) $body['resource_id'] : null;
+        $version = isset($body['version']) ? (int) $body['version'] : null;
+
+        $fields = [];
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) !== 1) {
+            $fields['date'] = 'Pick a valid date.';
+        }
+        if (preg_match('/^\d{2}:\d{2}$/', $time) !== 1) {
+            $fields['time'] = 'Pick a time.';
+        }
+        if ($fields !== []) {
+            return ApiResponse::error('VALIDATION', 'Please fix the highlighted fields.', 422, $fields);
+        }
+
+        try {
+            $result = $this->bookings->reschedule(
+                $tenant->tenantId,
+                $uuid,
+                $date,
+                $time,
+                $staffId,
+                $version,
+                $membership->actorUserId(),
+                'tenant_user',
+                $membership->can('appointments.override_policy'),
+                $resourceId,
+            );
+        } catch (TransitionException $e) {
+            return ApiResponse::error($e->apiCode, $e->getMessage(), $e->status, $e->fields ?: null);
+        }
+
+        return ApiResponse::ok($result);
+    }
+
+    /**
+     * Rotate (or create) the manage token and return the customer-facing
+     * manage-booking link. Requires appointments.view — staff share this
+     * link with the customer.
+     * @param array<string, string> $params
+     */
+    public function manageLink(Request $request, array $params): Response
+    {
+        [$tenant, $membership] = $this->context($request);
+        if (!$membership->can('appointments.view')) {
+            return ApiResponse::error('FORBIDDEN', 'You do not have permission to view appointments.', 403);
+        }
+        $row = $this->appointments->findByUuid($tenant->tenantId, (string) ($params['uuid'] ?? ''));
+        if ($row === null) {
+            return ApiResponse::error('NOT_FOUND', 'Appointment not found.', 404);
+        }
+        if (!$membership->canAccessBranch((int) $row['branch_id'])) {
+            return ApiResponse::error('FORBIDDEN', 'Branch out of scope.', 403);
+        }
+
+        $token = bin2hex(random_bytes(24));
+        $this->appointments->setManageToken($tenant->tenantId, (int) $row['id'], hash('sha256', $token));
+
+        $bookHost = $this->config->string('app.hosts.book');
+        $scheme = str_ends_with($bookHost, '.localhost') ? 'http' : 'https';
+
+        return ApiResponse::ok([
+            'url' => $scheme . '://' . $bookHost . '/' . $tenant->slug . '/manage/' . $token,
+            'reference' => (string) $row['reference'],
         ]);
     }
 
@@ -298,6 +391,9 @@ final class AppointmentsApiController
                 'tenant_user',
                 $membership->can('appointments.override_policy'),
                 $resourceId > 0 ? $resourceId : null,
+                preg_match('/^[A-Za-z0-9_-]{8,64}$/', (string) ($body['idempotency_key'] ?? '')) === 1
+                    ? (string) $body['idempotency_key']
+                    : null,
             );
         } catch (TransitionException $e) {
             return ApiResponse::error($e->apiCode, $e->getMessage(), $e->status, $e->fields ?: null);

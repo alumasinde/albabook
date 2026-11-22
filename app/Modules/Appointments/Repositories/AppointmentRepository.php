@@ -205,13 +205,32 @@ final class AppointmentRepository
         ];
     }
 
+    /**
+     * The first appointment item with the columns reschedule needs.
+     * @return array<string, mixed>|null
+     */
+    public function primaryItemFull(int $tenantId, int $appointmentId): ?array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT id, service_id, staff_id, duration_minutes,
+                    buffer_before_minutes, buffer_after_minutes
+               FROM appointment_items
+              WHERE tenant_id = :t AND appointment_id = :a
+              ORDER BY item_position LIMIT 1',
+        );
+        $stmt->execute(['t' => $tenantId, 'a' => $appointmentId]);
+        $row = $stmt->fetch();
+
+        return $row ?: null;
+    }
+
     /** @return list<array<string, mixed>> */
     public function itemsFor(int $tenantId, int $appointmentId): array
     {
         $stmt = $this->db->pdo()->prepare(
-            'SELECT ai.id, ai.service_name_snapshot, ai.variant_name_snapshot, ai.duration_minutes,
+            'SELECT ai.id, ai.service_id, ai.staff_id, ai.service_name_snapshot, ai.variant_name_snapshot, ai.duration_minutes,
                     ai.start_at, ai.end_at, ai.unit_amount_minor, ai.quantity, ai.currency,
-                    s.display_name AS staff_name
+                    s.display_name AS staff_name, s.uuid AS staff_uuid
                FROM appointment_items ai
           LEFT JOIN staff s ON s.tenant_id = ai.tenant_id AND s.id = ai.staff_id
               WHERE ai.tenant_id = :t AND ai.appointment_id = :a
@@ -261,11 +280,110 @@ final class AppointmentRepository
         return $stmt->rowCount() === 1 ? $expectedVersion + 1 : null;
     }
 
-    public function insertEvent(int $tenantId, int $appointmentId, string $eventType, ?string $actorType, ?int $actorId, ?string $from, string $to, ?string $reason = null): void
+    /**
+     * Optimistic reschedule: moves the appointment window and bumps
+     * version + reschedule_count only when the expected version matches.
+     * Returns the new version or null on stale.
+     */
+    public function updateSchedule(int $tenantId, int $id, int $expectedVersion, string $startAt, string $endAt, int $staffId): ?int
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'UPDATE appointments
+                SET start_at = :s, end_at = :e, staff_id = :st,
+                    version = version + 1, reschedule_count = reschedule_count + 1
+              WHERE tenant_id = :t AND id = :id AND version = :v',
+        );
+        $stmt->execute([
+            's' => $startAt, 'e' => $endAt, 'st' => $staffId,
+            't' => $tenantId, 'id' => $id, 'v' => $expectedVersion,
+        ]);
+
+        return $stmt->rowCount() === 1 ? $expectedVersion + 1 : null;
+    }
+
+    /** Move one appointment item's window to match its appointment. */
+    public function updateItemSchedule(int $tenantId, int $itemId, int $staffId, string $startAt, string $endAt, string $occupiedStart, string $occupiedEnd): void
     {
         $this->db->pdo()->prepare(
-            'INSERT INTO appointment_events (tenant_id, appointment_id, event_type, actor_type, actor_id, from_status, to_status, reason)
-             VALUES (:t, :a, :type, :actor_type, :actor_id, :from, :to, :reason)',
+            'UPDATE appointment_items
+                SET staff_id = :st, start_at = :s, end_at = :e,
+                    occupied_start_at = :os, occupied_end_at = :oe
+              WHERE tenant_id = :t AND id = :id',
+        )->execute([
+            'st' => $staffId, 's' => $startAt, 'e' => $endAt,
+            'os' => $occupiedStart, 'oe' => $occupiedEnd,
+            't' => $tenantId, 'id' => $itemId,
+        ]);
+    }
+
+    /** Drop resource allocations for an item (re-allocated on reschedule). */
+    public function deleteResourceAllocations(int $tenantId, int $itemId): void
+    {
+        $this->db->pdo()->prepare(
+            'DELETE FROM appointment_resources WHERE tenant_id = :t AND appointment_item_id = :i',
+        )->execute(['t' => $tenantId, 'i' => $itemId]);
+    }
+
+    /**
+     * Manage-token lookup — the token is the capability (booking-engine.md
+     * §18): it identifies the appointment globally, not tenant-scoped.
+     * @return array<string, mixed>|null
+     */
+    /**
+     * Reference-scoped lookup for the public booking-lookup endpoint —
+     * tenant-isolated, so a reference from another tenant's booking cannot
+     * be probed.
+     * @return array<string, mixed>|null
+     */
+    public function findByReference(int $tenantId, string $reference): ?array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            self::LIST_SELECT . ' WHERE a.tenant_id = :t AND a.reference = :r',
+        );
+        $stmt->execute(['t' => $tenantId, 'r' => $reference]);
+        $row = $stmt->fetch();
+
+        return $row === false ? null : $row;
+    }
+
+    /** @return array<string, mixed>|null */
+    public function findByManageToken(string $tokenHash): ?array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT * FROM appointments WHERE manage_token_hash = :h LIMIT 1',
+        );
+        $stmt->execute(['h' => $tokenHash]);
+        $row = $stmt->fetch();
+
+        return $row ?: null;
+    }
+
+    /** @return array<string, mixed>|null */
+    public function findByIdempotencyKey(int $tenantId, string $key): ?array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT * FROM appointments WHERE tenant_id = :t AND idempotency_key = :k LIMIT 1',
+        );
+        $stmt->execute(['t' => $tenantId, 'k' => $key]);
+        $row = $stmt->fetch();
+
+        return $row ?: null;
+    }
+
+    /** Rotate the manage token (e.g. a staff "share manage link" action). */
+    public function setManageToken(int $tenantId, int $id, string $tokenHash): void
+    {
+        $this->db->pdo()->prepare(
+            'UPDATE appointments SET manage_token_hash = :h WHERE tenant_id = :t AND id = :id',
+        )->execute(['h' => $tokenHash, 't' => $tenantId, 'id' => $id]);
+    }
+
+    /** @param array<string, mixed>|null $metadata */
+    public function insertEvent(int $tenantId, int $appointmentId, string $eventType, ?string $actorType, ?int $actorId, ?string $from, string $to, ?string $reason = null, ?array $metadata = null): void
+    {
+        $this->db->pdo()->prepare(
+            'INSERT INTO appointment_events (tenant_id, appointment_id, event_type, actor_type, actor_id, from_status, to_status, reason, metadata)
+             VALUES (:t, :a, :type, :actor_type, :actor_id, :from, :to, :reason, :meta)',
         )->execute([
             't' => $tenantId,
             'a' => $appointmentId,
@@ -275,6 +393,7 @@ final class AppointmentRepository
             'from' => $from,
             'to' => $to,
             'reason' => $reason,
+            'meta' => $metadata === null ? null : json_encode($metadata, JSON_THROW_ON_ERROR),
         ]);
     }
 
@@ -293,16 +412,29 @@ final class AppointmentRepository
         return (int) $stmt->fetchColumn();
     }
 
-    public function staffOccupied(int $tenantId, int $staffId, string $fromUtc, string $toUtc): int
+    public function staffOccupied(int $tenantId, int $staffId, string $fromUtc, string $toUtc, ?int $excludeAppointmentId = null, ?int $excludeHoldId = null): int
     {
         $stmt = $this->db->pdo()->prepare(
-            "SELECT COUNT(*) FROM appointment_items ai
-              JOIN appointments a ON a.tenant_id = ai.tenant_id AND a.id = ai.appointment_id
-              WHERE ai.tenant_id = :t AND ai.staff_id = :s
-                AND ai.occupied_start_at < :to AND ai.occupied_end_at > :from
-                AND a.status IN ('pending', 'confirmed', 'checked_in', 'in_service')",
+            "SELECT
+                (SELECT COUNT(*) FROM appointment_items ai
+                  JOIN appointments a ON a.tenant_id = ai.tenant_id AND a.id = ai.appointment_id
+                  WHERE ai.tenant_id = :t AND ai.staff_id = :s
+                    AND ai.occupied_start_at < :to AND ai.occupied_end_at > :from
+                    AND (:ex_a = 0 OR a.id <> :ex_b)
+                    AND a.status IN ('pending', 'confirmed', 'checked_in', 'in_service'))
+              + (SELECT COUNT(*) FROM booking_hold_items hi
+                  JOIN booking_holds h ON h.tenant_id = hi.tenant_id AND h.id = hi.hold_id
+                  WHERE hi.tenant_id = :t2 AND hi.staff_id = :s2
+                    AND hi.occupied_start_at < :to2 AND hi.occupied_end_at > :from2
+                    AND h.status = 'active' AND h.expires_at > UTC_TIMESTAMP()
+                    AND (:exh_a = 0 OR h.id <> :exh_b))",
         );
-        $stmt->execute(['t' => $tenantId, 's' => $staffId, 'from' => $fromUtc, 'to' => $toUtc]);
+        $stmt->execute([
+            't' => $tenantId, 's' => $staffId, 'from' => $fromUtc, 'to' => $toUtc,
+            'ex_a' => $excludeAppointmentId ?? 0, 'ex_b' => $excludeAppointmentId ?? 0,
+            't2' => $tenantId, 's2' => $staffId, 'from2' => $fromUtc, 'to2' => $toUtc,
+            'exh_a' => $excludeHoldId ?? 0, 'exh_b' => $excludeHoldId ?? 0,
+        ]);
 
         return (int) $stmt->fetchColumn();
     }
@@ -385,15 +517,19 @@ final class AppointmentRepository
      * person cannot attend two visits at once; the public page rejects a
      * second booking for the same matched customer in that window.
      */
-    public function customerOverlaps(int $tenantId, int $customerId, string $fromUtc, string $toUtc): int
+    public function customerOverlaps(int $tenantId, int $customerId, string $fromUtc, string $toUtc, ?int $excludeAppointmentId = null): int
     {
         $stmt = $this->db->pdo()->prepare(
             "SELECT COUNT(*) FROM appointments
               WHERE tenant_id = :t AND customer_id = :c
                 AND status IN ('pending', 'confirmed', 'checked_in', 'in_service')
+                AND (:ex_a = 0 OR id <> :ex_b)
                 AND start_at < :to AND end_at > :from",
         );
-        $stmt->execute(['t' => $tenantId, 'c' => $customerId, 'to' => $toUtc, 'from' => $fromUtc]);
+        $stmt->execute([
+            't' => $tenantId, 'c' => $customerId, 'to' => $toUtc, 'from' => $fromUtc,
+            'ex_a' => $excludeAppointmentId ?? 0, 'ex_b' => $excludeAppointmentId ?? 0,
+        ]);
 
         return (int) $stmt->fetchColumn();
     }
@@ -698,6 +834,7 @@ final class AppointmentRepository
         int $quantity = 1,
         ?string $localDate = null,
         ?int $onlyResourceId = null,
+        ?int $excludeHoldId = null,
     ): ?int {
         $stmt = $this->db->pdo()->prepare(
             "SELECT r.id FROM resources r
@@ -729,7 +866,8 @@ final class AppointmentRepository
                       JOIN booking_holds h ON h.tenant_id = hr.tenant_id AND h.id = hr.hold_id
                      WHERE hr.tenant_id = :t2 AND hr.resource_id = r.id
                        AND hr.occupied_start_at < :to2 AND hr.occupied_end_at > :from2
-                       AND h.status = 'active' AND h.expires_at > UTC_TIMESTAMP())
+                       AND h.status = 'active' AND h.expires_at > UTC_TIMESTAMP()
+                       AND (:exh_a = 0 OR h.id <> :exh_b))
                  + :qty <= r.capacity
                )
              ORDER BY r.id LIMIT 1",
@@ -741,6 +879,7 @@ final class AppointmentRepository
             'wd' => $weekday, 'lstart' => $localStart, 'lend' => $localEnd,
             't1' => $tenantId, 'from1' => $fromUtc, 'to1' => $toUtc,
             't2' => $tenantId, 'from2' => $fromUtc, 'to2' => $toUtc,
+            'exh_a' => $excludeHoldId ?? 0, 'exh_b' => $excludeHoldId ?? 0,
             't5' => $tenantId, 'to3' => $toUtc, 'from3' => $fromUtc,
             't6' => $tenantId, 'ldate' => $localDate ?? '',
             'qty' => $quantity,

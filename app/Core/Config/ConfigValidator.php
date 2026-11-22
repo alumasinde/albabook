@@ -124,6 +124,16 @@ final class ConfigValidator
             $errors[] = 'MAIL_FROM_ADDRESS must be a valid email address.';
         }
 
+        $smsProvider = $config->string('notifications.platform.sms.provider');
+        if ($smsProvider !== '' && !in_array($smsProvider, ['africastalking', 'africastalking_sms', 'twilio', 'twilio_sms'], true)) {
+            $errors[] = 'SMS_PROVIDER must be "africastalking" or "twilio" (or the full provider code).';
+        }
+        if (in_array($smsProvider, ['africastalking', 'africastalking_sms'], true)
+            && ($config->string('notifications.platform.sms.credentials.username') === ''
+                || $config->string('notifications.platform.sms.credentials.api_key') === '')) {
+            $errors[] = 'SMS_PROVIDER=africastalking requires SMS_USERNAME and SMS_API_KEY.';
+        }
+
         foreach ($config->array('security.platform.ip_allowlist') as $entry) {
             if (!is_string($entry) || !TrustedProxies::isValidEntry($entry)) {
                 $errors[] = 'SECURITY_PLATFORM_IP_ALLOWLIST contains an entry that is not an IP address or CIDR range.';

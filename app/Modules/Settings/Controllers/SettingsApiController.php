@@ -8,6 +8,7 @@ use App\Core\Http\Request;
 use App\Core\Http\Response;
 use App\Modules\Auth\Context\MembershipContext;
 use App\Modules\Billing\Services\FeatureGate;
+use App\Modules\Notifications\Services\ChannelSender;
 use App\Modules\Settings\Repositories\SettingsRepository;
 use App\Shared\Http\ApiResponse;
 use App\Shared\Security\Encrypter;
@@ -28,6 +29,7 @@ final class SettingsApiController
         private readonly UuidFactory $uuids,
         private readonly Encrypter $encrypter,
         private readonly FeatureGate $features,
+        private readonly ChannelSender $sender,
     ) {}
 
     /** Workspace profile + display preferences + dropdown metadata.
@@ -199,6 +201,10 @@ final class SettingsApiController
                 ],
                 $this->settings->notificationAccounts($tenant->tenantId),
             ),
+            'platform_fallback' => [
+                'sms' => $this->sender->platformConfigured('sms'),
+                'whatsapp' => $this->sender->platformConfigured('whatsapp'),
+            ],
         ]);
     }
 

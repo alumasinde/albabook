@@ -15,8 +15,9 @@ return [
     // Rejected at registration and rename. The platform-managed additions can
     // be supplied through TENANCY_RESERVED_SLUGS (comma separated).
     'reserved_slugs' => array_values(array_unique(array_merge([
-        '_', 'admin', 'api', 'app', 'assets', 'book', 'help', 'login',
-        'manage', 'static', 'support', 'widget', 'www',
+        '_', 'admin', 'api', 'app', 'assets', 'availability', 'book',
+        'embed', 'help', 'login', 'manage', 'staff', 'static', 'support',
+        'widget', 'www',
     ], array_filter(array_map('trim', explode(',', (string) env('TENANCY_RESERVED_SLUGS', ''))))))),
 
     // Old slugs keep redirecting and stay unclaimable (multi-tenancy.md §4).

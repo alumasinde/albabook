@@ -117,6 +117,7 @@ Format: **context → decision → consequences.** Status is *Accepted* unless n
   - Launch on one shared, registered alphanumeric sender ID ("AlbaBook"). Tenant-specific sender IDs are a later entitlement (`sms_custom_sender_id`).
   - Apply for sender ID registration with the networks at the start of Phase 8; Safaricom approval can take weeks.
 - **Consequences:** Confirm the choice with a delivery test (a few hundred messages across all three networks, comparing delivery rate and latency) before signing a volume agreement. Provider selection stays configuration-only behind `NotificationProvider`.
+  - **Account model (hybrid):** the platform-owned Africa's Talking account (`config/notifications.php`, env-backed) is the default send route with the shared "AlbaBook" sender; a tenant's own `tenant_notification_accounts` row, when active, takes precedence. A tenant `sender_id` is only honoured while `sms_custom_sender_id` is entitled — otherwise the shared platform sender is used.
 - **Status:** Accepted, pending the delivery test.
 
 ### D-015 Prices are VAT-inclusive; AlbaBook does not issue tenant tax invoices in MVP

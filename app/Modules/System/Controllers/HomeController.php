@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Modules\System\Controllers;
 
 use App\Core\Http\Request;
+use App\Core\Http\RequestContext;
 use App\Core\Http\Response;
 use App\Core\View\View;
 use App\Modules\Auth\Context\AuthContext;
+use App\Modules\Booking\Controllers\BookingPageController;
 use App\Modules\Platform\Context\PlatformAuthContext;
 use App\Tenancy\TenantSettingsService;
 
@@ -23,6 +25,8 @@ final class HomeController
         private readonly AuthContext $auth,
         private readonly PlatformAuthContext $platformAuth,
         private readonly TenantSettingsService $settings,
+        private readonly RequestContext $context,
+        private readonly BookingPageController $bookingPage,
     ) {}
 
     /** @param array<string, string> $params */
@@ -57,6 +61,13 @@ final class HomeController
     /** @param array<string, string> $params */
     public function booking(Request $request, array $params): Response
     {
+        // A verified custom domain serves its tenant's booking page at /
+        // (the host identifies the tenant); the shared book host keeps the
+        // placeholder landing.
+        if ($this->context->customDomain !== null) {
+            return $this->bookingPage->page($request, $params);
+        }
+
         return $this->view->response('pages/home/booking.twig');
     }
 

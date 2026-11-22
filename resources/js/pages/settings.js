@@ -430,14 +430,21 @@
 
     function renderNotifAccounts() {
       const accounts = state.notif.accounts || [];
+      const fallback = state.notif.platform_fallback || {};
+      const sharedNote = (fallback.sms || fallback.whatsapp)
+        ? el('p', 'text-xs text-muted mb-3', 'Nothing connected — messages send through AlbaBook\'s shared account. Connect your own provider to use your own sender ID and billing.')
+        : null;
       if (!accounts.length) {
-        notifAccounts.replaceChildren(ui.emptyState({
+        const empty = el('div');
+        if (sharedNote) empty.append(sharedNote);
+        empty.append(ui.emptyState({
           icon: 'fa-tower-broadcast',
           title: 'No channels connected',
           message: 'Connect an SMS or WhatsApp provider to reach customers beyond email.',
           actionLabel: canUpdate ? 'Connect channel' : null,
           onAction: canUpdate ? () => openAccountForm() : null,
         }));
+        notifAccounts.replaceChildren(empty);
         return;
       }
       notifAccounts.replaceChildren(...accounts.map((a) => {
@@ -467,8 +474,9 @@
     function renderNotifPrefs() {
       const { events = [], channels = [], prefs = {} } = state.notif;
       const usable = channels.filter((c) => ['email', 'sms', 'whatsapp'].includes(c.code));
-      const hasSms = (state.notif.accounts || []).some((a) => a.channel === 'sms' && a.status === 'active');
-      const hasWa = (state.notif.accounts || []).some((a) => a.channel === 'whatsapp' && a.status === 'active');
+      const fallback = state.notif.platform_fallback || {};
+      const hasSms = (state.notif.accounts || []).some((a) => a.channel === 'sms' && a.status === 'active') || fallback.sms;
+      const hasWa = (state.notif.accounts || []).some((a) => a.channel === 'whatsapp' && a.status === 'active') || fallback.whatsapp;
       const channelReady = (code) => code === 'email' || (code === 'sms' && hasSms) || (code === 'whatsapp' && hasWa);
 
       const table = el('table', 'data-table');
@@ -512,7 +520,9 @@
       wrap.append(table);
       notifPrefs.replaceChildren(wrap);
       const hint = el('p', 'mt-3 text-xs text-muted');
-      hint.textContent = 'SMS and WhatsApp toggles unlock once a provider account is active.';
+      hint.textContent = (fallback.sms || fallback.whatsapp)
+        ? 'SMS and WhatsApp send through AlbaBook\'s shared account unless you connect your own provider.'
+        : 'SMS and WhatsApp toggles unlock once a provider account is active.';
       notifPrefs.append(hint);
     }
 

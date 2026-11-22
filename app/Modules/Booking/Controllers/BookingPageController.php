@@ -11,6 +11,7 @@ use App\Core\View\View;
 use App\Modules\Appointments\Services\ManualBookingService;
 use App\Modules\Appointments\Services\TransitionException;
 use App\Modules\Billing\Services\FeatureGate;
+use App\Modules\Booking\Repositories\BookingHoldRepository;
 use App\Modules\Booking\Repositories\BookingPageRepository;
 use App\Modules\Booking\Services\AvailabilityService;
 use App\Shared\Http\ApiResponse;
@@ -35,11 +36,13 @@ final class BookingPageController
         private readonly View $view,
         private readonly TenantRepository $tenants,
         private readonly BookingPageRepository $pages,
+        private readonly BookingHoldRepository $holds,
         private readonly AvailabilityService $availability,
         private readonly ManualBookingService $bookings,
         private readonly RateLimiter $limiter,
         private readonly CurrencyFormatter $currency,
         private readonly FeatureGate $features,
+        private readonly \App\Core\Http\RequestContext $context,
     ) {}
 
     /** @param array<string, string> $params */
@@ -71,7 +74,42 @@ final class BookingPageController
             'sections' => $this->pages->sections((int) $tenant['id']),
             'faqs' => $this->pages->faqs((int) $tenant['id']),
             'show_powered_by' => !$this->features->enabled((int) $tenant['id'], 'white_label'),
+            // Slugless endpoints when the request arrived on the tenant's
+            // verified custom domain; canonical slug endpoints otherwise.
+            'api_base' => $this->context->customDomain !== null ? '' : '/' . $tenant['slug'],
+            // Bookings submitted from the framed widget are recorded with
+            // booking_source 'widget' (the page JS reads data-embed).
+            'embed' => str_ends_with($request->path(), '/embed'),
         ]);
+    }
+
+    /**
+     * Widget frame variant of the booking page (plan.md §12.2): identical
+     * markup, but served with `frame-ancestors *` so customer sites can
+     * embed it. CSP frame-ancestors supersedes X-Frame-Options in modern
+     * browsers; the plain page stays locked to 'none'.
+     * @param array<string, string> $params
+     */
+    public function embed(Request $request, array $params): Response
+    {
+        $response = $this->page($request, $params);
+        $nonce = (string) $this->context->cspNonce;
+
+        return $response->withHeader(
+            'Content-Security-Policy',
+            implode('; ', [
+                "default-src 'self'",
+                "script-src 'self'",
+                "style-src 'self' 'nonce-{$nonce}'",
+                "img-src 'self' data:",
+                "font-src 'self'",
+                "connect-src 'self'",
+                "form-action 'self'",
+                "frame-ancestors *",
+                "base-uri 'self'",
+                "object-src 'none'",
+            ]),
+        );
     }
 
     /**
@@ -253,6 +291,14 @@ final class BookingPageController
             'notes' => trim((string) ($body['notes'] ?? '')) ?: null,
         ];
         $locale = in_array($body['locale'] ?? 'en', ['en', 'sw'], true) ? (string) ($body['locale'] ?? 'en') : 'en';
+        $idempotencyKey = trim((string) ($body['idempotency_key'] ?? ''));
+        if ($idempotencyKey !== '' && !preg_match('/^[A-Za-z0-9_-]{8,64}$/', $idempotencyKey)) {
+            return ApiResponse::error('VALIDATION', 'Invalid idempotency key.', 422, ['idempotency_key' => 'Invalid key.']);
+        }
+        $holdToken = trim((string) ($body['hold_token'] ?? ''));
+        if ($holdToken !== '' && (strlen($holdToken) !== 48 || !ctype_xdigit($holdToken))) {
+            return ApiResponse::error('VALIDATION', 'Invalid reservation token.', 422, ['hold_token' => 'Invalid reservation token.']);
+        }
 
         $fields = [];
         if ($serviceId <= 0) {
@@ -280,9 +326,34 @@ final class BookingPageController
             return ApiResponse::error('NOT_FOUND', 'That service or location is not available.', 404);
         }
 
-        $staff = $this->pickStaff((int) $tenant['id'], $branch, $service, $staffId, $date, $time, (string) $tenant['timezone']);
-        if ($staff === null) {
-            return ApiResponse::error('SLOT_UNAVAILABLE', 'That time is no longer available. Pick another.', 409, ['time' => 'Pick another time.']);
+        if ($holdToken !== '') {
+            // A hold pins the staff it was taken for and marks its own
+            // window busy on the grid — so the grid check is skipped here
+            // and create() (which excludes this hold) is the arbiter.
+            $hold = $this->holds->findActiveByTokenHash(hash('sha256', $holdToken));
+            if ($hold === null || (int) $hold['tenant_id'] !== (int) $tenant['id']) {
+                return ApiResponse::error('HOLD_EXPIRED', 'Your reservation expired — pick the time again.', 410, ['time' => 'Reservation expired. Pick the time again.']);
+            }
+            $holdItems = $this->holds->itemsFor((int) $tenant['id'], (int) $hold['id']);
+            $holdStaffId = (int) ($holdItems[0]['staff_id'] ?? 0);
+            if ($staffId === null) {
+                $staffId = $holdStaffId;
+            }
+            $staff = null;
+            foreach ($this->availability->candidates((int) $tenant['id'], (int) $service['id'], (int) $branch['id']) as $member) {
+                if ((int) $member['id'] === $staffId) {
+                    $staff = $member;
+                    break;
+                }
+            }
+            if ($staff === null || $staffId !== $holdStaffId) {
+                return ApiResponse::error('VALIDATION_FAILED', 'That reservation does not match this booking.', 422, ['hold_token' => 'The reservation is for a different slot.']);
+            }
+        } else {
+            $staff = $this->pickStaff((int) $tenant['id'], $branch, $service, $staffId, $date, $time, (string) $tenant['timezone']);
+            if ($staff === null) {
+                return ApiResponse::error('SLOT_UNAVAILABLE', 'That time is no longer available. Pick another.', 409, ['time' => 'Pick another time.']);
+            }
         }
 
         try {
@@ -295,11 +366,18 @@ final class BookingPageController
                 $date,
                 $time,
                 $customer,
-                'public_page',
+                // The widget frame posts source=widget; anything else from
+                // the public page stays 'public_page' (client can't pick
+                // privileged sources).
+                ($body['source'] ?? '') === 'widget' ? 'widget' : 'public_page',
                 $locale,
                 (string) $tenant['currency'],
                 null,
                 'customer',
+                false,
+                null,
+                $idempotencyKey !== '' ? $idempotencyKey : null,
+                $holdToken !== '' ? $holdToken : null,
             );
         } catch (TransitionException $e) {
             return ApiResponse::error($e->apiCode, $e->getMessage(), $e->status, $e->fields ?: null);
@@ -312,7 +390,11 @@ final class BookingPageController
             'start_at' => $result['start_at'],
             'staff_name' => (string) $staff['display_name'],
             'service_name' => (string) $service['name'],
-        ], 201);
+            'existing' => $result['existing'],
+            'manage_url' => $result['manage_token'] !== null
+                ? ($this->context->customDomain !== null ? '' : '/' . $tenant['slug']) . '/manage/' . $result['manage_token']
+                : null,
+        ], $result['existing'] ? 200 : 201);
     }
 
     /**
@@ -322,10 +404,12 @@ final class BookingPageController
     private function tenant(array $params): ?array
     {
         $slug = strtolower(trim((string) ($params['slug'] ?? '')));
-        if ($slug === '') {
-            return null;
-        }
-        $tenant = $this->tenants->findBySlug($slug);
+        // On a verified custom domain the slug segment is absent: the host
+        // itself identifies the tenant (TrustedHostMiddleware only maps
+        // 'active' tenant_domains here).
+        $tenant = $slug === ''
+            ? ($this->context->customDomain !== null ? $this->tenants->findByDomain($this->context->customDomain) : null)
+            : $this->tenants->findBySlug($slug);
         if ($tenant === null || !in_array($tenant['status'], ['active', 'trial'], true)) {
             return null;
         }

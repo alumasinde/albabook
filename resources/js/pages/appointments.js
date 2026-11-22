@@ -122,6 +122,42 @@
         body.append(actions);
       }
 
+      if (d.can_manage_link) {
+        const link = el('button', 'btn btn-outline btn-md mt-3 w-full');
+        link.type = 'button';
+        link.append(el('i', 'fa-solid fa-link'));
+        link.append(document.createTextNode(' Copy manage link'));
+        link.addEventListener('click', () => {
+          ui.setBusy(link, true);
+          AlbaBook.api
+            .post('/api/appointments/' + encodeURIComponent(d.uuid) + '/manage-link', {})
+            .then((data) => {
+              const url = data.url || '';
+              if (navigator.clipboard && url) {
+                navigator.clipboard.writeText(url).catch(() => {});
+              }
+              AlbaBook.toast('Manage link copied — share it with the customer.', 'success');
+            })
+            .catch((error) => AlbaBook.toast(error.message || 'Could not create the link.', 'danger'))
+            .finally(() => ui.setBusy(link, false));
+        });
+        body.append(link);
+      }
+
+      if (d.can_reschedule) {
+        const wrap = el('div', 'mt-4');
+        const btn = el('button', 'btn btn-secondary btn-md w-full');
+        btn.type = 'button';
+        btn.append(el('i', 'fa-regular fa-calendar'));
+        btn.append(document.createTextNode(' Reschedule'));
+        wrap.append(btn);
+        body.append(wrap);
+        btn.addEventListener('click', () => {
+          btn.remove();
+          wrap.append(appointmentDrawer._rescheduleForm(d, body, onChange));
+        });
+      }
+
       if (d.history && d.history.length) {
         body.append(el('h4', 'mt-6 text-sm font-semibold text-ink', 'History'));
         const list = el('ul', 'mt-2 space-y-1.5 text-sm text-muted');
@@ -160,6 +196,114 @@
           AlbaBook.toast(error.message || 'Update failed.', 'danger');
           if (error.code === 'STALE_APPOINTMENT') appointmentDrawer.open(d.uuid, onChange);
         });
+    },
+
+    /* Reschedule form — same dependent-dropdown model as the create modal:
+     * staff filtered to the appointment's branch + service, an optional
+     * room pick when the service requires one. Server re-validates all of
+     * it inside the reschedule transaction. */
+    _rescheduleForm(d, body, onChange) {
+      const form = el('form', 'mt-4 space-y-3 rounded-lg border border-line p-4');
+      form.noValidate = true;
+
+      const staffSel = el('select', 'input w-full');
+      staffSel.name = 'staff_id';
+      const dateInput = el('input', 'input w-full');
+      dateInput.type = 'date';
+      dateInput.name = 'date';
+      const timeInput = el('input', 'input w-full');
+      timeInput.type = 'time';
+      timeInput.name = 'time';
+      const resourceWrap = el('div', 'hidden');
+      const resourceSel = el('select', 'input w-full');
+      resourceSel.name = 'resource_id';
+      const errorEl = el('p', 'text-sm text-danger hidden');
+
+      AlbaBook.api.get('/api/filters').then((f) => {
+        const staff = (f.staff || []).filter(
+          (s) => (s.branch_ids || []).includes(d.branch_id) && (s.service_ids || []).includes(d.service_id),
+        );
+        staffSel.replaceChildren();
+        staff.forEach((s) => {
+          const opt = el('option', '', s.name);
+          opt.value = String(s.id);
+          if (s.id === d.staff_id) opt.selected = true;
+          staffSel.appendChild(opt);
+        });
+
+        const service = (f.services || []).find((s) => s.id === d.service_id);
+        const typeId = service && service.required_resource_type_id;
+        const rooms = typeId
+          ? (f.resources || []).filter((r) => r.branch_id === d.branch_id && r.resource_type_id === typeId)
+          : [];
+        if (rooms.length) {
+          resourceSel.replaceChildren();
+          const auto = el('option', '', 'Auto-assign a room');
+          auto.value = '';
+          resourceSel.appendChild(auto);
+          rooms.forEach((r) => {
+            const opt = el('option', '', r.name);
+            opt.value = String(r.id);
+            resourceSel.appendChild(opt);
+          });
+          resourceWrap.classList.remove('hidden');
+        }
+      }).catch(() => {
+        staffSel.replaceChildren();
+        const opt = el('option', '', 'Could not load staff');
+        opt.value = '';
+        staffSel.appendChild(opt);
+      });
+
+      form.append(
+        el('label', 'block text-sm font-medium text-ink', ['Staff member', staffSel]),
+        el('label', 'block text-sm font-medium text-ink', ['New date', dateInput]),
+        el('label', 'block text-sm font-medium text-ink', ['New time', timeInput]),
+        resourceWrap,
+        errorEl,
+      );
+      const roomLabel = el('label', 'block text-sm font-medium text-ink', ['Room / resource', resourceSel]);
+      resourceWrap.append(roomLabel);
+
+      const actions = el('div', 'flex gap-2');
+      const submit = el('button', 'btn-primary flex-1');
+      submit.type = 'submit';
+      submit.textContent = 'Save new time';
+      const cancel = el('button', 'btn-outline');
+      cancel.type = 'button';
+      cancel.textContent = 'Back';
+      cancel.addEventListener('click', () => appointmentDrawer.open(d.uuid, onChange));
+      actions.append(submit, cancel);
+      form.append(actions);
+
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        errorEl.classList.add('hidden');
+        ui.setBusy(submit, true);
+        AlbaBook.api
+          .post('/api/appointments/' + encodeURIComponent(d.uuid) + '/reschedule', {
+            date: dateInput.value,
+            time: timeInput.value,
+            staff_id: staffSel.value ? parseInt(staffSel.value, 10) : undefined,
+            resource_id: resourceSel.value ? parseInt(resourceSel.value, 10) : undefined,
+            version: d.version,
+          })
+          .then(() => {
+            AlbaBook.toast('Appointment rescheduled.', 'success');
+            ui.drawer.close();
+            if (onChange) onChange();
+            else AlbaBook.pages.mount(document);
+          })
+          .catch((error) => {
+            errorEl.hidden = false;
+            errorEl.classList.remove('hidden');
+            errorEl.textContent = error.message || 'Reschedule failed.';
+            if (error.code === 'STALE_APPOINTMENT') appointmentDrawer.open(d.uuid, onChange);
+          })
+          .finally(() => ui.setBusy(submit, false));
+      });
+
+      return form;
     },
   });
 

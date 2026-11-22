@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace App\Modules\Notifications\Services;
 
+use App\Core\Config\Config;
 use App\Core\Database\Database;
+use App\Modules\Billing\Services\FeatureGate;
 use App\Shared\Http\HttpClient;
 use App\Shared\Security\Encrypter;
 
 /**
- * Delivers sms/whatsapp queue rows through the tenant's configured
- * provider account (tenant_notification_accounts + notification_providers).
+ * Delivers sms/whatsapp queue rows through the provider account resolved
+ * for the tenant (D-014 hybrid): the tenant's own configured account wins;
+ * when they have none the platform-owned account (config/notifications.php)
+ * sends with the shared sender identity.
  * Credentials are stored encrypted; the decrypted JSON shape is
  * provider-specific (api_key/username, auth_token/account_sid, phone_id…).
  */
@@ -20,33 +24,31 @@ final class ChannelSender
         private readonly Database $db,
         private readonly Encrypter $encrypter,
         private readonly HttpClient $http,
+        private readonly Config $config,
+        private readonly FeatureGate $features,
     ) {}
 
     /**
      * Send $text to $recipient on $channel ('sms'|'whatsapp') using the
-     * tenant's active provider account. Throws on any failure — the caller
+     * resolved provider account. Throws on any failure — the caller
      * records the error and schedules a retry.
      */
     public function send(int $tenantId, string $channel, string $recipient, string $text): void
     {
-        $account = $this->account($tenantId, $channel);
+        $account = $this->resolveAccount($tenantId, $channel);
         if ($account === null) {
             throw new \RuntimeException("No active {$channel} provider account for this business.");
         }
 
-        $credentials = json_decode(
-            $this->encrypter->decrypt((string) $account['credentials_encrypted']),
-            true,
-            512,
-            JSON_THROW_ON_ERROR,
-        );
-        $senderId = $account['sender_id'] !== null ? (string) $account['sender_id'] : '';
-
-        $this->dispatch((string) $account['provider_code'], $credentials, $senderId, $recipient, $text);
+        $this->dispatch($account['provider_code'], $account['credentials'], $account['sender_id'], $recipient, $text);
     }
 
-    /** @return array<string, mixed>|null */
-    private function account(int $tenantId, string $channel): ?array
+    /**
+     * The account a send would use, decrypted and ready to dispatch:
+     * tenant account first, platform fallback second.
+     * @return array{provider_code: string, credentials: array<string, mixed>, sender_id: string, source: string}|null
+     */
+    public function resolveAccount(int $tenantId, string $channel): ?array
     {
         $stmt = $this->db->pdo()->prepare(
             "SELECT a.sender_id, a.credentials_encrypted, p.code AS provider_code
@@ -57,8 +59,63 @@ final class ChannelSender
         );
         $stmt->execute(['t' => $tenantId, 'c' => $channel]);
         $row = $stmt->fetch();
+        if ($row !== false) {
+            $senderId = $row['sender_id'] !== null ? (string) $row['sender_id'] : '';
+            // Custom sender IDs are a plan feature (sms_custom_sender_id).
+            // Settings enforces this at write time too, but a downgrade can
+            // leave a stored sender_id behind — the shared platform sender
+            // is used instead when the feature is not entitled.
+            if ($senderId !== '' && !$this->features->enabled($tenantId, 'sms_custom_sender_id')) {
+                $senderId = $this->platformAccount($channel)['sender_id'] ?? '';
+            }
 
-        return $row === false ? null : $row;
+            return [
+                'provider_code' => (string) $row['provider_code'],
+                'credentials' => json_decode(
+                    $this->encrypter->decrypt((string) $row['credentials_encrypted']),
+                    true,
+                    512,
+                    JSON_THROW_ON_ERROR,
+                ),
+                'sender_id' => $senderId,
+                'source' => 'tenant',
+            ];
+        }
+
+        return $this->platformAccount($channel);
+    }
+
+    /** Whether the platform-owned fallback is configured for a channel. */
+    public function platformConfigured(string $channel): bool
+    {
+        return $this->platformAccount($channel) !== null;
+    }
+
+    /**
+     * The platform-owned account for a channel, or null when the provider
+     * or its required credentials are not configured.
+     * @return array{provider_code: string, credentials: array<string, mixed>, sender_id: string, source: string}|null
+     */
+    private function platformAccount(string $channel): ?array
+    {
+        $provider = $this->config->string("notifications.platform.{$channel}.provider");
+        // Env shorthand: `africastalking` means the `africastalking_sms` provider code.
+        $provider = match ($provider) {
+            'africastalking' => 'africastalking_sms',
+            'twilio' => $channel === 'whatsapp' ? 'twilio_whatsapp' : 'twilio_sms',
+            default => $provider,
+        };
+        if ($provider === '') {
+            return null;
+        }
+        $credentials = $this->config->array("notifications.platform.{$channel}.credentials");
+
+        return [
+            'provider_code' => $provider,
+            'credentials' => $credentials,
+            'sender_id' => $this->config->string("notifications.platform.{$channel}.sender_id"),
+            'source' => 'platform',
+        ];
     }
 
     /** @param array<string, mixed> $credentials */

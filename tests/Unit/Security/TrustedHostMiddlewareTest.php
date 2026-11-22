@@ -12,6 +12,8 @@ use App\Core\Http\Response;
 use App\Middleware\TrustedHostMiddleware;
 use App\Shared\Support\HostMap;
 use App\Shared\Support\TrustedProxies;
+use App\Tenancy\TenantDomainResolver;
+use App\Tenancy\TenantRepository;
 use PHPUnit\Framework\TestCase;
 
 final class TrustedHostMiddlewareTest extends TestCase
@@ -83,6 +85,13 @@ final class TrustedHostMiddlewareTest extends TestCase
             new HostMap(['app' => 'app.albabook.test', 'book' => 'book.albabook.test', 'api' => 'api.albabook.test', 'admin' => 'admin.albabook.test']),
             new TrustedProxies(['10.0.0.0/8']),
             new RequestContext(),
+            // No rows can resolve in unit scope: the lazy Database is never
+            // connected for platform hosts, and an unreachable lookup fails closed.
+            new TenantRepository(new \App\Core\Database\Database([
+                'host' => '127.0.0.1', 'port' => 1, 'database' => 'none',
+                'username' => 'none', 'password' => '', 'charset' => 'utf8mb4',
+            ])),
+            new TenantDomainResolver(new \App\Core\Config\Config(['app' => ['hosts' => ['app.albabook.test', 'book.albabook.test', 'api.albabook.test', 'admin.albabook.test']]])),
         );
         $seen = null;
         $middleware->process($request, static function (Request $r) use (&$seen): Response {

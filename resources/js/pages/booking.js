@@ -15,7 +15,7 @@
     const slug = root.getAttribute('data-slug');
     const base = root.getAttribute('data-api-base') || '/' + encodeURIComponent(slug || '');
 
-    const state = { service: null, branch: '', staff: '', date: '', slot: null };
+    const state = { service: null, branch: '', staff: '', date: '', slot: null, idempotencyKey: null };
     const steps = ['service', 'datetime', 'details', 'confirm'];
     let step = 0;
 
@@ -190,8 +190,16 @@
 
         const fields = {};
         new FormData(form).forEach((v, k) => { fields[k] = v; });
+        // One key per booking attempt: a retry/double-click replays to the
+        // same appointment instead of double-booking (exactly-once).
+        if (!state.idempotencyKey) {
+          state.idempotencyKey = window.crypto && crypto.randomUUID
+            ? crypto.randomUUID()
+            : 'bk-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+        }
         AlbaBook.api
           .post(base + '/book', {
+            idempotency_key: state.idempotencyKey,
             service: state.service.id,
             branch: state.branch || undefined,
             staff: state.slot && state.slot.staff_id ? state.slot.staff_id : state.staff || undefined,
@@ -202,9 +210,11 @@
             email: fields.email || undefined,
             notes: fields.notes || undefined,
             locale: document.documentElement.lang || 'en',
+            source: root.dataset.embed === '1' ? 'widget' : 'public_page',
           })
           .then((result) => {
             showSuccess(result);
+            state.idempotencyKey = null;
           })
           .catch((error) => {
             if (error instanceof AlbaBook.ApiError && error.fields && Object.keys(error.fields).length) {
@@ -228,6 +238,11 @@
         if (whenEl) whenEl.textContent = state.date + ' · ' + state.slot.start_time;
         const svcEl = host.querySelector('[data-booking-service]');
         if (svcEl) svcEl.textContent = state.service.name;
+        const manageEl = host.querySelector('[data-booking-manage]');
+        if (manageEl && result.manage_url) {
+          manageEl.href = result.manage_url;
+          manageEl.hidden = false;
+        }
       }
       Object.entries(panels).forEach(([key, panel]) => {
         if (panel) panel.hidden = key !== 'success';

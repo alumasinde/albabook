@@ -1,6 +1,7 @@
 /*
  * Integrations: webhook endpoint manager (create/edit/toggle/delete,
- * secret shown once) plus the recent delivery log.
+ * secret shown once), scoped API credentials (create/rotate/revoke,
+ * token shown once) plus the recent delivery log.
  */
 AlbaBook.pages.register('integrations', function (root) {
   const { api, ui } = AlbaBook;
@@ -9,13 +10,17 @@ AlbaBook.pages.register('integrations', function (root) {
 
   const endpointsWrap = root.querySelector('[data-int-endpoints]');
   const deliveriesWrap = root.querySelector('[data-int-deliveries]');
+  const credentialsWrap = root.querySelector('[data-int-credentials]');
   let eventTypes = [];
+  let credentialScopes = [];
 
   api.get('/api/integrations')
     .then((data) => {
       eventTypes = data.event_types;
+      credentialScopes = data.credential_scopes || [];
       renderEndpoints(data.endpoints);
       renderDeliveries(data.deliveries);
+      renderCredentials(data.credentials || []);
     })
     .catch((error) => endpointsWrap.replaceChildren(ui.errorState(error.message, () => location.reload())));
 
@@ -153,6 +158,122 @@ AlbaBook.pages.register('integrations', function (root) {
     });
   }
 
+  function renderCredentials(credentials) {
+    credentialsWrap.replaceChildren();
+    if (!credentials.length) {
+      credentialsWrap.append(ui.emptyState({
+        title: 'No API credentials yet',
+        message: 'Create a scoped token to call the private REST API.',
+        icon: 'fa-key',
+      }));
+      return;
+    }
+    credentials.forEach((cred) => {
+      const card = el('div', 'rounded-xl border border-line p-4');
+      const top = el('div', 'flex items-start justify-between gap-3');
+      const left = el('div', 'min-w-0');
+      left.append(el('p', 'truncate font-mono text-sm text-ink', cred.public_id + '.•••'));
+      const meta = el('div', 'mt-1 flex flex-wrap items-center gap-2');
+      if (cred.revoked) meta.append(ui.badge('revoked', 'danger'));
+      else if (cred.expired) meta.append(ui.badge('expired', 'warning'));
+      else meta.append(ui.badge('active', 'success'));
+      cred.scopes.forEach((scope) => meta.append(ui.badge(scope, 'info')));
+      const sub = el('p', 'mt-1 text-xs text-muted',
+        (cred.expires_at ? 'expires ' + cred.expires_at.slice(0, 10) : 'no expiry')
+        + (cred.last_used_at ? ' · last used ' + cred.last_used_at.slice(0, 16) : ''));
+      left.append(meta, sub);
+      top.append(left);
+
+      if (canManage && !cred.revoked) {
+        const actions = el('div', 'flex shrink-0 gap-1');
+        const rotate = iconBtn('fa-rotate', 'Rotate key');
+        const revoke = iconBtn('fa-ban', 'Revoke credential');
+        rotate.addEventListener('click', () => {
+          ui.confirm({
+            title: 'Rotate credential?',
+            message: 'The current token stops working immediately.',
+            confirmLabel: 'Rotate',
+          }).then((ok) => {
+            if (!ok) return;
+            api.post('/api/integrations/credentials/' + cred.uuid + '/rotate', {})
+              .then((data) => { if (data.token) showSecret(data.token); reload(); })
+              .catch((error) => AlbaBook.toast(error.message, 'danger'));
+          });
+        });
+        revoke.addEventListener('click', () => {
+          ui.confirm({
+            title: 'Revoke credential?',
+            message: 'Requests with this token will be rejected immediately.',
+            confirmLabel: 'Revoke',
+            danger: true,
+          }).then((ok) => {
+            if (!ok) return;
+            api.del('/api/integrations/credentials/' + cred.uuid)
+              .then(() => { AlbaBook.toast('Credential revoked.'); reload(); })
+              .catch((error) => AlbaBook.toast(error.message, 'danger'));
+          });
+        });
+        actions.append(rotate, revoke);
+        top.append(actions);
+      }
+      card.append(top);
+      credentialsWrap.append(card);
+    });
+  }
+
+  function credentialDrawer() {
+    const form = el('form', 'flex flex-col gap-4');
+
+    const scopesWrap = el('div', 'field');
+    scopesWrap.append(el('span', 'field-label', 'Scopes'));
+    const boxes = [];
+    const grid = el('div', 'grid gap-2 sm:grid-cols-2');
+    credentialScopes.forEach((scope) => {
+      const label = el('label', 'flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm text-ink');
+      const box = el('input');
+      box.type = 'checkbox';
+      box.value = scope;
+      boxes.push(box);
+      label.append(box, document.createTextNode(scope));
+      grid.append(label);
+    });
+    scopesWrap.append(grid);
+    form.append(scopesWrap);
+
+    const expField = el('div', 'field');
+    const expInput = el('input', 'input');
+    expInput.type = 'date';
+    expInput.name = 'expires_at';
+    expField.append(el('label', 'field-label', 'Expiry (optional)'), expInput, el('p', 'field-error'));
+    form.append(expField);
+
+    const submit = el('button', 'btn btn-primary btn-md self-start', 'Create credential');
+    submit.type = 'submit';
+    form.append(submit);
+
+    const { wrap, body } = ui.drawerShell('New API credential');
+    body.append(form);
+    ui.drawer.setContent(wrap);
+    ui.drawer.open();
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const payload = {
+        scopes: boxes.filter((b) => b.checked).map((b) => b.value),
+      };
+      if (expInput.value) payload.expires_at = expInput.value;
+      ui.setBusy(submit, true, 'Saving…');
+      api.post('/api/integrations/credentials', payload)
+        .then((data) => {
+          ui.drawer.close();
+          if (data.token) showSecret(data.token);
+          reload();
+        })
+        .catch((error) => AlbaBook.toast(error.message, 'danger'))
+        .finally(() => ui.setBusy(submit, false));
+    });
+  }
+
   function showSecret(secret) {
     const box = el('div', 'flex flex-col gap-3');
     box.append(el('p', 'text-sm text-ink', 'Signing secret — shown once. Store it somewhere safe.'));
@@ -174,10 +295,16 @@ AlbaBook.pages.register('integrations', function (root) {
 
   function reload() {
     api.get('/api/integrations')
-      .then((data) => { renderEndpoints(data.endpoints); renderDeliveries(data.deliveries); })
+      .then((data) => {
+        renderEndpoints(data.endpoints);
+        renderDeliveries(data.deliveries);
+        renderCredentials(data.credentials || []);
+      })
       .catch(() => {});
   }
 
   const newBtn = root.querySelector('[data-int-new]');
   if (newBtn) newBtn.addEventListener('click', () => endpointDrawer(null));
+  const newCredBtn = root.querySelector('[data-int-cred-new]');
+  if (newCredBtn) newCredBtn.addEventListener('click', credentialDrawer);
 });

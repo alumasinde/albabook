@@ -12,6 +12,8 @@ use App\Core\Http\Response;
 use App\Core\Middleware\MiddlewareInterface;
 use App\Shared\Support\HostMap;
 use App\Shared\Support\TrustedProxies;
+use App\Tenancy\TenantDomainResolver;
+use App\Tenancy\TenantRepository;
 
 /**
  * Establishes the trusted host, scheme and client IP, then maps the host to a
@@ -28,6 +30,8 @@ final class TrustedHostMiddleware implements MiddlewareInterface
         private readonly HostMap $hosts,
         private readonly TrustedProxies $proxies,
         private readonly RequestContext $context,
+        private readonly TenantRepository $tenants,
+        private readonly TenantDomainResolver $domains,
     ) {}
 
     public function process(Request $request, callable $next): Response
@@ -40,6 +44,19 @@ final class TrustedHostMiddleware implements MiddlewareInterface
         $host = self::normaliseHost($rawHost);
 
         $group = $host === null ? null : $this->hosts->groupFor($host);
+
+        // Verified tenant custom domains resolve to the booking host
+        // (multi-tenancy.md §4). findByDomain() matches 'active' rows only, so
+        // pending/failed/disabled domains are rejected the same as any
+        // unknown host — the Host header is never trusted on its own.
+        $customDomain = null;
+        if ($group === null && $host !== null) {
+            $normalised = $this->domains->normalise($host);
+            if ($normalised !== null && $this->domainResolves($normalised)) {
+                $group = HostGroup::Booking;
+                $customDomain = $normalised;
+            }
+        }
         if ($group === null) {
             throw HttpException::badRequest('UNKNOWN_HOST', 'Unknown host.');
         }
@@ -55,6 +72,7 @@ final class TrustedHostMiddleware implements MiddlewareInterface
         }
 
         $this->context->hostGroup = $group;
+        $this->context->customDomain = $customDomain;
 
         return $next(
             $request
@@ -63,6 +81,16 @@ final class TrustedHostMiddleware implements MiddlewareInterface
                 ->withAttribute('scheme', $scheme)
                 ->withAttribute('client_ip', $clientIp),
         );
+    }
+
+    /** Verified+active tenant_domains lookup; fails closed on lookup errors. */
+    private function domainResolves(string $normalisedHost): bool
+    {
+        try {
+            return $this->tenants->findByDomain($normalisedHost) !== null;
+        } catch (\PDOException) {
+            return false;
+        }
     }
 
     /** Lower-case, strip port and trailing dot; null when malformed. */

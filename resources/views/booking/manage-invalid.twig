@@ -1,0 +1,17 @@
+{#
+  Shown when a manage link is invalid, rotated out, or the slug does not
+  match the token's tenant. Deliberately vague — token probing reveals
+  nothing about whether a booking exists.
+#}
+{% extends 'layouts/public.twig' %}
+
+{% block title %}{{ t('booking.manage_invalid_title') }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-md py-16 text-center">
+  <i class="fa-regular fa-circle-xmark text-4xl text-muted" aria-hidden="true"></i>
+  <h1 class="mt-4 text-2xl font-semibold text-ink">{{ t('booking.manage_invalid_title') }}</h1>
+  <p class="mt-2 text-muted">{{ t('booking.manage_invalid_body') }}</p>
+  <a href="/" class="btn-primary mt-6 inline-block">{{ t('booking.manage_invalid_cta') }}</a>
+</div>
+{% endblock %}

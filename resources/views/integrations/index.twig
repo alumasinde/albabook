@@ -39,6 +39,22 @@
       <p class="mt-1 text-sm text-muted">{{ t('integrations.deliveries_subtitle') }}</p>
       <div data-int-deliveries class="mt-5 space-y-2"></div>
     </div>
+
+    <div class="card p-6 xl:col-span-2">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <h3 class="text-lg font-semibold text-ink">{{ t('integrations.credentials_heading') }}</h3>
+          <p class="mt-1 text-sm text-muted">{{ t('integrations.credentials_subtitle') }}</p>
+        </div>
+        {% if membership.can('integrations.manage') %}
+        <button type="button" class="btn btn-primary btn-md shrink-0" data-int-cred-new>
+          <i class="fa-solid fa-plus" aria-hidden="true"></i>
+          <span>{{ t('integrations.credential_new') }}</span>
+        </button>
+        {% endif %}
+      </div>
+      <div data-int-credentials class="mt-5 space-y-3"></div>
+    </div>
   </div>
 </div>
 {% endblock %}

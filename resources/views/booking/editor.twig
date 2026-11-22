@@ -62,6 +62,27 @@
       </div>
 
       <div class="card p-6">
+        <h3 class="text-lg font-semibold text-ink">{{ t('booking_page.embed_heading') }}</h3>
+        <p class="mt-1 text-sm text-muted">{{ t('booking_page.embed_subtitle') }}</p>
+        <pre data-embed-snippet class="mt-4 hidden overflow-x-auto rounded-lg bg-surface p-3 font-mono text-xs text-ink"></pre>
+        <button type="button" class="btn btn-secondary btn-sm mt-3 hidden" data-embed-copy>{{ t('booking_page.embed_copy') }}</button>
+      </div>
+
+      <div class="card p-6">
+        <h3 class="text-lg font-semibold text-ink">{{ t('booking_page.domains_heading') }}</h3>
+        <p class="mt-1 text-sm text-muted">{{ t('booking_page.domains_subtitle') }}</p>
+        <div data-domains-list class="mt-5 space-y-3"></div>
+        <div data-domains-form class="mt-4">
+          <div class="flex items-center gap-2">
+            <input type="text" class="input" data-domain-input placeholder="{{ t('booking_page.domain_placeholder') }}" aria-label="{{ t('booking_page.domain_placeholder') }}">
+            <button type="button" class="btn btn-secondary btn-sm shrink-0" data-domain-add>{{ t('booking_page.domain_add') }}</button>
+          </div>
+          <p data-domains-note class="mt-2 hidden text-sm text-muted"></p>
+          <p data-domains-error class="field-error mt-2"></p>
+        </div>
+      </div>
+
+      <div class="card p-6">
         <h3 class="text-lg font-semibold text-ink">{{ t('booking_page.versions_heading') }}</h3>
         <p class="mt-1 text-sm text-muted">{{ t('booking_page.versions_subtitle') }}</p>
         <div data-versions class="mt-5 space-y-2"></div>

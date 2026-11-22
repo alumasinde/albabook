@@ -118,7 +118,7 @@ final class BookingPageRepository
     public function staffForService(int $tenantId, int $serviceId, int $branchId): array
     {
         $stmt = $this->db->pdo()->prepare(
-            'SELECT s.id, s.display_name, s.booking_priority, s.bio
+            'SELECT s.id, s.uuid, s.display_name, s.booking_priority, s.bio
              FROM staff s
              JOIN staff_services ss ON ss.tenant_id = s.tenant_id AND ss.staff_id = s.id
              JOIN staff_branches sb ON sb.tenant_id = s.tenant_id AND sb.staff_id = s.id
@@ -130,6 +130,39 @@ final class BookingPageRepository
         $stmt->execute(['t' => $tenantId, 'svc' => $serviceId, 'b' => $branchId]);
 
         return array_values($stmt->fetchAll());
+    }
+
+    /**
+     * Public-facing staff lookup by uuid (D-008 — uuids in API payloads,
+     * never auto-increment ids). Only bookable-online staff resolve.
+     * @return array<string, mixed>|null
+     */
+    public function staffByUuid(int $tenantId, string $uuid): ?array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT id, uuid, display_name FROM staff
+             WHERE tenant_id = :t AND uuid = :u AND status = 'active' AND is_bookable_online = 1",
+        );
+        $stmt->execute(['t' => $tenantId, 'u' => $uuid]);
+        $row = $stmt->fetch();
+
+        return $row === false ? null : $row;
+    }
+
+    /**
+     * Bookable branch resolved by public uuid.
+     * @return array<string, mixed>|null
+     */
+    public function branchByUuid(int $tenantId, string $uuid): ?array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT id, uuid, name, address_line1, address_line2, county, town, phone, email, timezone
+             FROM branches WHERE tenant_id = :t AND uuid = :u AND is_active = 1',
+        );
+        $stmt->execute(['t' => $tenantId, 'u' => $uuid]);
+        $row = $stmt->fetch();
+
+        return $row === false ? null : $row;
     }
 
     /** @return array<string, mixed>|null */
@@ -322,9 +355,16 @@ final class BookingPageRepository
              JOIN appointments a ON a.tenant_id = ai.tenant_id AND a.id = ai.appointment_id
              WHERE ai.tenant_id = :t AND ai.staff_id IN ({$in})
                AND ai.occupied_start_at < :to AND ai.occupied_end_at > :from
-               AND a.status IN ('pending', 'confirmed', 'checked_in', 'in_service')",
+               AND a.status IN ('pending', 'confirmed', 'checked_in', 'in_service')
+             UNION ALL
+             SELECT hi.staff_id, hi.occupied_start_at, hi.occupied_end_at
+             FROM booking_hold_items hi
+             JOIN booking_holds h ON h.tenant_id = hi.tenant_id AND h.id = hi.hold_id
+             WHERE hi.tenant_id = :t2 AND hi.staff_id IN ({$in})
+               AND hi.occupied_start_at < :to2 AND hi.occupied_end_at > :from2
+               AND h.status = 'active' AND h.expires_at > UTC_TIMESTAMP()",
         );
-        $stmt->execute(['t' => $tenantId, 'from' => $fromUtc, 'to' => $toUtc]);
+        $stmt->execute(['t' => $tenantId, 't2' => $tenantId, 'from' => $fromUtc, 'to' => $toUtc, 'from2' => $fromUtc, 'to2' => $toUtc]);
 
         return array_values($stmt->fetchAll());
     }
@@ -419,8 +459,7 @@ final class BookingPageRepository
     public function policy(int $tenantId, ?int $branchId): ?array
     {
         $stmt = $this->db->pdo()->prepare(
-            'SELECT slot_interval_minutes, min_notice_minutes, max_advance_days, confirmation_mode
-             FROM booking_policies WHERE tenant_id = :t AND branch_scope = :s',
+            'SELECT * FROM booking_policies WHERE tenant_id = :t AND branch_scope = :s',
         );
         $stmt->execute(['t' => $tenantId, 's' => $branchId ?? 0]);
         $row = $stmt->fetch();

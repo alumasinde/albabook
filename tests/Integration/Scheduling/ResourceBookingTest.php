@@ -7,6 +7,7 @@ namespace Tests\Integration\Scheduling;
 use App\Modules\Appointments\Repositories\AppointmentRepository;
 use App\Modules\Appointments\Services\ManualBookingService;
 use App\Modules\Appointments\Services\TransitionException;
+use App\Modules\Booking\Repositories\BookingHoldRepository;
 use App\Modules\Booking\Repositories\BookingPageRepository;
 use App\Shared\Time\DateTimeService;
 use Tests\Integration\Support\Phase2TestCase;
@@ -474,7 +475,10 @@ final class ResourceBookingTest extends Phase2TestCase
             new \App\Modules\Notifications\Services\AppointmentEventService(
                 $this->db,
                 $this->uuids,
-                new \App\Modules\Notifications\Services\NotificationPolicy($this->db),
+                new \App\Modules\Notifications\Services\NotificationPolicy(
+                    $this->db,
+                    new \App\Core\Config\Config([]),
+                ),
             ),
             new \App\Modules\Billing\Services\FeatureGate($this->db),
             new \App\Modules\Till\Repositories\TillRepository($this->db),
@@ -482,6 +486,7 @@ final class ResourceBookingTest extends Phase2TestCase
                 new BookingPageRepository($this->db),
                 new DateTimeService($this->clock),
             ),
+            new \App\Modules\Booking\Repositories\BookingHoldRepository($this->db),
         );
     }
 }

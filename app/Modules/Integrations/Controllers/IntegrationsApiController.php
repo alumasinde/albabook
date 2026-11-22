@@ -6,6 +6,7 @@ namespace App\Modules\Integrations\Controllers;
 
 use App\Core\Http\Request;
 use App\Core\Http\Response;
+use App\Modules\Api\Repositories\ApiCredentialRepository;
 use App\Modules\Auth\Context\MembershipContext;
 use App\Modules\Integrations\Repositories\IntegrationRepository;
 use App\Shared\Http\ApiResponse;
@@ -21,6 +22,16 @@ use App\Tenancy\TenantContext;
  */
 final class IntegrationsApiController
 {
+    /** Scopes a private API credential can carry (D-008, plan.md §12.4). */
+    private const CREDENTIAL_SCOPES = [
+        'appointments:read',
+        'appointments:write',
+        'services:read',
+        'staff:read',
+        'customers:read',
+        'reports:read',
+    ];
+
     /** Domain events a webhook can subscribe to. */
     private const EVENT_TYPES = [
         'appointment.created',
@@ -35,6 +46,7 @@ final class IntegrationsApiController
 
     public function __construct(
         private readonly IntegrationRepository $integrations,
+        private readonly ApiCredentialRepository $credentials,
         private readonly UuidFactory $uuids,
         private readonly Encrypter $encrypter,
     ) {}
@@ -54,6 +66,11 @@ final class IntegrationsApiController
             ),
             'deliveries' => $this->integrations->deliveries($tenant->tenantId),
             'event_types' => self::EVENT_TYPES,
+            'credentials' => array_map(
+                fn(array $row): array => $this->credentialShape($row),
+                $this->credentials->listForTenant($tenant->tenantId),
+            ),
+            'credential_scopes' => self::CREDENTIAL_SCOPES,
         ]);
     }
 
@@ -163,7 +180,117 @@ final class IntegrationsApiController
         return ApiResponse::ok(['saved' => true]);
     }
 
+    /**
+     * Create a private API credential. The full bearer token is returned
+     * exactly once; only its SHA-256 hash is stored (plan.md §12.4).
+     * @param array<string, string> $params
+     */
+    public function createCredential(Request $request, array $params): Response
+    {
+        [$tenant, $membership] = $this->context($request);
+        if (!$membership->can('integrations.manage')) {
+            return ApiResponse::error('FORBIDDEN', 'You do not have permission to manage integrations.', 403);
+        }
+
+        $body = $request->body();
+        [$scopes, $scopeError] = $this->validScopes($body['scopes'] ?? null);
+        $fields = [];
+        if ($scopeError !== null) {
+            $fields['scopes'] = $scopeError;
+        }
+        $expiresAt = null;
+        if (isset($body['expires_at']) && trim((string) $body['expires_at']) !== '') {
+            $expiresAt = trim((string) $body['expires_at']);
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $expiresAt) !== 1) {
+                $fields['expires_at'] = 'Use Y-m-d format.';
+                $expiresAt = null;
+            }
+        }
+        if ($fields !== []) {
+            return ApiResponse::error('VALIDATION', 'Fix the highlighted fields.', 422, $fields);
+        }
+
+        [$token, $publicId, $secretHash] = self::mintToken();
+        $this->credentials->insert([
+            'uuid' => $this->uuids->generate(),
+            'tenant_id' => $tenant->tenantId,
+            'public_id' => $publicId,
+            'secret_hash' => $secretHash,
+            'scopes' => json_encode($scopes, JSON_THROW_ON_ERROR),
+            'expires_at' => $expiresAt !== null ? $expiresAt . ' 00:00:00' : null,
+            'created_by_user_id' => $membership->actorUserId(),
+        ]);
+
+        return ApiResponse::ok([
+            'token' => $token, // shown once — never returned again
+            'credentials' => array_map(
+                fn(array $row): array => $this->credentialShape($row),
+                $this->credentials->listForTenant($tenant->tenantId),
+            ),
+        ], 201);
+    }
+
+    /**
+     * Rotate a credential's key material in place — the old token dies
+     * immediately, the new one is returned exactly once.
+     * @param array<string, string> $params
+     */
+    public function rotateCredential(Request $request, array $params): Response
+    {
+        [$tenant, $membership] = $this->context($request);
+        if (!$membership->can('integrations.manage')) {
+            return ApiResponse::error('FORBIDDEN', 'You do not have permission to manage integrations.', 403);
+        }
+
+        $credential = $this->credentials->findByUuid($tenant->tenantId, (string) $params['uuid']);
+        if ($credential === null) {
+            return ApiResponse::error('NOT_FOUND', 'Credential not found.', 404);
+        }
+
+        [$token, $publicId, $secretHash] = self::mintToken();
+        $this->credentials->updateSecret($tenant->tenantId, (int) $credential['id'], $publicId, $secretHash);
+
+        return ApiResponse::ok([
+            'token' => $token, // shown once — never returned again
+            'credentials' => array_map(
+                fn(array $row): array => $this->credentialShape($row),
+                $this->credentials->listForTenant($tenant->tenantId),
+            ),
+        ]);
+    }
+
+    /** @param array<string, string> $params */
+    public function destroyCredential(Request $request, array $params): Response
+    {
+        [$tenant, $membership] = $this->context($request);
+        if (!$membership->can('integrations.manage')) {
+            return ApiResponse::error('FORBIDDEN', 'You do not have permission to manage integrations.', 403);
+        }
+
+        $credential = $this->credentials->findByUuid($tenant->tenantId, (string) $params['uuid']);
+        if ($credential === null) {
+            return ApiResponse::error('NOT_FOUND', 'Credential not found.', 404);
+        }
+
+        $this->credentials->revoke($tenant->tenantId, (string) $credential['uuid']);
+
+        return ApiResponse::ok(['saved' => true]);
+    }
+
     /* ------------------------------------------------------------------ */
+
+    /**
+     * New "{public_id}.{secret}" bearer token. public_id is 32 hex chars to
+     * match api_credentials.public_id; the secret is 48 hex chars.
+     * @return array{0: string, 1: string, 2: string}
+     */
+    private static function mintToken(): array
+    {
+        $publicId = bin2hex(random_bytes(16));
+        $secret = bin2hex(random_bytes(24));
+
+        return [$publicId . '.' . $secret, $publicId, hash('sha256', $secret)];
+    }
 
     /** @return array{TenantContext, MembershipContext} */
     private function context(Request $request): array
@@ -204,5 +331,46 @@ final class IntegrationsApiController
         }
 
         return [$events, null];
+    }
+
+    /** @return array{list<string>, string|null} */
+    private function validScopes(mixed $value): array
+    {
+        if (!is_array($value)) {
+            return [[], 'Choose at least one scope.'];
+        }
+        $scopes = array_values(array_unique(array_filter(array_map(
+            static fn($v): string => is_string($v) ? trim($v) : '',
+            $value,
+        ))));
+        $invalid = array_diff($scopes, self::CREDENTIAL_SCOPES);
+        if ($scopes === [] || $invalid !== []) {
+            return [[], 'Choose at least one valid scope.'];
+        }
+
+        return [$scopes, null];
+    }
+
+    /**
+     * Credential row for API output — public id and metadata only, never
+     * the secret hash.
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function credentialShape(array $row): array
+    {
+        $scopes = json_decode((string) ($row['scopes'] ?? '[]'), true);
+        $expired = $row['expires_at'] !== null && (string) $row['expires_at'] <= gmdate('Y-m-d H:i:s');
+
+        return [
+            'uuid' => $row['uuid'],
+            'public_id' => $row['public_id'],
+            'scopes' => is_array($scopes) ? $scopes : [],
+            'expires_at' => $row['expires_at'],
+            'revoked' => $row['revoked_at'] !== null,
+            'expired' => $expired,
+            'last_used_at' => $row['last_used_at'],
+            'created_at' => $row['created_at'],
+        ];
     }
 }

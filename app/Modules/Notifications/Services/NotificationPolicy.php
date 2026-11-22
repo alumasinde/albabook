@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Notifications\Services;
 
+use App\Core\Config\Config;
 use App\Core\Database\Database;
 
 /**
@@ -23,7 +24,10 @@ final class NotificationPolicy
     /** @var array<string, bool> per-request memo: "tenant|channel|event" */
     private array $memo = [];
 
-    public function __construct(private readonly Database $db) {}
+    public function __construct(
+        private readonly Database $db,
+        private readonly Config $config,
+    ) {}
 
     public function allows(int $tenantId, string $channel, string $eventKey): bool
     {
@@ -49,6 +53,13 @@ final class NotificationPolicy
     {
         if ($channel === 'email') {
             return true; // platform mailer; no tenant account needed
+        }
+
+        // Platform-owned provider account (config/notifications.php) — the
+        // shared route ChannelSender falls back to, so the channel is
+        // available even without a tenant account.
+        if ($this->config->get('notifications.platform.' . $channel . '.provider', '') !== '') {
+            return true;
         }
 
         $stmt = $this->db->pdo()->prepare(

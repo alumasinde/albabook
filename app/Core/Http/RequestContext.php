@@ -24,6 +24,12 @@ final class RequestContext
     /** @var array{reason: string, expires_at: int, write_allowed: bool}|null */
     public ?array $supportSession = null;
 
+    /**
+     * Verified tenant custom domain the request arrived on, when the host is
+     * not one of the configured platform hosts (set by TrustedHostMiddleware).
+     */
+    public ?string $customDomain = null;
+
     public function reset(): void
     {
         $this->requestId = null;
@@ -33,5 +39,6 @@ final class RequestContext
         $this->locale = 'en';
         $this->isSpa = false;
         $this->supportSession = null;
+        $this->customDomain = null;
     }
 }

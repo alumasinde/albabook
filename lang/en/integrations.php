@@ -10,4 +10,7 @@ return [
     'endpoint_new' => 'New webhook',
     'deliveries_heading' => 'Deliveries',
     'deliveries_subtitle' => 'Recent attempts and their responses.',
+    'credentials_heading' => 'API credentials',
+    'credentials_subtitle' => 'Scoped bearer tokens for the private REST API.',
+    'credential_new' => 'New credential',
 ];

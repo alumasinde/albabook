@@ -19,6 +19,7 @@ final class AppointmentEventService
 {
     /** Appointment status => customer notification_events.code. */
     private const EVENT_FOR = [
+        'rescheduled' => 'appointment_rescheduled',
         'confirmed' => 'booking_confirmed',
         'rejected' => 'booking_rejected',
         'cancelled' => 'appointment_cancelled',
