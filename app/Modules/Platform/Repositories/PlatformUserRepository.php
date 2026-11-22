@@ -78,6 +78,36 @@ final class PlatformUserRepository
         ]);
     }
 
+    /** The instant until which TOTP verification is locked for this admin. */
+    public function mfaLockedUntil(int $platformUserId): ?string
+    {
+        $stmt = $this->db->pdo()->prepare('SELECT mfa_locked_until FROM platform_users WHERE id = ?');
+        $stmt->execute([$platformUserId]);
+        $value = $stmt->fetchColumn();
+
+        return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    public function recordMfaFailure(int $platformUserId, int $max, int $lockMinutes): void
+    {
+        $this->db->pdo()->prepare(
+            'UPDATE platform_users
+                SET mfa_failed_attempts = mfa_failed_attempts + 1,
+                    mfa_locked_until = IF(
+                        mfa_failed_attempts >= :max,
+                        DATE_ADD(UTC_TIMESTAMP(), INTERVAL :mins MINUTE),
+                        mfa_locked_until)
+              WHERE id = :id',
+        )->execute(['max' => $max, 'mins' => $lockMinutes, 'id' => $platformUserId]);
+    }
+
+    public function resetMfaFailures(int $platformUserId): void
+    {
+        $this->db->pdo()->prepare(
+            'UPDATE platform_users SET mfa_failed_attempts = 0, mfa_locked_until = NULL WHERE id = ?',
+        )->execute([$platformUserId]);
+    }
+
     public function markMfaEnrolled(int $platformUserId, string $at): void
     {
         $this->db->pdo()->prepare(

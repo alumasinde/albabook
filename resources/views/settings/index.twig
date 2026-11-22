@@ -12,7 +12,7 @@
 {% block title %}{{ t('nav.settings') }} · {{ app_name }}{% endblock %}
 
 {% block content %}
-<div data-page="settings"{% if membership.can('settings.update') %} data-can-update="1"{% endif %}>
+<div data-page="settings"{% if membership.can('settings.update') %} data-can-update="1"{% endif %}{% if feature_themes %} data-feature-themes="1"{% endif %}{% if feature_sender_id %} data-feature-sender-id="1"{% endif %}>
   <div class="mb-6">
     <h2 class="text-2xl font-semibold text-ink">{{ t('settings.title') }}</h2>
     <p class="mt-1 text-sm text-muted">{{ t('settings.subtitle') }}</p>

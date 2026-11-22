@@ -39,8 +39,8 @@ return [
         // rejected before any session work, and before route middleware so
         // RequireAuth/Tenant/Permission can rely on AuthContext.
         'app' => [CacheControlMiddleware::class, SpaFragmentMiddleware::class, CsrfMiddleware::class, AuthenticationMiddleware::class],
-        'book' => [CsrfMiddleware::class],
-        'admin' => [CacheControlMiddleware::class, CsrfMiddleware::class, PlatformAuthenticationMiddleware::class],
+        'book' => [SpaFragmentMiddleware::class, CsrfMiddleware::class],
+        'admin' => [CacheControlMiddleware::class, SpaFragmentMiddleware::class, CsrfMiddleware::class, PlatformAuthenticationMiddleware::class],
         'api' => [],
     ],
 ];

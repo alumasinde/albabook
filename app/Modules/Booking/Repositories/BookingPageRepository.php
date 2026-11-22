@@ -330,6 +330,88 @@ final class BookingPageRepository
     }
 
     /**
+     * Resource types a service requires (service_resource_requirements).
+     *
+     * @return list<array{resource_type_id: int, quantity: int, occupancy: string}>
+     */
+    public function serviceRequirements(int $tenantId, int $serviceId): array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT resource_type_id, quantity, occupancy FROM service_resource_requirements
+             WHERE tenant_id = :t AND service_id = :s',
+        );
+        $stmt->execute(['t' => $tenantId, 's' => $serviceId]);
+
+        /** @var list<array{resource_type_id: int, quantity: int, occupancy: string}> */
+        return array_values($stmt->fetchAll());
+    }
+
+    /**
+     * True when at least one active resource of the type has capacity for the
+     * whole booking window: scheduled, not blocked/overridden closed, and
+     * existing allocations + live holds + the needed quantity fit capacity.
+     * Read-only twin of AppointmentRepository::freeResourceForType.
+     */
+    public function hasFreeResource(
+        int $tenantId,
+        int $branchId,
+        int $typeId,
+        string $fromUtc,
+        string $toUtc,
+        int $weekday,
+        string $localStart,
+        string $localEnd,
+        string $localDate,
+        int $quantity,
+    ): bool {
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT r.id FROM resources r
+             WHERE r.tenant_id = :t AND r.branch_id = :b AND r.resource_type_id = :rt
+               AND r.status = 'active'
+               AND NOT EXISTS (SELECT 1 FROM blocked_periods bp
+                                WHERE bp.tenant_id = :t5 AND bp.resource_id = r.id
+                                  AND bp.starts_at < :to3 AND bp.ends_at > :from3)
+               AND NOT EXISTS (SELECT 1 FROM schedule_overrides so
+                                WHERE so.tenant_id = :t6 AND so.resource_id = r.id
+                                  AND so.local_date = :ldate AND so.is_closed = 1)
+               AND (
+                   NOT EXISTS (SELECT 1 FROM resource_schedules rs
+                                WHERE rs.tenant_id = :t3 AND rs.resource_id = r.id AND rs.weekday = :wd)
+                   OR EXISTS (SELECT 1 FROM resource_schedules rs
+                               WHERE rs.tenant_id = :t4 AND rs.resource_id = r.id AND rs.weekday = :wd
+                                 AND rs.start_time <= :lstart AND rs.end_time >= :lend)
+               )
+               AND (
+                 (SELECT COALESCE(SUM(ar.quantity), 0) FROM appointment_resources ar
+                      JOIN appointment_items ai ON ai.tenant_id = ar.tenant_id AND ai.id = ar.appointment_item_id
+                      JOIN appointments a ON a.tenant_id = ai.tenant_id AND a.id = ai.appointment_id
+                     WHERE ar.tenant_id = :t1 AND ar.resource_id = r.id
+                       AND ai.occupied_start_at < :to1 AND ai.occupied_end_at > :from1
+                       AND a.status IN ('pending', 'confirmed', 'checked_in', 'in_service'))
+                 + (SELECT COUNT(*) FROM booking_hold_resources hr
+                      JOIN booking_holds h ON h.tenant_id = hr.tenant_id AND h.id = hr.hold_id
+                     WHERE hr.tenant_id = :t2 AND hr.resource_id = r.id
+                       AND hr.occupied_start_at < :to2 AND hr.occupied_end_at > :from2
+                       AND h.status = 'active' AND h.expires_at > UTC_TIMESTAMP())
+                 + :qty <= r.capacity
+               )
+             LIMIT 1",
+        );
+        $stmt->execute([
+            't' => $tenantId, 'b' => $branchId, 'rt' => $typeId,
+            't3' => $tenantId, 't4' => $tenantId,
+            'wd' => $weekday, 'lstart' => $localStart, 'lend' => $localEnd,
+            't1' => $tenantId, 'from1' => $fromUtc, 'to1' => $toUtc,
+            't2' => $tenantId, 'from2' => $fromUtc, 'to2' => $toUtc,
+            't5' => $tenantId, 'to3' => $toUtc, 'from3' => $fromUtc,
+            't6' => $tenantId, 'ldate' => $localDate,
+            'qty' => $quantity,
+        ]);
+
+        return $stmt->fetchColumn() !== false;
+    }
+
+    /**
      * Branch policy row, falling back to the tenant-wide row (branch_scope = 0).
      *
      * @return array<string, mixed>|null

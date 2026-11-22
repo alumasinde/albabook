@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Middleware;
 
 use App\Core\Config\Config;
+use App\Core\Http\HostGroup;
 use App\Core\Http\Request;
 use App\Core\Http\RequestContext;
 use App\Core\Http\Response;
@@ -36,7 +37,7 @@ final class SecurityHeadersMiddleware implements MiddlewareInterface
         $response = $next($request);
 
         $headers = [
-            'Content-Security-Policy' => self::contentSecurityPolicy($nonce),
+            'Content-Security-Policy' => $this->contentSecurityPolicy($request, $nonce),
             'X-Content-Type-Options' => 'nosniff',
             'X-Frame-Options' => 'DENY',
             'Referrer-Policy' => 'strict-origin-when-cross-origin',
@@ -58,8 +59,19 @@ final class SecurityHeadersMiddleware implements MiddlewareInterface
         return $response;
     }
 
-    public static function contentSecurityPolicy(string $nonce): string
+    public function contentSecurityPolicy(Request $request, string $nonce): string
     {
+        // The admin host's support-entry interstitial posts a one-time code to
+        // the app host; allow exactly that origin, and only there.
+        $formAction = "'self'";
+        if ($this->context->hostGroup === HostGroup::Admin) {
+            $appHost = $this->config->string('app.hosts.' . HostGroup::Tenant->value, '');
+            if ($appHost !== '') {
+                $scheme = $request->isSecure() ? 'https' : 'http';
+                $formAction .= " {$scheme}://{$appHost}";
+            }
+        }
+
         return implode('; ', [
             "default-src 'self'",
             "script-src 'self'",
@@ -67,7 +79,7 @@ final class SecurityHeadersMiddleware implements MiddlewareInterface
             "img-src 'self' data:",
             "font-src 'self'",
             "connect-src 'self'",
-            "form-action 'self'",
+            "form-action {$formAction}",
             "frame-ancestors 'none'",
             "base-uri 'self'",
             "object-src 'none'",

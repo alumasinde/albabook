@@ -6,6 +6,7 @@ namespace App\Modules\Appointments\Services;
 
 use App\Core\Database\Database;
 use App\Modules\Appointments\Repositories\AppointmentRepository;
+use App\Modules\Notifications\Services\AppointmentEventService;
 
 /**
  * Appointment status transitions. The graph mirrors appointment_statuses
@@ -39,6 +40,7 @@ final class AppointmentTransitionService
     public function __construct(
         private readonly Database $db,
         private readonly AppointmentRepository $appointments,
+        private readonly AppointmentEventService $events,
     ) {}
 
     /** @return list<string> */
@@ -86,6 +88,7 @@ final class AppointmentTransitionService
             }
 
             $this->appointments->insertEvent($tenantId, (int) $row['id'], 'status.' . $to, $actorType, $actorUserId, $from, $to, $reason);
+            $this->events->onTransitioned($tenantId, (int) $row['id'], $to);
             $row['status'] = $to;
             $row['version'] = $newVersion;
 

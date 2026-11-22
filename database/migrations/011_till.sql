@@ -20,7 +20,7 @@ INSERT IGNORE INTO appointment_statuses (code, name, blocks_time, is_terminal, b
 -- Per-tenant checkout policy: require full payment before completing, or
 -- allow completing with a balance outstanding.
 ALTER TABLE tenant_settings
-    ADD COLUMN IF NOT EXISTS checkout_full_payment_required BOOLEAN NOT NULL DEFAULT TRUE AFTER default_dashboard_view;
+    ADD COLUMN checkout_full_payment_required BOOLEAN NOT NULL DEFAULT TRUE AFTER default_dashboard_view;
 
 -- Sellable retail items rung up at the till. NULL stock_quantity means
 -- the product is not stock-tracked.

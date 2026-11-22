@@ -12,6 +12,7 @@ return [
     'range_90d' => '90 days',
     'apply' => 'Apply',
     'export' => 'Export CSV',
+    'export_upgrade' => 'Report exports are not included in your plan. Upgrade to download CSVs.',
     'tab_overview' => 'Overview',
     'tab_appointments' => 'Appointments',
     'tab_sales' => 'Sales',

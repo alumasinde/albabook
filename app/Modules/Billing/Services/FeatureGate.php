@@ -45,14 +45,24 @@ final class FeatureGate
      */
     public function underLimit(int $tenantId, string $feature, int $currentCount): bool
     {
-        $limit = $this->limit($tenantId, $feature);
+        $row = $this->resolve($tenantId, $feature);
+        if ($row === null) {
+            return true; // grandfathered — no rule applies
+        }
+        if (!(bool) $row['is_enabled']) {
+            return false; // a disabled feature admits no quota at all
+        }
 
-        return $limit === null || $currentCount < $limit;
+        return $row['limit_value'] === null || $currentCount < (int) $row['limit_value'];
     }
 
     /**
-     * The effective override or plan_feature row, or NULL when the tenant
-     * has no subscription and no override (default-permit).
+     * The effective override or plan_feature row. NULL means "no rule
+     * applies" (never subscribed, feature not on the plan) → default-permit
+     * for legacy tenants. A tenant whose latest subscription is
+     * cancelled/expired gets an explicit deny — lapsed customers do not
+     * silently keep premium features. past_due keeps plan access (grace).
+     *
      * @return array{is_enabled: int, limit_value: ?int}|null
      */
     private function resolve(int $tenantId, string $feature): ?array
@@ -70,17 +80,32 @@ final class FeatureGate
         }
 
         $stmt = $this->db->pdo()->prepare(
-            "SELECT pf.is_enabled, pf.limit_value
+            "SELECT s.status, pf.is_enabled, pf.limit_value, f.value_type
                FROM tenant_subscriptions s
-               JOIN plan_features pf ON pf.plan_id = s.plan_id AND pf.feature_key = :f
-              WHERE s.tenant_id = :t AND s.status IN ('trialing', 'active')
-              LIMIT 1",
+               JOIN features f ON f.code = :f
+               LEFT JOIN plan_features pf ON pf.plan_id = s.plan_id AND pf.feature_key = f.code
+              WHERE s.tenant_id = :t
+              ORDER BY s.id DESC LIMIT 1",
         );
         $stmt->execute(['t' => $tenantId, 'f' => $feature]);
         $row = $stmt->fetch();
+        if ($row === false) {
+            // Unknown feature key or never subscribed → grandfathered.
+            return null;
+        }
+        if (!in_array((string) $row['status'], ['trialing', 'active', 'past_due'], true)) {
+            return ['is_enabled' => 0, 'limit_value' => null];
+        }
+        if ($row['is_enabled'] === null) {
+            // Feature absent from the plan: booleans are not entitled,
+            // limit features are simply uncapped.
+            return $row['value_type'] === 'boolean'
+                ? ['is_enabled' => 0, 'limit_value' => null]
+                : ['is_enabled' => 1, 'limit_value' => null];
+        }
 
-        /** @var array{is_enabled: int, limit_value: ?int}|false $row */
-        return $row === false ? null : $row;
+        /** @var array{is_enabled: int, limit_value: ?int} */
+        return $row;
     }
 
     /** The tenant's live subscription + plan, for admin/billing UIs.
@@ -118,6 +143,69 @@ final class FeatureGate
                          UTC_TIMESTAMP() + INTERVAL 1 MONTH)",
             )->execute(['uuid' => $uuid, 't' => $tenantId, 'p' => $planId]);
         });
+    }
+
+    /** End the live subscription immediately — the tenant loses plan features. */
+    public function cancelSubscription(int $tenantId): void
+    {
+        $this->db->pdo()->prepare(
+            "UPDATE tenant_subscriptions SET status = 'cancelled', cancelled_at = UTC_TIMESTAMP()
+             WHERE tenant_id = :t AND status IN ('trialing','active','past_due')",
+        )->execute(['t' => $tenantId]);
+    }
+
+    /**
+     * Active + scheduled overrides for display on the tenant admin page.
+     * @return list<array{feature_key: string, is_enabled: int, limit_value: ?int, expires_at: ?string}>
+     */
+    public function overrides(int $tenantId): array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT feature_key, is_enabled, limit_value, expires_at
+             FROM tenant_feature_overrides WHERE tenant_id = :t ORDER BY feature_key',
+        );
+        $stmt->execute(['t' => $tenantId]);
+
+        /** @var list<array{feature_key: string, is_enabled: int, limit_value: ?int, expires_at: ?string}> */
+        return array_values($stmt->fetchAll());
+    }
+
+    /** Upsert a per-tenant override; expires_at NULL means indefinite. */
+    public function setOverride(int $tenantId, string $feature, bool $enabled, ?int $limit, ?string $expiresAt): void
+    {
+        $this->db->pdo()->prepare(
+            'INSERT INTO tenant_feature_overrides (tenant_id, feature_key, is_enabled, limit_value, expires_at)
+             VALUES (:t, :f, :e, :l, :x)
+             ON DUPLICATE KEY UPDATE is_enabled = VALUES(is_enabled),
+                 limit_value = VALUES(limit_value), expires_at = VALUES(expires_at)',
+        )->execute([
+            't' => $tenantId,
+            'f' => $feature,
+            'e' => $enabled ? 1 : 0,
+            'l' => $limit,
+            'x' => $expiresAt,
+        ]);
+    }
+
+    public function clearOverride(int $tenantId, string $feature): void
+    {
+        $this->db->pdo()->prepare(
+            'DELETE FROM tenant_feature_overrides WHERE tenant_id = :t AND feature_key = :f',
+        )->execute(['t' => $tenantId, 'f' => $feature]);
+    }
+
+    /** Feature catalog keys for validating override input.
+     * @return list<string>
+     */
+    public function featureKeys(): array
+    {
+        $stmt = $this->db->pdo()->query('SELECT code FROM features ORDER BY code');
+        if ($stmt === false) {
+            return [];
+        }
+
+        /** @var list<string> */
+        return array_map(static fn(mixed $k): string => (string) $k, $stmt->fetchAll(\PDO::FETCH_COLUMN));
     }
 
     /** @return list<array{id: int, code: string, name: string, price_minor: int}> */

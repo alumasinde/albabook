@@ -32,6 +32,11 @@ final class MfaService
      */
     public const MAX_ATTEMPTS = 5;
 
+    /** Per-user cumulative cap: this many TOTP failures across sessions locks
+     * verification for USER_LOCK_MINUTES — re-logging in cannot reset it. */
+    public const USER_LOCK_ATTEMPTS = 10;
+    public const USER_LOCK_MINUTES = 15;
+
     public function __construct(
         private readonly Config $config,
         private readonly Clock $clock,

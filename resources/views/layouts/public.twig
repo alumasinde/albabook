@@ -26,8 +26,10 @@
     {% block content %}{% endblock %}
   </main>
 
+  {% if show_powered_by ?? true %}
   <footer class="border-t border-line py-6 text-center text-sm text-muted">
     {{ t('common.powered_by') }}
   </footer>
+  {% endif %}
 </div>
 {% endblock %}

@@ -39,6 +39,9 @@ final class DashboardController
             'canSupportRead' => $this->auth->can(PlatformPermission::SupportRead->value),
             'canSupportWrite' => $this->auth->can(PlatformPermission::SupportWrite->value),
             'status' => $request->query('status', ''),
+            'active_nav' => 'overview',
+            'page_title' => 'Platform overview',
+            'admin_email' => $this->auth->user?->email,
         ]);
     }
 }

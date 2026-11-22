@@ -9,6 +9,11 @@
 <h1 class="mt-4 text-2xl font-semibold text-ink">{{ t('admin.login_title') }}</h1>
 <p class="mt-1 text-sm text-muted">{{ t('admin.login_subtitle') }}</p>
 
+{% if status == 'mfa_locked' %}
+  <div class="mt-6">
+    {% include 'components/feedback/alert.twig' with { tone: 'danger', message: t('auth.mfa_locked'), dismissible: true } only %}
+  </div>
+{% endif %}
 {% if error %}
   <div class="mt-6">
     {% include 'components/feedback/alert.twig' with { tone: 'danger', message: error } only %}

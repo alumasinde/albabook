@@ -49,7 +49,8 @@
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const title = doc.querySelector('template[data-spa-title]');
     const main = document.getElementById('main');
-    if (!main) return false;
+    // A full document contains its own #main — refuse to nest it inside ours.
+    if (!main || doc.getElementById('main')) return false;
 
     // Everything outside the title template is page content.
     const fragment = document.createDocumentFragment();

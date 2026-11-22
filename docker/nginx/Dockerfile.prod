@@ -1,0 +1,21 @@
+# Production web image (docs/deployment.md).
+#
+# Nginx needs its own copy of public/ — fastcgi resolves SCRIPT_FILENAME in
+# the app container, but static assets are served by nginx directly. The
+# asset build runs here too so the image is self-contained and assets are
+# versioned with every build (a shared named volume would go stale across
+# redeploys). .dockerignore keeps secrets out of the build context.
+
+# Frontend build: Tailwind CSS + copied vendor assets into public/assets.
+FROM node:20-bookworm-slim AS assets
+WORKDIR /app
+COPY package.json package-lock.json tailwind.config.js ./
+RUN npm ci --no-audit --no-fund
+COPY resources ./resources
+COPY scripts ./scripts
+RUN npm run build
+
+FROM nginx:1.27-alpine
+COPY docker/nginx/prod.conf /etc/nginx/conf.d/default.conf
+COPY public /var/www/albabook/public
+COPY --from=assets /app/public/assets /var/www/albabook/public/assets

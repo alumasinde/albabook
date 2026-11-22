@@ -12,11 +12,20 @@
 {% block title %}{{ t('nav.reports') }} · {{ app_name }}{% endblock %}
 
 {% block content %}
-<div data-page="reports"{% if membership.can('reports.export') %} data-can-export="1"{% endif %}{% if membership.can('reports.view_financial') %} data-can-financial="1"{% endif %}>
+<div data-page="reports"{% if membership.can('reports.export') and can_export %} data-can-export="1"{% endif %}{% if membership.can('reports.view_financial') %} data-can-financial="1"{% endif %}>
   <div class="mb-6">
     <h2 class="text-2xl font-semibold text-ink">{{ t('reports.title') }}</h2>
     <p class="mt-1 text-sm text-muted">{{ t('reports.subtitle') }}</p>
   </div>
+
+  {% if membership.can('reports.export') and not can_export %}
+    <div class="mb-4">
+      {% include 'components/feedback/alert.twig' with {
+        tone: 'info',
+        message: t('reports.export_upgrade'),
+      } only %}
+    </div>
+  {% endif %}
 
   <div class="card mb-6 flex flex-wrap items-end gap-3 p-4">
     <div class="field">
@@ -69,7 +78,7 @@
     <div class="card p-6">
       <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h3 class="text-lg font-semibold text-ink">{{ t('reports.appointments_by_day') }}</h3>
-        {% if membership.can('reports.export') %}
+        {% if membership.can('reports.export') and can_export %}
         <a class="btn btn-ghost btn-sm" data-rep-export-appointments href="#" download>
           <i class="fa-solid fa-download" aria-hidden="true"></i> {{ t('reports.export') }}
         </a>
@@ -88,7 +97,7 @@
     <div class="card p-6">
       <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h3 class="text-lg font-semibold text-ink">{{ t('reports.sales_by_day') }}</h3>
-        {% if membership.can('reports.export') %}
+        {% if membership.can('reports.export') and can_export %}
         <a class="btn btn-ghost btn-sm" data-rep-export-sales href="#" download>
           <i class="fa-solid fa-download" aria-hidden="true"></i> {{ t('reports.export') }}
         </a>

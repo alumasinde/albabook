@@ -259,6 +259,17 @@ final class AppointmentRepository
      * Count occupied windows for a staff member overlapping [fromUtc, toUtc)
      * on statuses that block time (appointment_statuses.blocks_time).
      */
+    /** Appointments created at/after an instant — the monthly_bookings meter. */
+    public function countCreatedSince(int $tenantId, string $sinceUtc): int
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT COUNT(*) FROM appointments WHERE tenant_id = :t AND created_at >= :s',
+        );
+        $stmt->execute(['t' => $tenantId, 's' => $sinceUtc]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
     public function staffOccupied(int $tenantId, int $staffId, string $fromUtc, string $toUtc): int
     {
         $stmt = $this->db->pdo()->prepare(
@@ -515,11 +526,18 @@ final class AppointmentRepository
         string $localStart,
         string $localEnd,
         int $quantity = 1,
+        ?string $localDate = null,
     ): ?int {
         $stmt = $this->db->pdo()->prepare(
             "SELECT r.id FROM resources r
              WHERE r.tenant_id = :t AND r.branch_id = :b AND r.resource_type_id = :rt
                AND r.status = 'active'
+               AND NOT EXISTS (SELECT 1 FROM blocked_periods bp
+                                WHERE bp.tenant_id = :t5 AND bp.resource_id = r.id
+                                  AND bp.starts_at < :to3 AND bp.ends_at > :from3)
+               AND NOT EXISTS (SELECT 1 FROM schedule_overrides so
+                                WHERE so.tenant_id = :t6 AND so.resource_id = r.id
+                                  AND so.local_date = :ldate AND so.is_closed = 1)
                AND (
                    NOT EXISTS (SELECT 1 FROM resource_schedules rs0
                                 WHERE rs0.tenant_id = :t3 AND rs0.resource_id = r.id)
@@ -550,6 +568,8 @@ final class AppointmentRepository
             'wd' => $weekday, 'lstart' => $localStart, 'lend' => $localEnd,
             't1' => $tenantId, 'from1' => $fromUtc, 'to1' => $toUtc,
             't2' => $tenantId, 'from2' => $fromUtc, 'to2' => $toUtc,
+            't5' => $tenantId, 'to3' => $toUtc, 'from3' => $fromUtc,
+            't6' => $tenantId, 'ldate' => $localDate ?? '',
             'qty' => $quantity,
         ]);
         $id = $stmt->fetchColumn();

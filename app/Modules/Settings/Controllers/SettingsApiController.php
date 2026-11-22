@@ -7,6 +7,7 @@ namespace App\Modules\Settings\Controllers;
 use App\Core\Http\Request;
 use App\Core\Http\Response;
 use App\Modules\Auth\Context\MembershipContext;
+use App\Modules\Billing\Services\FeatureGate;
 use App\Modules\Settings\Repositories\SettingsRepository;
 use App\Shared\Http\ApiResponse;
 use App\Shared\Security\Encrypter;
@@ -26,6 +27,7 @@ final class SettingsApiController
         private readonly SettingsRepository $settings,
         private readonly UuidFactory $uuids,
         private readonly Encrypter $encrypter,
+        private readonly FeatureGate $features,
     ) {}
 
     /** Workspace profile + display preferences + dropdown metadata.
@@ -134,6 +136,9 @@ final class SettingsApiController
         [$tenant, $membership] = $this->context($request);
         if (!$membership->can('settings.update')) {
             return ApiResponse::error('FORBIDDEN', 'You do not have permission to update settings.', 403);
+        }
+        if (!$this->features->enabled($tenant->tenantId, 'advanced_themes')) {
+            return ApiResponse::error('FEATURE_NOT_AVAILABLE', 'Custom themes are not included in your plan.', 403);
         }
 
         $body = $request->body();
@@ -244,6 +249,8 @@ final class SettingsApiController
         $senderId = trim((string) ($body['sender_id'] ?? ''));
         if (mb_strlen($senderId) > 64) {
             $fields['sender_id'] = 'Sender ID is too long (max 64 characters).';
+        } elseif ($senderId !== '' && !$this->features->enabled($tenant->tenantId, 'sms_custom_sender_id')) {
+            $fields['sender_id'] = 'A custom sender ID is not included in your plan.';
         }
 
         $credentials = trim((string) ($body['credentials'] ?? ''));
@@ -295,6 +302,12 @@ final class SettingsApiController
         $senderId = array_key_exists('sender_id', $body)
             ? (trim((string) $body['sender_id']) ?: null)
             : $account['sender_id'];
+        if ($senderId !== null
+            && $senderId !== ''
+            && $senderId !== $account['sender_id']
+            && !$this->features->enabled($tenant->tenantId, 'sms_custom_sender_id')) {
+            return ApiResponse::error('FEATURE_NOT_AVAILABLE', 'A custom sender ID is not included in your plan.', 403);
+        }
 
         $this->settings->updateNotificationAccount($tenant->tenantId, (int) $account['id'], $status, $senderId);
 

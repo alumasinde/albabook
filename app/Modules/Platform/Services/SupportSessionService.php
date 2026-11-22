@@ -40,7 +40,7 @@ final class SupportSessionService implements SupportSessionLocator
     ) {}
 
     /**
-     * @return array{id: int, uuid: string, code: string, expires_at: int, write_allowed: bool, tenant_slug: string}
+     * @return array{id: int, uuid: string, code: string, expires_at: int, write_allowed: bool, tenant_slug: string, tenant_name: string}
      * @throws HttpException
      */
     public function start(
@@ -119,6 +119,7 @@ final class SupportSessionService implements SupportSessionLocator
             'expires_at' => $expiresAt->getTimestamp(),
             'write_allowed' => $writeAllowed,
             'tenant_slug' => (string) $tenant['slug'],
+            'tenant_name' => (string) $tenant['name'],
         ];
     }
 

@@ -19,6 +19,7 @@ return [
     'reset_done' => 'Your password was updated. Sign in with the new password.',
     'invitation_accepted' => 'Your account is ready. Sign in to open your workspace.',
     'signed_out' => 'You have been signed out.',
+    'mfa_locked' => 'Too many incorrect verification codes. Two-step verification is locked for a while — sign in again later.',
 
     'register_title' => 'Create your account',
     'register_subtitle' => 'Your account is personal. You will create or join a business workspace next.',

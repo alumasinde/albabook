@@ -141,6 +141,8 @@ final class ResourceBookingTest extends Phase2TestCase
             new BookingPageRepository($this->db),
             new DateTimeService($this->clock),
             $this->uuids,
+            new \App\Modules\Notifications\Services\AppointmentEventService($this->db, $this->uuids),
+            new \App\Modules\Billing\Services\FeatureGate($this->db),
         );
     }
 }

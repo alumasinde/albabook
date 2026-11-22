@@ -5,7 +5,6 @@
 {% block content %}
 {% set statusTones = { pending: 'warning', trial: 'info', active: 'success', suspended: 'danger', cancelled: 'neutral', archived: 'neutral' } %}
 
-<h1 class="text-2xl font-semibold text-ink">{{ t('admin.dashboard_title') }}</h1>
 <p class="mt-1 text-sm text-muted">{{ t('admin.dashboard_subtitle') }}</p>
 
 {% if status == 'support_invalid' %}
@@ -115,7 +114,7 @@
         <tbody>
           {% for tenant in tenants %}
             <tr>
-              <td data-label="{{ t('admin.tenant_name') }}">{{ tenant.name }}</td>
+              <td data-label="{{ t('admin.tenant_name') }}"><a href="/tenants/{{ tenant.uuid }}" class="font-medium text-brand hover:underline">{{ tenant.name }}</a></td>
               <td data-label="{{ t('admin.tenant_slug') }}">{{ tenant.slug }}</td>
               <td data-label="{{ t('admin.tenant_status') }}">
                 <span class="badge badge-{{ statusTones[tenant.status]|default('neutral') }}">

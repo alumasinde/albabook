@@ -18,9 +18,20 @@
       <p class="mt-1 text-sm text-muted">{{ t('appointments.subtitle') }}</p>
     </div>
     {% if membership.can('appointments.create') %}
-      <a class="btn btn-primary btn-md" href="/calendar" data-cal-new-link>{{ t('appointments.new') }}</a>
+      <a class="btn btn-primary btn-md{% if booking_cap.reached %} opacity-50 pointer-events-none{% endif %}"
+         href="/calendar" data-cal-new-link
+         {% if booking_cap.reached %}aria-disabled="true" title="{{ t('appointments.limit_title') }}"{% endif %}>{{ t('appointments.new') }}</a>
     {% endif %}
   </div>
+
+  {% if booking_cap.reached %}
+    <div class="mb-4">
+      {% include 'components/feedback/alert.twig' with {
+        tone: 'warning',
+        message: t('appointments.limit_reached', { used: booking_cap.used, limit: booking_cap.limit ?? 0 }),
+      } only %}
+    </div>
+  {% endif %}
 
   <div data-appt-stats class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-live="polite"></div>
 

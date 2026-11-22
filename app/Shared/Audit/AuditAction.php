@@ -40,4 +40,11 @@ final class AuditAction
     public const SUPPORT_ENDED = 'support.ended';
 
     public const PLAN_ASSIGNED = 'platform.plan_assigned';
+    public const PLAN_CREATED = 'platform.plan_created';
+    public const PLAN_UPDATED = 'platform.plan_updated';
+    public const PLAN_DELETED = 'platform.plan_deleted';
+    public const SUBSCRIPTION_CANCELLED = 'platform.subscription_cancelled';
+    public const TENANT_STATUS_CHANGED = 'platform.tenant_status_changed';
+    public const FEATURE_OVERRIDE_SET = 'platform.feature_override_set';
+    public const FEATURE_OVERRIDE_CLEARED = 'platform.feature_override_cleared';
 }

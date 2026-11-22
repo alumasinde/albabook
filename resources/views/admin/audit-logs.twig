@@ -1,0 +1,94 @@
+{% extends 'layouts/admin.twig' %}
+
+{% block title %}Audit logs · {{ app_name }}{% endblock %}
+
+{% block content %}
+<section class="card mt-2 p-4">
+  <form method="get" action="/audit-logs" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+    {% include 'components/forms/input.twig' with {
+      name: 'action', label: 'Action', value: filters.action, placeholder: 'e.g. login', type: 'search',
+    } only %}
+    {% include 'components/forms/select.twig' with {
+      name: 'actor_type', label: 'Actor', value: filters.actor_type, placeholder: 'Any',
+      options: [
+        { value: 'tenant_user', label: 'Tenant user' },
+        { value: 'platform_user', label: 'Platform user' },
+        { value: 'support_session', label: 'Support session' },
+        { value: 'api_credential', label: 'API credential' },
+        { value: 'system', label: 'System' },
+        { value: 'customer', label: 'Customer' },
+      ],
+    } only %}
+    {% include 'components/forms/input.twig' with {
+      name: 'tenant', label: 'Business', value: filters.tenant, placeholder: 'Name or slug', type: 'search',
+    } only %}
+    {% include 'components/forms/input.twig' with {
+      name: 'from', label: 'From', value: filters.from, type: 'date',
+    } only %}
+    {% include 'components/forms/input.twig' with {
+      name: 'to', label: 'To', value: filters.to, type: 'date',
+    } only %}
+    <div class="flex items-end gap-2">
+      <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+      <a href="/audit-logs" class="btn btn-ghost btn-sm">Reset</a>
+    </div>
+  </form>
+</section>
+
+<section class="card mt-4 overflow-x-auto" aria-label="Audit log entries">
+  {% if rows is empty %}
+    <p class="p-8 text-center text-sm text-muted">No audit entries match those filters.</p>
+  {% else %}
+    <table class="w-full min-w-[720px] text-sm">
+      <thead>
+        <tr class="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
+          <th class="px-4 py-3 font-semibold">Time (UTC)</th>
+          <th class="px-4 py-3 font-semibold">Action</th>
+          <th class="px-4 py-3 font-semibold">Actor</th>
+          <th class="px-4 py-3 font-semibold">Business</th>
+          <th class="px-4 py-3 font-semibold">Target</th>
+          <th class="px-4 py-3 font-semibold">IP</th>
+          <th class="px-4 py-3 font-semibold">Detail</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr class="border-b border-line/60 align-top">
+            <td class="whitespace-nowrap px-4 py-2.5 text-muted">{{ row.created_at }}</td>
+            <td class="px-4 py-2.5"><code class="rounded bg-surface px-1.5 py-0.5 text-xs">{{ row.action }}</code></td>
+            <td class="px-4 py-2.5 text-muted">{{ row.actor_type|default('—') }}{{ row.actor_id ? ' #' ~ row.actor_id : '' }}</td>
+            <td class="px-4 py-2.5">{{ row.tenant_name|default('—') }}</td>
+            <td class="px-4 py-2.5 text-muted">{{ row.target_type|default('') }}{{ row.target_id ? ' · ' ~ row.target_id[:8] : '' }}</td>
+            <td class="px-4 py-2.5 text-muted">{{ row.ip_address|default('—') }}</td>
+            <td class="px-4 py-2.5">
+              {% if row.before_values or row.after_values %}
+                <details>
+                  <summary class="cursor-pointer text-primary">diff</summary>
+                  <pre class="mt-1 max-w-xs overflow-x-auto rounded bg-surface p-2 text-xs">{% if row.before_values %}before: {{ row.before_values }}
+{% endif %}{% if row.after_values %}after: {{ row.after_values }}{% endif %}</pre>
+                </details>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if pages > 1 %}
+      <nav class="flex items-center justify-between px-4 py-3 text-sm" aria-label="Pagination">
+        <p class="text-muted">Page {{ page }} of {{ pages }} · {{ total }} entries</p>
+        <div class="flex gap-2">
+          {% if page > 1 %}
+            <a class="btn btn-secondary btn-sm" href="/audit-logs?action={{ filters.action|url_encode }}&actor_type={{ filters.actor_type }}&tenant={{ filters.tenant|url_encode }}&from={{ filters.from }}&to={{ filters.to }}&page={{ page - 1 }}">Previous</a>
+          {% endif %}
+          {% if page < pages %}
+            <a class="btn btn-secondary btn-sm" href="/audit-logs?action={{ filters.action|url_encode }}&actor_type={{ filters.actor_type }}&tenant={{ filters.tenant|url_encode }}&from={{ filters.from }}&to={{ filters.to }}&page={{ page + 1 }}">Next</a>
+          {% endif %}
+        </div>
+      </nav>
+    {% endif %}
+  {% endif %}
+</section>
+{% endblock %}

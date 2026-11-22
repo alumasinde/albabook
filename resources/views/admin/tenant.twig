@@ -1,0 +1,147 @@
+{% extends 'layouts/admin.twig' %}
+
+{% block title %}Business · {{ tenant.name }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+{% if status == 'updated' %}
+  {% include 'components/feedback/alert.twig' with { tone: 'success', message: 'Business status updated.', dismissible: true } only %}
+{% elseif status == 'plan_assigned' %}
+  {% include 'components/feedback/alert.twig' with { tone: 'success', message: 'Plan assigned — the new subscription period has started.', dismissible: true } only %}
+{% elseif status == 'subscription_cancelled' %}
+  {% include 'components/feedback/alert.twig' with { tone: 'success', message: 'Subscription cancelled — plan features no longer apply.', dismissible: true } only %}
+{% elseif status == 'override_saved' %}
+  {% include 'components/feedback/alert.twig' with { tone: 'success', message: 'Feature override saved.', dismissible: true } only %}
+{% elseif status == 'override_cleared' %}
+  {% include 'components/feedback/alert.twig' with { tone: 'success', message: 'Feature override removed — the plan rule applies again.', dismissible: true } only %}
+{% endif %}
+
+<div class="grid gap-6 lg:grid-cols-2">
+  <section class="card p-6">
+    <h2 class="text-base font-semibold">Business</h2>
+    <dl class="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+      <dt class="text-muted">Name</dt><dd class="font-medium">{{ tenant.name }}</dd>
+      <dt class="text-muted">Slug</dt><dd><code class="text-xs">{{ tenant.slug }}</code></dd>
+      <dt class="text-muted">Status</dt>
+      <dd><span class="badge badge-{{ tenant.status == 'active' ? 'success' : (tenant.status == 'cancelled' or tenant.status == 'suspended' ? 'danger' : 'warning') }}">{{ tenant.status }}</span></dd>
+      <dt class="text-muted">Timezone</dt><dd>{{ tenant.timezone }}</dd>
+      <dt class="text-muted">Currency</dt><dd>{{ tenant.currency }}</dd>
+      <dt class="text-muted">Locale</dt><dd>{{ tenant.default_locale }}</dd>
+    </dl>
+
+    {% if canTenants %}
+      <form method="post" action="/tenants/{{ tenant.uuid }}/status" class="mt-5 flex items-end gap-3 border-t border-line pt-4">
+        {{ csrf_field() }}
+        <div class="flex-1">
+          <label for="tenant-status" class="form-label">Lifecycle status</label>
+          <select id="tenant-status" name="status" class="form-select">
+            {% for s in statuses %}
+              <option value="{{ s }}" {{ s == tenant.status ? 'selected' }}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit" class="btn btn-secondary btn-sm">Update</button>
+      </form>
+      <p class="mt-2 text-xs text-muted">Status decides what the business can do — see the tenant status policy. Approving moves a pending business to <code>trial</code> or <code>active</code>.</p>
+    {% endif %}
+  </section>
+
+  <section class="card p-6">
+    <h2 class="text-base font-semibold">Subscription</h2>
+    {% if subscription %}
+      <dl class="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+        <dt class="text-muted">Plan</dt><dd class="font-medium">{{ subscription.plan_name }} <code class="text-xs text-muted">({{ subscription.plan_code }})</code></dd>
+        <dt class="text-muted">Status</dt><dd><span class="badge badge-info">{{ subscription.status }}</span></dd>
+        <dt class="text-muted">Period end</dt><dd>{{ subscription.current_period_end }}</dd>
+        {% if subscription.trial_ends_at %}<dt class="text-muted">Trial ends</dt><dd>{{ subscription.trial_ends_at }}</dd>{% endif %}
+      </dl>
+      {% if canBilling %}
+        <form method="post" action="/tenants/{{ tenant.uuid }}/subscription/cancel" class="mt-5 border-t border-line pt-4">
+          {{ csrf_field() }}
+          <button type="submit" class="btn btn-danger btn-sm">Cancel subscription</button>
+        </form>
+      {% endif %}
+    {% else %}
+      <p class="mt-4 text-sm text-muted">No live subscription. Without a plan the business is grandfathered — assign one to start billing and enforce limits.</p>
+    {% endif %}
+
+    {% if canBilling %}
+      <form method="post" action="/tenants/{{ tenant.uuid }}/plan" class="mt-5 flex items-end gap-3 border-t border-line pt-4">
+        {{ csrf_field() }}
+        <div class="flex-1">
+          <label for="plan-code" class="form-label">Assign plan</label>
+          <select id="plan-code" name="plan" class="form-select">
+            {% for p in plans %}
+              <option value="{{ p.code }}" {{ subscription and subscription.plan_code == p.code ? 'selected' }}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Assign</button>
+      </form>
+      <p class="mt-2 text-xs text-muted">Assigning ends the current subscription and starts a fresh monthly period.</p>
+    {% endif %}
+  </section>
+</div>
+
+{% if canTenants %}
+  <section class="card mt-6 p-6">
+    <h2 class="text-base font-semibold">Feature overrides</h2>
+    <p class="mt-1 text-sm text-muted">An override beats the plan rule until it expires — use it for comps, trials of a premium feature, or a one-off limit.</p>
+
+    {% if overrides is not empty %}
+      <div class="mt-4 overflow-x-auto">
+        <table class="table">
+          <thead><tr><th>Feature</th><th>State</th><th>Limit</th><th>Expires</th><th></th></tr></thead>
+          <tbody>
+            {% for o in overrides %}
+              <tr>
+                <td><code class="text-xs">{{ o.feature_key }}</code></td>
+                <td><span class="badge badge-{{ o.is_enabled ? 'success' : 'danger' }}">{{ o.is_enabled ? 'enabled' : 'disabled' }}</span></td>
+                <td class="text-sm">{{ o.limit_value ?? 'unlimited' }}</td>
+                <td class="text-sm">{{ o.expires_at ?? 'never' }}</td>
+                <td class="text-right">
+                  <form method="post" action="/tenants/{{ tenant.uuid }}/overrides/{{ o.feature_key }}/clear">
+                    {{ csrf_field() }}
+                    <button type="submit" class="btn btn-ghost btn-sm text-danger">Remove</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="mt-4 text-sm text-muted">No overrides — the plan's feature rules apply as configured.</p>
+    {% endif %}
+
+    <form method="post" action="/tenants/{{ tenant.uuid }}/overrides" class="mt-5 grid items-end gap-3 border-t border-line pt-4 sm:grid-cols-4">
+      {{ csrf_field() }}
+      <div>
+        <label for="ov-feature" class="form-label">Feature</label>
+        <select id="ov-feature" name="feature_key" class="form-select">
+          {% for f in featureKeys %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="ov-state" class="form-label">State</label>
+        <select id="ov-state" name="state" class="form-select">
+          <option value="enabled">Enabled</option>
+          <option value="disabled">Disabled</option>
+        </select>
+      </div>
+      <div>
+        <label for="ov-limit" class="form-label">Limit <span class="text-muted">(blank = unlimited)</span></label>
+        <input id="ov-limit" name="limit" type="number" min="0" class="form-input" placeholder="—">
+      </div>
+      <div>
+        <label for="ov-expires" class="form-label">Expires <span class="text-muted">(blank = never)</span></label>
+        <input id="ov-expires" name="expires_at" type="date" class="form-input">
+      </div>
+      <div class="sm:col-span-4">
+        <button type="submit" class="btn btn-primary btn-sm">Save override</button>
+      </div>
+    </form>
+  </section>
+{% endif %}
+
+<p class="mt-6"><a href="/dashboard" class="btn btn-ghost btn-sm"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Back to overview</a></p>
+{% endblock %}

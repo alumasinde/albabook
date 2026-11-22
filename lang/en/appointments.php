@@ -6,6 +6,8 @@ return [
     'title' => 'Appointments',
     'subtitle' => 'Manage all your appointments and bookings',
     'new' => 'New Appointment',
+    'limit_title' => 'Monthly booking limit reached',
+    'limit_reached' => 'You have used :used of :limit bookings this month on your plan. Upgrade to take more bookings.',
     'search_label' => 'Search',
     'search_placeholder' => 'Search by customer name, phone or reference…',
     'filter_status' => 'Status',

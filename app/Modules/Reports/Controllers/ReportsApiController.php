@@ -7,6 +7,7 @@ namespace App\Modules\Reports\Controllers;
 use App\Core\Http\Request;
 use App\Core\Http\Response;
 use App\Modules\Auth\Context\MembershipContext;
+use App\Modules\Billing\Services\FeatureGate;
 use App\Modules\Reports\Repositories\ReportRepository;
 use App\Shared\Http\ApiResponse;
 use App\Tenancy\TenantContext;
@@ -18,7 +19,10 @@ use App\Tenancy\TenantContext;
  */
 final class ReportsApiController
 {
-    public function __construct(private readonly ReportRepository $reports) {}
+    public function __construct(
+        private readonly ReportRepository $reports,
+        private readonly FeatureGate $features,
+    ) {}
 
     /** @param array<string, string> $params */
     public function summary(Request $request, array $params): Response
@@ -62,6 +66,9 @@ final class ReportsApiController
         [$tenant, $membership] = $this->context($request);
         if (!$membership->can('reports.export')) {
             return ApiResponse::error('FORBIDDEN', 'You do not have permission to export reports.', 403);
+        }
+        if (!$this->features->enabled($tenant->tenantId, 'advanced_reports')) {
+            return ApiResponse::error('FEATURE_NOT_AVAILABLE', 'Report exports are not included in your plan.', 403);
         }
 
         $range = $this->range($request);

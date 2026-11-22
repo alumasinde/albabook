@@ -20,6 +20,20 @@
 
   AlbaBook.pages.register('settings', function (root) {
     const canUpdate = root.dataset.canUpdate === '1';
+    const featureThemes = root.dataset.featureThemes === '1';
+    const featureSenderId = root.dataset.featureSenderId === '1';
+    const upgradeNote = (text) => {
+      const box = el('div', 'rounded-xl border border-line bg-surface p-5 flex items-center gap-3');
+      const icon = el('i', 'fa-solid fa-lock text-muted');
+      icon.setAttribute('aria-hidden', 'true');
+      const body = el('div');
+      body.append(el('p', 'text-sm text-ink', text));
+      const link = el('a', 'text-sm font-semibold text-brand hover:underline', 'View plans');
+      link.href = '/billing';
+      body.append(link);
+      box.append(icon, body);
+      return box;
+    };
     const state = { meta: null, categories: [], notif: null, pay: null };
 
     /* ------------------------------------------------------------- tabs */
@@ -300,6 +314,10 @@
     function renderTheme(data) {
       const b = data.branding || {};
       themeForm.replaceChildren();
+      if (!featureThemes) {
+        themeForm.append(upgradeNote('Custom themes are not included in your plan.'));
+        return;
+      }
 
       const colors = [
         ['primary_color', 'Primary colour', 'Buttons, links and highlights'],
@@ -511,7 +529,8 @@
       );
       const senderInput = input('text', '');
       senderInput.maxLength = 64;
-      senderInput.placeholder = 'e.g. ALBABOOK';
+      senderInput.placeholder = featureSenderId ? 'e.g. ALBABOOK' : 'Not included in your plan';
+      senderInput.disabled = !featureSenderId;
       const credInput = el('textarea', 'input');
       credInput.rows = 3;
       credInput.placeholder = '{"api_key":"…","username":"…"}';
@@ -519,7 +538,7 @@
       const submit = submitBtn('Connect');
       form.append(
         field('Provider', providerSelect, 'provider_id'),
-        field('Sender ID (optional)', senderInput, 'sender_id'),
+        field(featureSenderId ? 'Sender ID (optional)' : 'Sender ID — premium feature', senderInput, 'sender_id'),
         field('Credentials', credInput, 'credentials'),
         submit,
       );

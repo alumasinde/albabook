@@ -46,6 +46,7 @@ final class WebhookSender
                    FROM webhook_deliveries d
                    JOIN webhook_endpoints e ON e.id = d.endpoint_id
                   WHERE d.status = 'pending' AND e.is_active = 1
+                    AND (d.next_attempt_at IS NULL OR d.next_attempt_at <= UTC_TIMESTAMP())
                   ORDER BY d.id LIMIT :n
                   FOR UPDATE SKIP LOCKED",
             );
@@ -67,9 +68,9 @@ final class WebhookSender
     {
         $id = (int) $delivery['id'];
         $body = (string) $delivery['payload'];
-        $secret = $this->encrypter->decrypt((string) $delivery['secret_encrypted']);
 
         try {
+            $secret = $this->encrypter->decrypt((string) $delivery['secret_encrypted']);
             $response = $this->http->post(
                 (string) $delivery['url'],
                 [
@@ -98,12 +99,18 @@ final class WebhookSender
         } catch (\Throwable $e) {
             $attempt = (int) $delivery['attempt'] + 1;
             $status = $attempt > self::MAX_ATTEMPTS ? 'failed' : 'pending';
+            // Exponential backoff: 1m, 2m, 4m, 8m, 16m — never sooner than now.
+            $retryAt = $status === 'pending'
+                ? gmdate('Y-m-d H:i:s', time() + min(3600, 30 * (2 ** $attempt)))
+                : null;
             $this->db->pdo()->prepare(
-                'UPDATE webhook_deliveries SET status = :s, attempt = :a, error = :e WHERE id = :id',
+                'UPDATE webhook_deliveries SET status = :s, attempt = :a, error = :e,
+                        next_attempt_at = :retry WHERE id = :id',
             )->execute([
                 's' => $status,
                 'a' => $attempt,
                 'e' => mb_substr($e->getMessage(), 0, 500),
+                'retry' => $retryAt,
                 'id' => $id,
             ]);
             $this->touchEndpoint((int) $delivery['endpoint_id'], false);

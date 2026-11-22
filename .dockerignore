@@ -3,4 +3,15 @@ node_modules
 vendor
 storage/logs/*
 storage/cache/*
+
+# Secrets and runtime artifacts must never enter the image: a pulled image
+# would otherwise leak APP_KEY, DB credentials, TLS keys and customer data.
 .env
+.env.*
+tls/
+backups/
+*.sql
+*.sql.gz
+.docker_code.tmp
+.support_code.tmp
+.*_cookies.tmp

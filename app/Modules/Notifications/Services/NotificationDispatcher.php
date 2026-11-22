@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Notifications\Services;
 
 use App\Core\Database\Database;
+use App\Modules\Billing\Services\FeatureGate;
 use App\Shared\Mail\Mailer;
 use App\Shared\Mail\MailMessage;
 
@@ -24,6 +25,7 @@ final class NotificationDispatcher
         private readonly Mailer $mailer,
         private readonly ChannelSender $channels,
         private readonly MessageRenderer $renderer,
+        private readonly FeatureGate $features,
     ) {}
 
     /** Process up to $limit due rows; returns the number claimed. */
@@ -69,6 +71,24 @@ final class NotificationDispatcher
     {
         $id = (int) $job['id'];
         try {
+            $channel = (string) $job['channel'];
+            if ($channel === 'sms' || $channel === 'whatsapp') {
+                $feature = $channel . '_messages';
+                $stmt = $this->db->pdo()->prepare(
+                    "SELECT COUNT(*) FROM notification_queue
+                      WHERE tenant_id = :t AND channel = :c AND status = 'sent'
+                        AND sent_at >= DATE_FORMAT(UTC_TIMESTAMP(), '%Y-%m-01')",
+                );
+                $stmt->execute(['t' => (int) $job['tenant_id'], 'c' => $channel]);
+                $sent = (int) $stmt->fetchColumn();
+                if (!$this->features->underLimit((int) $job['tenant_id'], $feature, $sent)) {
+                    $this->db->pdo()->prepare(
+                        "UPDATE notification_queue SET status = 'skipped', last_error = :e WHERE id = :id",
+                    )->execute(['e' => 'Monthly ' . $channel . ' limit reached.', 'id' => $id]);
+
+                    return;
+                }
+            }
             $payload = json_decode((string) $job['payload'], true, 512, JSON_THROW_ON_ERROR);
             $rendered = $this->renderer->render(
                 (int) $job['tenant_id'],

@@ -4,18 +4,34 @@
 FROM composer:2 AS vendor
 WORKDIR /app
 COPY composer.json composer.lock ./
-RUN composer install --no-dev --no-scripts --optimize-autoloader --no-interaction
+# pdo_mysql lives in the final FPM image, not this composer one — the check
+# is a platform assertion, not a runtime requirement at install time.
+RUN composer install --no-dev --no-scripts --optimize-autoloader --no-interaction \
+    --ignore-platform-req=ext-pdo_mysql
+
+# Frontend build: Tailwind CSS + copied vendor assets into public/assets.
+FROM node:20-bookworm-slim AS assets
+WORKDIR /app
+COPY package.json package-lock.json tailwind.config.js ./
+RUN npm ci --no-audit --no-fund
+COPY resources ./resources
+COPY scripts ./scripts
+RUN npm run build
 
 FROM php:8.3-fpm-bookworm
-RUN docker-php-ext-install -j"$(nproc)" pdo_mysql opcache zip \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libzip-dev \
+    && docker-php-ext-install -j"$(nproc)" pdo_mysql opcache zip \
     && rm -rf /var/lib/apt/lists/*
 
 COPY docker/php/php.prod.ini /usr/local/etc/php/conf.d/zz-albabook.ini
+COPY docker/php/www-prod.conf /usr/local/etc/php-fpm.d/zz-albabook-pool.conf
 
 WORKDIR /var/www/albabook
 COPY --chown=www-data:www-data . .
 COPY --from=vendor --chown=www-data:www-data /app/vendor ./vendor
-RUN rm -rf docker tests .env .env.example \
+COPY --from=assets --chown=www-data:www-data /app/public/assets ./public/assets
+RUN rm -rf docker tests node_modules \
     && mkdir -p storage/logs storage/cache \
     && chown -R www-data:www-data storage
 

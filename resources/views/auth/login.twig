@@ -11,6 +11,8 @@
     {% include 'components/feedback/alert.twig' with { tone: 'success', message: t('auth.reset_done'), dismissible: true } only %}
   {% elseif status == 'invited' %}
     {% include 'components/feedback/alert.twig' with { tone: 'success', message: t('auth.invitation_accepted'), dismissible: true } only %}
+  {% elseif status == 'mfa_locked' %}
+    {% include 'components/feedback/alert.twig' with { tone: 'danger', message: t('auth.mfa_locked'), dismissible: true } only %}
   {% endif %}
   {% if error %}
     {% include 'components/feedback/alert.twig' with { tone: 'danger', message: error } only %}

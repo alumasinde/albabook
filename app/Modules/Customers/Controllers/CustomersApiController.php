@@ -40,7 +40,7 @@ final class CustomersApiController
         ];
 
         $page = max(1, (int) $request->query('page', 1));
-        $result = $this->customers->listForTenant($tenant->tenantId, $filters, $page, self::PER_PAGE);
+        $result = $this->customers->listForTenant($tenant->tenantId, $filters, $page, self::PER_PAGE, $membership->branchIds);
         $pages = max(1, (int) ceil($result['total'] / self::PER_PAGE));
 
         return ApiResponse::ok([
@@ -76,7 +76,7 @@ final class CustomersApiController
         }
 
         $customer = $this->customers->findByUuid($tenant->tenantId, (string) $params['uuid']);
-        if ($customer === null) {
+        if ($customer === null || !$this->customers->visibleAtBranches($tenant->tenantId, (int) $customer['id'], $membership->branchIds)) {
             return ApiResponse::error('NOT_FOUND', 'Customer not found.', 404);
         }
 
@@ -116,7 +116,7 @@ final class CustomersApiController
         }
 
         $customer = $this->customers->findByUuid($tenant->tenantId, (string) $params['uuid']);
-        if ($customer === null) {
+        if ($customer === null || !$this->customers->visibleAtBranches($tenant->tenantId, (int) $customer['id'], $membership->branchIds)) {
             return ApiResponse::error('NOT_FOUND', 'Customer not found.', 404);
         }
 
@@ -140,7 +140,7 @@ final class CustomersApiController
         }
 
         $customer = $this->customers->findByUuid($tenant->tenantId, (string) $params['uuid']);
-        if ($customer === null) {
+        if ($customer === null || !$this->customers->visibleAtBranches($tenant->tenantId, (int) $customer['id'], $membership->branchIds)) {
             return ApiResponse::error('NOT_FOUND', 'Customer not found.', 404);
         }
 

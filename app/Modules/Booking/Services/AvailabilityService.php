@@ -101,6 +101,7 @@ final class AvailabilityService
         foreach ($breaks as $row) {
             $breaksByStaff[(int) $row['staff_id']][] = [(int) $this->minutes($row['starts_at']), (int) $this->minutes($row['ends_at'])];
         }
+        $requirements = $this->pages->serviceRequirements($tenantId, (int) $service['id']);
         $occupiedByStaff = [];
         foreach ($occupied as $row) {
             $occupiedByStaff[(int) $row['staff_id']][] = [
@@ -153,6 +154,20 @@ final class AvailabilityService
                     if ($staffId === null && isset($seen[$key])) {
                         continue; // earlier-priority staff already covers this time
                     }
+                    if ($requirements !== [] && !$this->resourcesFree(
+                        $tenantId,
+                        (int) $branch['id'],
+                        $requirements,
+                        $startUtc,
+                        $endUtc,
+                        $weekday,
+                        $date,
+                        $t,
+                        $duration,
+                    )) {
+                        $seen[$key] = true; // no resource capacity at this time for any staff
+                        continue;
+                    }
                     $seen[$key] = true;
                     $endT = $t + $duration;
                     $slots[] = [
@@ -168,6 +183,49 @@ final class AvailabilityService
         usort($slots, static fn($a, $b): int => strcmp($a['start_time'], $b['start_time']));
 
         return $slots;
+    }
+
+    /**
+     * Every resource type the service requires has a free, schedulable
+     * resource at this slot. Non-mutating mirror of the write-path check —
+     * slot listing cannot know guest_count, so per_guest occupancy is
+     * validated as quantity 1 and re-checked for real at booking time.
+     *
+     * @param list<array{resource_type_id: int, quantity: int, occupancy: string}> $requirements
+     */
+    private function resourcesFree(
+        int $tenantId,
+        int $branchId,
+        array $requirements,
+        \DateTimeImmutable $startUtc,
+        \DateTimeImmutable $endUtc,
+        int $weekday,
+        string $date,
+        int $startMinute,
+        int $duration,
+    ): bool {
+        $endMinute = $startMinute + $duration;
+        $localStart = sprintf('%02d:%02d:00', intdiv($startMinute, 60) % 24, $startMinute % 60);
+        $localEnd = sprintf('%02d:%02d:00', intdiv($endMinute, 60) % 24, $endMinute % 60);
+        foreach ($requirements as $req) {
+            $qty = (string) $req['occupancy'] === 'per_guest' ? 1 : max(1, (int) $req['quantity']);
+            if (!$this->pages->hasFreeResource(
+                $tenantId,
+                $branchId,
+                (int) $req['resource_type_id'],
+                $this->dates->toDb($startUtc),
+                $this->dates->toDb($endUtc),
+                $weekday,
+                $localStart,
+                $localEnd,
+                $date,
+                $qty,
+            )) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

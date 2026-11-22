@@ -18,12 +18,29 @@
       <p class="mt-1 text-sm text-muted">{{ t('staff.subtitle') }}</p>
     </div>
     {% if membership.can('staff.manage') %}
-      <button type="button" class="btn btn-primary btn-md" data-staff-new>
+      <button type="button" class="btn btn-primary btn-md" data-staff-new
+        {% if cap.reached %}disabled title="{{ t('staff.limit_title') }}"{% endif %}>
         <i class="fa-solid fa-plus" aria-hidden="true"></i>
         <span>{{ t('staff.new') }}</span>
       </button>
     {% endif %}
   </div>
+
+  {% if cap.reached %}
+    <div class="mb-4">
+      {% include 'components/feedback/alert.twig' with {
+        tone: 'warning',
+        message: t('staff.limit_reached', { used: cap.used, limit: cap.limit ?? 0 }),
+      } only %}
+    </div>
+  {% elseif cap.limit is not null and cap.used >= cap.limit - 1 %}
+    <div class="mb-4">
+      {% include 'components/feedback/alert.twig' with {
+        tone: 'info',
+        message: t('staff.limit_near', { used: cap.used, limit: cap.limit }),
+      } only %}
+    </div>
+  {% endif %}
 
   <div class="card p-4">
     <div class="grid gap-3 md:grid-cols-3">

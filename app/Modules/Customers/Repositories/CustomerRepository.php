@@ -17,12 +17,21 @@ final class CustomerRepository
 
     /**
      * @param array{q?: string, status?: string} $filters
+     * @param list<int>|null $branchIds Branch-limited scope: only customers
+     *        with at least one appointment at these branches are returned.
+     *        NULL = unrestricted (tenant-wide visibility).
      * @return array{rows: list<array<string, mixed>>, total: int}
      */
-    public function listForTenant(int $tenantId, array $filters, int $page, int $perPage): array
+    public function listForTenant(int $tenantId, array $filters, int $page, int $perPage, ?array $branchIds = null): array
     {
         $where = ['c.tenant_id = :t'];
         $params = ['t' => $tenantId];
+
+        if ($branchIds !== null) {
+            [$scopeSql, $scopeParams] = $this->branchScope($branchIds);
+            $where[] = $scopeSql;
+            $params += $scopeParams;
+        }
 
         $q = trim((string) ($filters['q'] ?? ''));
         if ($q !== '') {
@@ -64,6 +73,52 @@ final class CustomerRepository
         $rows = array_values($stmt->fetchAll());
 
         return ['rows' => $rows, 'total' => $total];
+    }
+
+    /**
+     * Customers are tenant-level entities (no branch_id): branch-limited
+     * members may only see customers associated with their branches through
+     * at least one appointment. Returns true when no restriction applies.
+     *
+     * @param list<int>|null $branchIds
+     */
+    public function visibleAtBranches(int $tenantId, int $customerId, ?array $branchIds): bool
+    {
+        if ($branchIds === null) {
+            return true;
+        }
+        [$scopeSql, $scopeParams] = $this->branchScope($branchIds);
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT 1 FROM customers c WHERE c.tenant_id = :t AND c.id = :c AND ' . $scopeSql . ' LIMIT 1',
+        );
+        $stmt->execute(['t' => $tenantId, 'c' => $customerId] + $scopeParams);
+
+        return $stmt->fetchColumn() !== false;
+    }
+
+    /**
+     * EXISTS clause binding :b0..:bN — a customer's branch association is
+     * their appointments'. An empty list matches nothing.
+     *
+     * @param list<int> $branchIds
+     * @return array{0: string, 1: array<string, int>}
+     */
+    private function branchScope(array $branchIds): array
+    {
+        $params = [];
+        $placeholders = [];
+        foreach (array_values($branchIds) as $i => $id) {
+            $placeholders[] = ':b' . $i;
+            $params['b' . $i] = (int) $id;
+        }
+        $in = $placeholders === [] ? 'NULL' : implode(',', $placeholders);
+
+        return [
+            'EXISTS (SELECT 1 FROM appointments ax
+                      WHERE ax.tenant_id = c.tenant_id AND ax.customer_id = c.id
+                        AND ax.branch_id IN (' . $in . '))',
+            $params,
+        ];
     }
 
     /** @return array<string, mixed>|null */

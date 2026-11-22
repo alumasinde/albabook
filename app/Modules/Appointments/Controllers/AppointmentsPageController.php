@@ -8,7 +8,10 @@ use App\Core\Http\HttpException;
 use App\Core\Http\Request;
 use App\Core\Http\Response;
 use App\Core\View\View;
+use App\Modules\Appointments\Repositories\AppointmentRepository;
 use App\Modules\Auth\Context\MembershipContext;
+use App\Modules\Billing\Services\FeatureGate;
+use App\Tenancy\TenantContext;
 
 /**
  * Renders the appointments and calendar shells. Tenant + membership always
@@ -16,7 +19,11 @@ use App\Modules\Auth\Context\MembershipContext;
  */
 final class AppointmentsPageController
 {
-    public function __construct(private readonly View $view) {}
+    public function __construct(
+        private readonly View $view,
+        private readonly AppointmentRepository $appointments,
+        private readonly FeatureGate $features,
+    ) {}
 
     /** @param array<string, string> $params */
     public function index(Request $request, array $params): Response
@@ -29,6 +36,7 @@ final class AppointmentsPageController
         return $this->view->response('appointments/index.twig', [
             'membership' => $membership,
             'tenant' => $request->attribute('tenant'),
+            'booking_cap' => $this->bookingCap($request),
         ]);
     }
 
@@ -43,6 +51,21 @@ final class AppointmentsPageController
         return $this->view->response('calendar/index.twig', [
             'membership' => $membership,
             'tenant' => $request->attribute('tenant'),
+            'booking_cap' => $this->bookingCap($request),
         ]);
+    }
+
+    /** @return array{used: int, limit: ?int, reached: bool} */
+    private function bookingCap(Request $request): array
+    {
+        $tenant = $request->attribute('tenant');
+        assert($tenant instanceof TenantContext);
+        $used = $this->appointments->countCreatedSince($tenant->tenantId, gmdate('Y-m-01 00:00:00'));
+
+        return [
+            'used' => $used,
+            'limit' => $this->features->limit($tenant->tenantId, 'monthly_bookings'),
+            'reached' => !$this->features->underLimit($tenant->tenantId, 'monthly_bookings', $used),
+        ];
     }
 }

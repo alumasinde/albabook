@@ -428,6 +428,7 @@ final class TenantAccessChecker
             'pending' => [
                 'dashboard.view',
                 'onboarding.manage',
+                'business.manage',   -- finish setup while awaiting approval
             ],
             'trial' => [
                 'dashboard.view',

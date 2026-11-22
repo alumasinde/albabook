@@ -10,6 +10,7 @@ use App\Core\Http\Response;
 use App\Core\View\View;
 use App\Modules\Appointments\Services\ManualBookingService;
 use App\Modules\Appointments\Services\TransitionException;
+use App\Modules\Billing\Services\FeatureGate;
 use App\Modules\Booking\Repositories\BookingPageRepository;
 use App\Modules\Booking\Services\AvailabilityService;
 use App\Shared\Http\ApiResponse;
@@ -38,6 +39,7 @@ final class BookingPageController
         private readonly ManualBookingService $bookings,
         private readonly RateLimiter $limiter,
         private readonly CurrencyFormatter $currency,
+        private readonly FeatureGate $features,
     ) {}
 
     /** @param array<string, string> $params */
@@ -68,6 +70,7 @@ final class BookingPageController
             'theme_css' => $this->themeCss($branding),
             'sections' => $this->pages->sections((int) $tenant['id']),
             'faqs' => $this->pages->faqs((int) $tenant['id']),
+            'show_powered_by' => !$this->features->enabled((int) $tenant['id'], 'white_label'),
         ]);
     }
 

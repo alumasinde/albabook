@@ -11,9 +11,11 @@ use App\Modules\Auth\Mfa\MfaSubject;
 use App\Modules\Auth\Services\MfaService;
 use App\Modules\Platform\Context\PlatformAuthContext;
 use App\Modules\Platform\Dto\ResolvedPlatformSession;
+use App\Modules\Platform\Repositories\PlatformUserRepository;
 use App\Modules\Platform\Services\PlatformAuthenticationService;
 use App\Modules\Platform\Services\PlatformSessionService;
 use App\Shared\Security\AuthCookieFactory;
+use App\Shared\Time\DateTimeService;
 
 final class TwoFactorController
 {
@@ -24,6 +26,8 @@ final class TwoFactorController
         private readonly PlatformAuthenticationService $authentication,
         private readonly PlatformSessionService $sessions,
         private readonly AuthCookieFactory $cookies,
+        private readonly DateTimeService $dates,
+        private readonly PlatformUserRepository $users,
     ) {}
 
     /** @param array<string, string> $params */
@@ -51,7 +55,23 @@ final class TwoFactorController
             return Response::redirect('/login');
         }
 
+        $lockedUntil = $this->users->mfaLockedUntil($user->id);
+        if ($lockedUntil !== null && $this->dates->fromDb($lockedUntil) > $this->dates->now()) {
+            $this->sessions->revoke($session->sessionId);
+
+            return Response::redirect('/login?status=mfa_locked')
+                ->withCookie($this->cookies->clearPlatformSession($request));
+        }
+
         if (!$this->mfa->verify(MfaSubject::PlatformUser, $user->id, (string) $request->input('code', ''), $request)) {
+            $this->users->recordMfaFailure($user->id, MfaService::USER_LOCK_ATTEMPTS, MfaService::USER_LOCK_MINUTES);
+            $userLocked = $this->users->mfaLockedUntil($user->id);
+            if ($userLocked !== null && $this->dates->fromDb($userLocked) > $this->dates->now()) {
+                $this->sessions->revoke($session->sessionId);
+
+                return Response::redirect('/login?status=mfa_locked')
+                    ->withCookie($this->cookies->clearPlatformSession($request));
+            }
             if ($this->sessions->recordMfaFailure($session->sessionId) >= MfaService::MAX_ATTEMPTS) {
                 $this->sessions->revoke($session->sessionId);
 
@@ -64,6 +84,7 @@ final class TwoFactorController
             ], 422);
         }
 
+        $this->users->resetMfaFailures($user->id);
         $issued = $this->authentication->completeMfa($session);
 
         return Response::redirect('/dashboard')

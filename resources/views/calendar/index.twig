@@ -32,12 +32,22 @@
         <option value="">{{ t('calendar.all_staff') }}</option>
       </select>
       {% if membership.can('appointments.create') %}
-        <button type="button" class="btn btn-primary btn-md" data-modal-open="new-appointment-modal">
+        <button type="button" class="btn btn-primary btn-md" data-modal-open="new-appointment-modal"
+          {% if booking_cap.reached %}disabled title="{{ t('appointments.limit_title') }}"{% endif %}>
           <i class="fa-solid fa-plus" aria-hidden="true"></i> {{ t('calendar.new_appointment') }}
         </button>
       {% endif %}
     </div>
   </div>
+
+  {% if booking_cap.reached %}
+    <div class="mb-4">
+      {% include 'components/feedback/alert.twig' with {
+        tone: 'warning',
+        message: t('appointments.limit_reached', { used: booking_cap.used, limit: booking_cap.limit ?? 0 }),
+      } only %}
+    </div>
+  {% endif %}
 
   <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
     <div class="flex items-center gap-2">

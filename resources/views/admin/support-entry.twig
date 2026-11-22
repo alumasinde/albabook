@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Opening support session…</title>
+</head>
+<body>
+    <p>Opening the support session for {{ tenant_name }}…</p>
+    <form id="support-entry" method="post" action="{{ entry_url }}">
+        <input type="hidden" name="code" value="{{ code }}">
+        <noscript>
+            <p>JavaScript is required to continue — press the button below.</p>
+        </noscript>
+        <button type="submit">Continue</button>
+    </form>
+    <script src="/assets/js/support-entry.js" defer></script>
+</body>
+</html>

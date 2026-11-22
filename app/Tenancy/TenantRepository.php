@@ -71,6 +71,12 @@ final class TenantRepository
         return (int) $pdo->lastInsertId();
     }
 
+    public function setStatus(int $tenantId, string $status): void
+    {
+        $this->db->pdo()->prepare('UPDATE tenants SET status = :s WHERE id = :t')
+            ->execute(['s' => $status, 't' => $tenantId]);
+    }
+
     public function updateSlug(int $tenantId, string $slug): void
     {
         $this->db->pdo()->prepare('UPDATE tenants SET slug = :slug WHERE id = :id')

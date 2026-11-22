@@ -7,6 +7,7 @@ namespace App\Modules\Platform\Controllers;
 use App\Core\Http\HttpException;
 use App\Core\Http\Request;
 use App\Core\Http\Response;
+use App\Core\View\View;
 use App\Modules\Platform\Context\PlatformAuthContext;
 use App\Modules\Platform\Services\SupportSessionService;
 use App\Shared\Http\AppUrl;
@@ -21,6 +22,7 @@ final class SupportSessionController
         private readonly PlatformAuthContext $auth,
         private readonly SupportSessionService $support,
         private readonly AppUrl $urls,
+        private readonly View $view,
     ) {}
 
     /** @param array<string, string> $params */
@@ -46,18 +48,14 @@ final class SupportSessionController
 
         // Hand the single-use code to the tenant host via an auto-submitted
         // POST form — the credential never touches a URL, access log or
-        // Referer header (audit fix: bearer tokens in URLs were replayable).
-        $entryUrl = $this->urls->app('/support/enter', $request);
-        $code = htmlspecialchars($session['code'], ENT_QUOTES);
-
-        return Response::html(<<<HTML
-            <!doctype html><html><head><meta charset="utf-8"><title>Entering support session…</title></head>
-            <body>
-            <form method="post" action="{$entryUrl}"><input type="hidden" name="code" value="{$code}">
-            <noscript><p>Press continue to open the support session.</p><button type="submit">Continue</button></noscript></form>
-            <script>document.forms[0].submit();</script>
-            </body></html>
-            HTML);
+        // Referer header. The page is CSP-clean: no inline script (auto-submit
+        // lives in /assets/js/support-entry.js) and the admin host's
+        // form-action explicitly allows the app origin.
+        return $this->view->response('admin/support-entry.twig', [
+            'entry_url' => $this->urls->app('/support/enter', $request),
+            'code' => $session['code'],
+            'tenant_name' => $session['tenant_name'],
+        ]);
     }
 
     /** @param array<string, string> $params */

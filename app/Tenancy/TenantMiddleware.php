@@ -135,13 +135,14 @@ final class TenantMiddleware implements MiddlewareInterface
 
         // Support sessions get a synthetic membership so API controllers keep
         // working: all tenant permissions when writes are allowed, *.view
-        // only otherwise. tenantOperations still gates on account status —
-        // support cannot act on behalf of a cancelled business.
+        // only otherwise — read-only support cannot export data either.
+        // tenantOperations still gates on account status — support cannot
+        // act on behalf of a cancelled business.
         $permissions = $this->roles->tenantPermissionIdentifiers();
         if (!$access->writeAllowed) {
             $permissions = array_values(array_filter(
                 $permissions,
-                static fn(string $p): bool => str_ends_with($p, '.view') || str_ends_with($p, '.export'),
+                static fn(string $p): bool => str_ends_with($p, '.view'),
             ));
         }
         $operations = $this->access->allowedOperations($tenant->status);

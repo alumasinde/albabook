@@ -7,7 +7,9 @@ namespace App\Modules\Appointments\Services;
 use App\Core\Database\Database;
 use App\Core\Database\IsolationLevel;
 use App\Modules\Appointments\Repositories\AppointmentRepository;
+use App\Modules\Billing\Services\FeatureGate;
 use App\Modules\Booking\Repositories\BookingPageRepository;
+use App\Modules\Notifications\Services\AppointmentEventService;
 use App\Shared\Support\UuidFactory;
 use App\Shared\Time\DateTimeService;
 
@@ -28,6 +30,8 @@ final class ManualBookingService
         private readonly BookingPageRepository $pages,
         private readonly DateTimeService $dates,
         private readonly UuidFactory $uuids,
+        private readonly AppointmentEventService $events,
+        private readonly FeatureGate $features,
     ) {}
 
     /**
@@ -89,6 +93,10 @@ final class ManualBookingService
             $price, $start, $end, $occupiedStart, $occupiedEnd, $localDate,
             $customer, $source, $locale, $currency, $actorUserId, $actorType,
         ): array {
+            $bookingCount = $this->appointments->countCreatedSince($tenantId, gmdate('Y-m-01 00:00:00'));
+            if (!$this->features->underLimit($tenantId, 'monthly_bookings', $bookingCount)) {
+                throw new TransitionException('BOOKING_LIMIT', 'This business has reached its monthly booking limit.', 422, ['date' => 'Monthly booking limit reached.']);
+            }
             $staff = $this->appointments->lockStaff($tenantId, $staffId);
                 if ($staff === null || $staff['status'] !== 'active') {
                     throw new TransitionException('STAFF_UNAVAILABLE', 'That staff member is not available.', 422, ['staff' => 'Choose available staff.']);
@@ -131,6 +139,7 @@ final class ManualBookingService
                         $localStart->format('H:i:s'),
                         $localEnd->format('H:i:s'),
                         $quantity,
+                        $localStart->format('Y-m-d'),
                     );
                     if ($resourceId === null) {
                         throw new TransitionException('RESOURCE_UNAVAILABLE', 'No room or equipment is free at that time.', 409, ['time' => 'Pick another time.']);
@@ -211,6 +220,7 @@ final class ManualBookingService
             }
 
             $this->appointments->insertEvent($tenantId, $appointmentId, 'status.created', $actorType, $actorUserId, null, $status);
+            $this->events->onCreated($tenantId, (int) $appointmentId);
 
             return [
                 'uuid' => $uuid,

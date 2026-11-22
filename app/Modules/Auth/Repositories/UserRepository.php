@@ -65,6 +65,37 @@ final class UserRepository
             ->execute(['email' => strtolower($email), 'id' => $userId]);
     }
 
+    /** The instant until which TOTP verification is locked for this user. */
+    public function mfaLockedUntil(int $userId): ?string
+    {
+        $stmt = $this->db->pdo()->prepare('SELECT mfa_locked_until FROM users WHERE id = ?');
+        $stmt->execute([$userId]);
+        $value = $stmt->fetchColumn();
+
+        return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    /** Cumulative per-user TOTP failure counter; locks once $max is reached. */
+    public function recordMfaFailure(int $userId, int $max, int $lockMinutes): void
+    {
+        $this->db->pdo()->prepare(
+            'UPDATE users
+                SET mfa_failed_attempts = mfa_failed_attempts + 1,
+                    mfa_locked_until = IF(
+                        mfa_failed_attempts >= :max,
+                        DATE_ADD(UTC_TIMESTAMP(), INTERVAL :mins MINUTE),
+                        mfa_locked_until)
+              WHERE id = :id',
+        )->execute(['max' => $max, 'mins' => $lockMinutes, 'id' => $userId]);
+    }
+
+    public function resetMfaFailures(int $userId): void
+    {
+        $this->db->pdo()->prepare(
+            'UPDATE users SET mfa_failed_attempts = 0, mfa_locked_until = NULL WHERE id = ?',
+        )->execute([$userId]);
+    }
+
     public function touchLastLogin(int $userId, string $at): void
     {
         $this->db->pdo()->prepare('UPDATE users SET last_login_at = :at WHERE id = :id')
