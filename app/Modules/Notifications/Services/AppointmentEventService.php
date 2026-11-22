@@ -37,6 +37,7 @@ final class AppointmentEventService
     public function __construct(
         private readonly Database $db,
         private readonly UuidFactory $uuids,
+        private readonly NotificationPolicy $policy,
     ) {}
 
     /**
@@ -84,7 +85,7 @@ final class AppointmentEventService
         $payload = $this->payload($appointment, $event);
         foreach (['email' => 'customer_email_snapshot', 'sms' => 'customer_phone_snapshot'] as $channel => $column) {
             $recipient = trim((string) ($appointment[$column] ?? ''));
-            if ($recipient === '') {
+            if ($recipient === '' || !$this->policy->allows((int) $appointment['tenant_id'], $channel, $event)) {
                 continue;
             }
             $this->db->pdo()->prepare(
@@ -166,14 +167,27 @@ final class AppointmentEventService
             'status' => (string) $appointment['status'],
             'start_at' => $this->localStart($appointment),
             'customer_name' => (string) ($appointment['customer_name_snapshot'] ?? ''),
+            'business_name' => (string) ($appointment['business_name'] ?? ''),
+            'branch_name' => (string) ($appointment['branch_name'] ?? ''),
         ], JSON_THROW_ON_ERROR);
     }
 
-    /** @param array<string, mixed> $appointment */
+    /**
+     * Start time in the branch's timezone (falls back to the tenant's, per
+     * booking-engine.md §3). Runs inside the booking transaction, so an
+     * unparseable zone degrades to UTC instead of failing the booking.
+     * @param array<string, mixed> $appointment
+     */
     private function localStart(array $appointment): string
     {
+        try {
+            $tz = new \DateTimeZone((string) ($appointment['timezone'] ?: 'UTC'));
+        } catch (\Exception) {
+            $tz = new \DateTimeZone('UTC');
+        }
+
         return (new \DateTimeImmutable((string) $appointment['start_at'], new \DateTimeZone('UTC')))
-            ->setTimezone(new \DateTimeZone((string) ($appointment['timezone'] ?: 'UTC')))
+            ->setTimezone($tz)
             ->format('j M Y H:i');
     }
 
@@ -183,9 +197,11 @@ final class AppointmentEventService
         $stmt = $this->db->pdo()->prepare(
             'SELECT a.id, a.tenant_id, a.uuid, a.reference, a.status, a.version, a.start_at,
                     a.customer_name_snapshot, a.customer_email_snapshot, a.customer_phone_snapshot,
-                    t.timezone
+                    t.name AS business_name, b.name AS branch_name,
+                    COALESCE(b.timezone, t.timezone) AS timezone
                FROM appointments a
                JOIN tenants t ON t.id = a.tenant_id
+               JOIN branches b ON b.tenant_id = a.tenant_id AND b.id = a.branch_id
               WHERE a.tenant_id = :t AND a.id = :a',
         );
         $stmt->execute(['t' => $tenantId, 'a' => $appointmentId]);

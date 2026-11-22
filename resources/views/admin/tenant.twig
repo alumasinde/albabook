@@ -11,6 +11,10 @@
   {% include 'components/feedback/alert.twig' with { tone: 'success', message: 'Subscription cancelled — plan features no longer apply.', dismissible: true } only %}
 {% elseif status == 'override_saved' %}
   {% include 'components/feedback/alert.twig' with { tone: 'success', message: 'Feature override saved.', dismissible: true } only %}
+{% elseif status == 'transition_invalid' %}
+  {% include 'components/feedback/alert.twig' with { tone: 'danger', message: 'That status change is not allowed from the business\'s current status.', dismissible: true } only %}
+{% elseif status == 'override_invalid_date' %}
+  {% include 'components/feedback/alert.twig' with { tone: 'danger', message: 'Enter a valid expiry date, or leave it empty for no expiry.', dismissible: true } only %}
 {% elseif status == 'override_cleared' %}
   {% include 'components/feedback/alert.twig' with { tone: 'success', message: 'Feature override removed — the plan rule applies again.', dismissible: true } only %}
 {% endif %}
@@ -29,19 +33,23 @@
     </dl>
 
     {% if canTenants %}
-      <form method="post" action="/tenants/{{ tenant.uuid }}/status" class="mt-5 flex items-end gap-3 border-t border-line pt-4">
-        {{ csrf_field() }}
-        <div class="flex-1">
-          <label for="tenant-status" class="form-label">Lifecycle status</label>
-          <select id="tenant-status" name="status" class="form-select">
-            {% for s in statuses %}
-              <option value="{{ s }}" {{ s == tenant.status ? 'selected' }}>{{ s }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <button type="submit" class="btn btn-secondary btn-sm">Update</button>
-      </form>
-      <p class="mt-2 text-xs text-muted">Status decides what the business can do — see the tenant status policy. Approving moves a pending business to <code>trial</code> or <code>active</code>.</p>
+      {% if statuses is empty %}
+        <p class="mt-5 border-t border-line pt-4 text-sm text-muted"><code>{{ tenant.status }}</code> is a final status — no further lifecycle changes are possible.</p>
+      {% else %}
+        <form method="post" action="/tenants/{{ tenant.uuid }}/status" class="mt-5 flex items-end gap-3 border-t border-line pt-4">
+          {{ csrf_field() }}
+          <div class="flex-1">
+            <label for="tenant-status" class="form-label">Move from <code>{{ tenant.status }}</code> to</label>
+            <select id="tenant-status" name="status" class="form-select">
+              {% for s in statuses %}
+                <option value="{{ s }}">{{ s }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-secondary btn-sm">Update</button>
+        </form>
+        <p class="mt-2 text-xs text-muted">Status decides what the business can do — see the tenant status policy. Approving moves a pending business to <code>trial</code> or <code>active</code>.</p>
+      {% endif %}
     {% endif %}
   </section>
 

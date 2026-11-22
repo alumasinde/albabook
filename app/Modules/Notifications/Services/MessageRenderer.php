@@ -14,20 +14,43 @@ use App\Core\Database\Database;
  */
 final class MessageRenderer
 {
-    private const FALLBACK_SUBJECT = 'AlbaBook';
+    /** Used only when an event has no subject of its own. */
+    private const FALLBACK_SUBJECT = 'Update from {business_name}';
 
+    /**
+     * Built-in bodies. Every message names the business up front — a
+     * customer may book with several businesses on AlbaBook and an SMS
+     * sender ID alone does not say which one this is.
+     */
     private const FALLBACKS = [
-        'payment_update' => 'Payment update for your appointment {reference}: paid {paid_amount} of {total_amount}.',
-        'booking_received' => 'We received your booking {reference} for {start_at}. You will get a confirmation shortly.',
-        'booking_confirmed' => 'Your booking {reference} is confirmed for {start_at}.',
-        'booking_rejected' => 'Your booking {reference} could not be accommodated. Please pick another time.',
-        'appointment_reminder_24h' => 'Reminder: your appointment {reference} is tomorrow at {start_at}.',
-        'appointment_reminder_2h' => 'Reminder: your appointment {reference} starts soon ({start_at}).',
-        'appointment_cancelled' => 'Your appointment {reference} has been cancelled.',
-        'appointment_expired' => 'Your booking {reference} expired before it could be confirmed.',
-        'appointment_completed' => 'Thank you for your visit! Your receipt for {reference}: {receipt_url}',
-        'appointment_rescheduled' => 'Your appointment {reference} was moved to {start_at}.',
-        'manage_link' => 'Manage your booking {reference}: {manage_url}',
+        'payment_update' => '{business_name}: payment update for appointment {reference}: paid {paid_amount} of {total_amount}.',
+        'booking_received' => '{business_name}: we received your booking {reference} for {start_at}. You will get a confirmation shortly.',
+        'booking_confirmed' => '{business_name}: your booking {reference} is confirmed for {start_at}.',
+        'booking_rejected' => '{business_name}: your booking {reference} could not be accommodated. Please pick another time.',
+        'appointment_reminder_24h' => '{business_name}: reminder, your appointment {reference} is tomorrow at {start_at}.',
+        'appointment_reminder_2h' => '{business_name}: reminder, your appointment {reference} starts soon ({start_at}).',
+        'appointment_cancelled' => '{business_name}: your appointment {reference} has been cancelled.',
+        'appointment_expired' => '{business_name}: your booking {reference} expired before it could be confirmed.',
+        // No receipt link: the only receipt page is the staff-only
+        // /appointments/{uuid}/receipt, which customers cannot open.
+        'appointment_completed' => 'Thank you for visiting {business_name}! Your appointment {reference} is complete.',
+        'appointment_rescheduled' => '{business_name}: your appointment {reference} was moved to {start_at}.',
+        'manage_link' => '{business_name}: manage your booking {reference}: {manage_url}',
+    ];
+
+    /** Built-in email subjects per event (templates may override). */
+    private const SUBJECTS = [
+        'payment_update' => 'Payment received — {business_name}',
+        'booking_received' => 'Booking received — {business_name}',
+        'booking_confirmed' => 'Booking confirmed — {business_name}',
+        'booking_rejected' => 'Booking not accepted — {business_name}',
+        'appointment_reminder_24h' => 'Reminder: your appointment tomorrow — {business_name}',
+        'appointment_reminder_2h' => 'Reminder: your appointment today — {business_name}',
+        'appointment_cancelled' => 'Appointment cancelled — {business_name}',
+        'appointment_expired' => 'Booking expired — {business_name}',
+        'appointment_completed' => 'Thank you for your visit — {business_name}',
+        'appointment_rescheduled' => 'Appointment moved — {business_name}',
+        'manage_link' => 'Manage your booking — {business_name}',
     ];
 
     public function __construct(private readonly Database $db) {}
@@ -40,15 +63,31 @@ final class MessageRenderer
     {
         $event = (string) ($payload['event'] ?? '');
         $template = $this->template($tenantId, $channel, $event, $locale);
-        $subject = $template['subject'] ?? self::FALLBACK_SUBJECT;
-        $body = $template['body'] ?? self::FALLBACKS[$event] ?? 'Update for your booking {reference}.';
+        $subject = ($template['subject'] ?? '') !== ''
+            ? (string) $template['subject']
+            : (self::SUBJECTS[$event] ?? self::FALLBACK_SUBJECT);
+        $body = $template['body'] ?? self::FALLBACKS[$event] ?? '{business_name}: update for your booking {reference}.';
 
         $values = $this->values($payload);
+        // Rows queued before payloads carried the name (and till receipts)
+        // still get it, so no message goes out with a blank business.
+        if (($values['business_name'] ?? '') === '') {
+            $values['business_name'] = $this->businessName($tenantId);
+        }
 
         return [
             'subject' => $this->interpolate((string) $subject, $values),
             'body' => $this->interpolate($body, $values),
         ];
+    }
+
+    private function businessName(int $tenantId): string
+    {
+        $stmt = $this->db->pdo()->prepare('SELECT name FROM tenants WHERE id = :t');
+        $stmt->execute(['t' => $tenantId]);
+        $name = $stmt->fetchColumn();
+
+        return is_string($name) && $name !== '' ? $name : 'AlbaBook';
     }
 
     /** @return array{subject: ?string, body: string}|null */
@@ -101,13 +140,20 @@ final class MessageRenderer
         return $values;
     }
 
-    /** @param array<string, string> $values */
+    /**
+     * Unknown placeholders render as empty text rather than leaking the raw
+     * "{name}" to customers (e.g. a tenant template using a key the payload
+     * does not carry); whitespace left behind is collapsed.
+     * @param array<string, string> $values
+     */
     private function interpolate(string $text, array $values): string
     {
-        return (string) preg_replace_callback(
+        $out = (string) preg_replace_callback(
             '/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}|\{\s*([a-zA-Z0-9_]+)\s*\}/',
-            static fn (array $m): string => $values[$m[1] !== '' ? $m[1] : $m[2]] ?? $m[0],
+            static fn (array $m): string => $values[($m[2] ?? '') !== '' ? $m[2] : $m[1]] ?? '',
             $text,
         );
+
+        return trim((string) preg_replace('/[ \t]{2,}/', ' ', $out));
     }
 }

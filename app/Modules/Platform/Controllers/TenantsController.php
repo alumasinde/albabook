@@ -15,6 +15,7 @@ use App\Shared\Audit\AuditAction;
 use App\Shared\Audit\AuditEntry;
 use App\Shared\Audit\AuditLogger;
 use App\Shared\Support\UuidFactory;
+use App\Tenancy\TenantLifecycleService;
 use App\Tenancy\TenantRepository;
 
 /**
@@ -33,6 +34,7 @@ final class TenantsController
         private readonly PlatformAuthContext $auth,
         private readonly AuditLogger $audit,
         private readonly View $view,
+        private readonly TenantLifecycleService $lifecycle,
     ) {}
 
     /** Tenant detail: identity, subscription, lifecycle actions, feature overrides.
@@ -52,7 +54,8 @@ final class TenantsController
             'plans' => $this->features->plans(),
             'overrides' => $this->features->overrides($tenantId),
             'featureKeys' => $this->features->featureKeys(),
-            'statuses' => self::STATUSES,
+            // Only moves the lifecycle allows from the current status.
+            'statuses' => TenantLifecycleService::allowedFrom((string) $tenant['status']),
             'canBilling' => $this->auth->can(PlatformPermission::BillingManage->value),
             'canTenants' => $this->auth->can(PlatformPermission::TenantsManage->value),
             'status' => $request->query('status', ''),
@@ -72,22 +75,18 @@ final class TenantsController
         if ($tenant === null || !in_array($status, self::STATUSES, true)) {
             return Response::redirect('/dashboard?status=tenant_invalid', 303);
         }
+        if ($status === (string) $tenant['status']) {
+            return Response::redirect('/tenants/' . $tenant['uuid'], 303);
+        }
 
-        $before = (string) $tenant['status'];
-        $this->tenants->setStatus((int) $tenant['id'], $status);
-        $this->audit->record(new AuditEntry(
-            action: AuditAction::TENANT_STATUS_CHANGED,
-            tenantId: (int) $tenant['id'],
-            actorType: 'platform_user',
-            actorId: $this->auth->user?->id,
-            targetType: 'tenant',
-            targetId: (string) $tenant['uuid'],
-            before: ['status' => $before],
-            after: ['status' => $status],
-            request: $request,
-        ));
+        // Graph check, update, audit and outbox event happen together in
+        // TenantLifecycleService (multi-tenancy.md §3).
+        $moved = $this->lifecycle->transition((int) $tenant['id'], $status, $this->auth->user?->id, $request);
 
-        return Response::redirect('/tenants/' . $tenant['uuid'] . '?status=updated', 303);
+        return Response::redirect(
+            '/tenants/' . $tenant['uuid'] . '?status=' . ($moved ? 'updated' : 'transition_invalid'),
+            303,
+        );
     }
 
     /** Create/update a per-tenant feature override (beats the plan until expiry).
@@ -104,8 +103,19 @@ final class TenantsController
         $state = (string) $request->input('state', 'enabled');
         $limitRaw = trim((string) $request->input('limit', ''));
         $limit = $limitRaw === '' ? null : max(0, (int) $limitRaw);
+        // A strict Y-m-d calendar date (the form's <input type="date">);
+        // anything else would reach MySQL as an invalid DATETIME and 500.
         $expiresRaw = trim((string) $request->input('expires_at', ''));
-        $expiresAt = $expiresRaw === '' ? null : $expiresRaw . ' 23:59:59';
+        $expiresAt = null;
+        if ($expiresRaw !== '') {
+            $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $expiresRaw, new \DateTimeZone('UTC'));
+            $errors = \DateTimeImmutable::getLastErrors();
+            if ($date === false || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))
+                || $date->format('Y-m-d') !== $expiresRaw || (int) $date->format('Y') > 2100) {
+                return Response::redirect('/tenants/' . $tenant['uuid'] . '?status=override_invalid_date', 303);
+            }
+            $expiresAt = $expiresRaw . ' 23:59:59';
+        }
         $enabled = $state !== 'disabled';
 
         $this->features->setOverride((int) $tenant['id'], $feature, $enabled, $enabled ? $limit : null, $expiresAt);

@@ -18,6 +18,7 @@ final class ReminderService
     public function __construct(
         private readonly Database $db,
         private readonly UuidFactory $uuids,
+        private readonly NotificationPolicy $policy,
     ) {}
 
     /** Process up to $limit due reminders; returns the number claimed. */
@@ -79,11 +80,14 @@ final class ReminderService
             'appointment_uuid' => (string) $appointment['uuid'],
             'reference' => (string) $appointment['reference'],
             'start_at' => $this->localStart($appointment),
+            'business_name' => (string) $appointment['business_name'],
+            'branch_name' => (string) $appointment['branch_name'],
         ], JSON_THROW_ON_ERROR);
 
         $queued = 0;
         foreach (['email' => $appointment['customer_email'], 'sms' => $appointment['customer_phone']] as $channel => $recipient) {
-            if ($recipient === null || $recipient === '') {
+            if ($recipient === null || $recipient === ''
+                || !$this->policy->allows((int) $row['tenant_id'], $channel, (string) $row['kind'])) {
                 continue;
             }
             $this->db->pdo()->prepare(
@@ -108,10 +112,13 @@ final class ReminderService
     {
         $stmt = $this->db->pdo()->prepare(
             'SELECT a.id, a.uuid, a.reference, a.status, a.version, a.start_at,
-                    t.timezone, a.customer_email_snapshot AS customer_email,
+                    COALESCE(b.timezone, t.timezone) AS timezone,
+                    t.name AS business_name, b.name AS branch_name,
+                    a.customer_email_snapshot AS customer_email,
                     a.customer_phone_snapshot AS customer_phone
                FROM appointments a
                JOIN tenants t ON t.id = a.tenant_id
+               JOIN branches b ON b.tenant_id = a.tenant_id AND b.id = a.branch_id
               WHERE a.tenant_id = :t AND a.id = :a',
         );
         $stmt->execute(['t' => $tenantId, 'a' => $appointmentId]);
@@ -123,7 +130,12 @@ final class ReminderService
     /** @param array<string, mixed> $appointment */
     private function localStart(array $appointment): string
     {
-        $tz = new \DateTimeZone((string) ($appointment['timezone'] ?: 'UTC'));
+        // Branch timezone, falling back to the tenant's (booking-engine.md §3).
+        try {
+            $tz = new \DateTimeZone((string) ($appointment['timezone'] ?: 'UTC'));
+        } catch (\Exception) {
+            $tz = new \DateTimeZone('UTC');
+        }
 
         return (new \DateTimeImmutable((string) $appointment['start_at'], new \DateTimeZone('UTC')))
             ->setTimezone($tz)

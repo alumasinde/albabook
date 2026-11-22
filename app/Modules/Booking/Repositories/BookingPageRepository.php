@@ -376,17 +376,17 @@ final class BookingPageRepository
                                   AND so.local_date = :ldate AND so.is_closed = 1)
                AND (
                    NOT EXISTS (SELECT 1 FROM resource_schedules rs
-                                WHERE rs.tenant_id = :t3 AND rs.resource_id = r.id AND rs.weekday = :wd)
+                                WHERE rs.tenant_id = :t3 AND rs.resource_id = r.id AND rs.weekday = :wd1)
                    OR EXISTS (SELECT 1 FROM resource_schedules rs
-                               WHERE rs.tenant_id = :t4 AND rs.resource_id = r.id AND rs.weekday = :wd
-                                 AND rs.start_time <= :lstart AND rs.end_time >= :lend)
+                               WHERE rs.tenant_id = :t4 AND rs.resource_id = r.id AND rs.weekday = :wd2
+                                 AND rs.starts_at <= :lstart AND rs.ends_at >= :lend)
                )
                AND (
                  (SELECT COALESCE(SUM(ar.quantity), 0) FROM appointment_resources ar
                       JOIN appointment_items ai ON ai.tenant_id = ar.tenant_id AND ai.id = ar.appointment_item_id
                       JOIN appointments a ON a.tenant_id = ai.tenant_id AND a.id = ai.appointment_id
                      WHERE ar.tenant_id = :t1 AND ar.resource_id = r.id
-                       AND ai.occupied_start_at < :to1 AND ai.occupied_end_at > :from1
+                       AND ar.occupied_start_at < :to1 AND ar.occupied_end_at > :from1
                        AND a.status IN ('pending', 'confirmed', 'checked_in', 'in_service'))
                  + (SELECT COUNT(*) FROM booking_hold_resources hr
                       JOIN booking_holds h ON h.tenant_id = hr.tenant_id AND h.id = hr.hold_id
@@ -400,7 +400,7 @@ final class BookingPageRepository
         $stmt->execute([
             't' => $tenantId, 'b' => $branchId, 'rt' => $typeId,
             't3' => $tenantId, 't4' => $tenantId,
-            'wd' => $weekday, 'lstart' => $localStart, 'lend' => $localEnd,
+            'wd1' => $weekday, 'wd2' => $weekday, 'lstart' => $localStart, 'lend' => $localEnd,
             't1' => $tenantId, 'from1' => $fromUtc, 'to1' => $toUtc,
             't2' => $tenantId, 'from2' => $fromUtc, 'to2' => $toUtc,
             't5' => $tenantId, 'to3' => $toUtc, 'from3' => $fromUtc,

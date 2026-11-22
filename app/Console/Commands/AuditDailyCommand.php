@@ -7,6 +7,7 @@ namespace App\Console\Commands;
 use App\Console\Command;
 use App\Console\Output;
 use App\Core\Database\Database;
+use App\Modules\Notifications\Services\AppointmentEventService;
 use App\Shared\Time\DateTimeService;
 
 /**
@@ -28,6 +29,7 @@ final class AuditDailyCommand implements Command
     public function __construct(
         private readonly Database $db,
         private readonly DateTimeService $dates,
+        private readonly AppointmentEventService $events,
     ) {}
 
     public function name(): string
@@ -101,23 +103,33 @@ final class AuditDailyCommand implements Command
                 if ($to === null) {
                     continue; // checked_in / in_service need a human — till may be open
                 }
-                $newVersion = $this->appointmentsRepoUpdate($tenantId, (int) $row['id'], $to, (int) $row['version']);
-                if ($newVersion === null) {
-                    continue; // raced with a staff action — next run picks it up
+                // One transaction per appointment: status, history row and
+                // side effects (customer notice, appointment.* outbox event,
+                // reminder cancellation) land together or not at all.
+                $applied = $this->db->transaction(function () use ($tenantId, $row, $to): bool {
+                    $newVersion = $this->appointmentsRepoUpdate($tenantId, (int) $row['id'], $to, (int) $row['version']);
+                    if ($newVersion === null) {
+                        return false; // raced with a staff action — next run picks it up
+                    }
+                    $this->db->pdo()->prepare(
+                        'INSERT INTO appointment_events (tenant_id, appointment_id, event_type, actor_type, actor_id, from_status, to_status, reason)
+                         VALUES (:t, :a, :type, :actor, NULL, :from, :to, :reason)',
+                    )->execute([
+                        't' => $tenantId,
+                        'a' => (int) $row['id'],
+                        'type' => 'status.' . $to,
+                        'actor' => 'system',
+                        'from' => $row['status'],
+                        'to' => $to,
+                        'reason' => 'night audit',
+                    ]);
+                    $this->events->onTransitioned($tenantId, (int) $row['id'], $to);
+
+                    return true;
+                });
+                if ($applied) {
+                    $totalApplied++;
                 }
-                $this->db->pdo()->prepare(
-                    'INSERT INTO appointment_events (tenant_id, appointment_id, event_type, actor_type, actor_id, from_status, to_status, reason)
-                     VALUES (:t, :a, :type, :actor, NULL, :from, :to, :reason)',
-                )->execute([
-                    't' => $tenantId,
-                    'a' => (int) $row['id'],
-                    'type' => 'status.' . $to,
-                    'actor' => 'platform_user',
-                    'from' => $row['status'],
-                    'to' => $to,
-                    'reason' => 'night audit',
-                ]);
-                $totalApplied++;
             }
         }
 

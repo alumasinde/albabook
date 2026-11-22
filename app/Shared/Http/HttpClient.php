@@ -108,12 +108,80 @@ final class HttpClient
         return [$host, $port, $ipv4[0] ?? $addresses[0]];
     }
 
+    /**
+     * Non-global IPv4 ranges (RFC 6890 "Global: false" plus multicast and
+     * broadcast). Checked explicitly on top of FILTER_FLAG_GLOBAL_RANGE
+     * because that flag's coverage has varied across PHP releases.
+     */
+    private const BLOCKED_V4 = [
+        '0.0.0.0/8', '10.0.0.0/8', '100.64.0.0/10', '127.0.0.0/8',
+        '169.254.0.0/16', '172.16.0.0/12', '192.0.0.0/24', '192.0.2.0/24',
+        '192.88.99.0/24', '192.168.0.0/16', '198.18.0.0/15', '198.51.100.0/24',
+        '203.0.113.0/24', '224.0.0.0/4', '240.0.0.0/4', '255.255.255.255/32',
+    ];
+
+    /**
+     * True only for globally routable addresses. IPv6 forms that embed an
+     * IPv4 address (IPv4-mapped ::ffff:a.b.c.d, IPv4-compatible ::a.b.c.d,
+     * NAT64 64:ff9b::/96, 6to4 2002::/16) are judged by that embedded
+     * address, so ::ffff:127.0.0.1 or 2002:7f00:1:: cannot reach loopback.
+     */
     private static function isPublicIp(string $ip): bool
     {
+        $packed = @inet_pton($ip);
+        if ($packed === false) {
+            return false;
+        }
+
+        if (strlen($packed) === 16) {
+            $embedded = self::embeddedIpv4($packed);
+            if ($embedded !== null) {
+                return self::isPublicIp($embedded);
+            }
+        } else {
+            foreach (self::BLOCKED_V4 as $cidr) {
+                if (self::inV4Cidr($packed, $cidr)) {
+                    return false;
+                }
+            }
+        }
+
         return filter_var(
             $ip,
             FILTER_VALIDATE_IP,
-            FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE,
+            FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE | FILTER_FLAG_GLOBAL_RANGE,
         ) !== false;
+    }
+
+    /** The IPv4 address carried inside an IPv6 address, if any. */
+    private static function embeddedIpv4(string $packed): ?string
+    {
+        $prefix12 = substr($packed, 0, 12);
+        // ::ffff:a.b.c.d (mapped) and ::a.b.c.d (compatible, deprecated);
+        // :: and ::1 themselves are left to the global-range filter.
+        if ($prefix12 === str_repeat("\0", 10) . "\xff\xff"
+            || ($prefix12 === str_repeat("\0", 12) && substr($packed, 12) !== "\0\0\0\0" && substr($packed, 12) !== "\0\0\0\1")) {
+            return (string) inet_ntop(substr($packed, 12));
+        }
+        // NAT64 well-known prefix 64:ff9b::/96.
+        if ($prefix12 === "\x00\x64\xff\x9b" . str_repeat("\0", 8)) {
+            return (string) inet_ntop(substr($packed, 12));
+        }
+        // 6to4 2002:AABB:CCDD::/48 carries AA.BB.CC.DD.
+        if (substr($packed, 0, 2) === "\x20\x02") {
+            return (string) inet_ntop(substr($packed, 2, 4));
+        }
+
+        return null;
+    }
+
+    private static function inV4Cidr(string $packed, string $cidr): bool
+    {
+        [$net, $bits] = explode('/', $cidr);
+        $mask = $bits === '0' ? 0 : (~0 << (32 - (int) $bits)) & 0xFFFFFFFF;
+        $ip = unpack('N', $packed)[1];
+        $base = unpack('N', (string) inet_pton($net))[1];
+
+        return ($ip & $mask) === ($base & $mask);
     }
 }

@@ -10,6 +10,7 @@ use App\Core\Http\Response;
 use App\Modules\Appointments\Repositories\AppointmentRepository;
 use App\Modules\Appointments\Services\TransitionException;
 use App\Modules\Auth\Context\MembershipContext;
+use App\Modules\Notifications\Services\NotificationPolicy;
 use App\Modules\Till\Repositories\TillRepository;
 use App\Shared\Http\ApiResponse;
 use App\Shared\Support\UuidFactory;
@@ -33,6 +34,7 @@ final class TillApiController
         private readonly TillRepository $till,
         private readonly Database $db,
         private readonly UuidFactory $uuids,
+        private readonly NotificationPolicy $notificationPolicy,
         private readonly AppointmentRepository $appointments,
     ) {}
 
@@ -611,10 +613,10 @@ final class TillApiController
         $phone = trim((string) ($appointment['customer_phone_snapshot'] ?? ''));
         $email = trim((string) ($appointment['customer_email_snapshot'] ?? ''));
 
-        if ($phone !== '') {
+        if ($phone !== '' && $this->notificationPolicy->allows($tenantId, 'sms', 'payment_update')) {
             $this->till->enqueueReceipt($tenantId, $this->uuids->generate(), (int) $appointment['id'], 'sms', $phone, $eventPayload);
         }
-        if ($email !== '') {
+        if ($email !== '' && $this->notificationPolicy->allows($tenantId, 'email', 'payment_update')) {
             $this->till->enqueueReceipt($tenantId, $this->uuids->generate(), (int) $appointment['id'], 'email', $email, $eventPayload);
         }
 
