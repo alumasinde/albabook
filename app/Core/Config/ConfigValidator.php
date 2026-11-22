@@ -36,7 +36,7 @@ final class ConfigValidator
         }
 
         $hosts = $config->array('app.hosts');
-        foreach (['app' => 'APP_HOST_TENANT', 'book' => 'APP_HOST_BOOKING', 'api' => 'APP_HOST_API', 'admin' => 'APP_HOST_ADMIN'] as $group => $var) {
+        foreach (['app' => 'APP_HOST_TENANT', 'book' => 'APP_HOST_BOOKING', 'api' => 'APP_HOST_API', 'admin' => 'APP_HOST_ADMIN', 'site' => 'APP_HOST_MARKETING'] as $group => $var) {
             $host = $hosts[$group] ?? '';
             if (!is_string($host) || !self::isHostname($host)) {
                 $errors[] = "{$var} must be a valid lowercase hostname without scheme or port.";
@@ -44,7 +44,7 @@ final class ConfigValidator
         }
         $hostValues = array_filter($hosts, 'is_string');
         if (count($hostValues) !== count(array_unique($hostValues))) {
-            $errors[] = 'APP_HOST_TENANT, APP_HOST_BOOKING, APP_HOST_API and APP_HOST_ADMIN must all differ.';
+            $errors[] = 'APP_HOST_TENANT, APP_HOST_BOOKING, APP_HOST_API, APP_HOST_ADMIN and APP_HOST_MARKETING must all differ.';
         }
 
         foreach (['host' => 'DB_HOST', 'database' => 'DB_DATABASE', 'username' => 'DB_USERNAME'] as $key => $var) {

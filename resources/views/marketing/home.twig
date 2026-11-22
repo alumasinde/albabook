@@ -1,0 +1,185 @@
+{% extends 'layouts/marketing.twig' %}
+
+{% block title %}{{ app_name }} · Online booking & payments for salons, spas and clinics{% endblock %}
+
+{% block content %}
+<div data-page="marketing">
+
+{# ------------------------------------------------------------------ Hero #}
+<section class="hero">
+  <div class="hero-glow" aria-hidden="true"></div>
+  <div class="relative mx-auto grid max-w-7xl items-center gap-12 px-4 pb-20 pt-14 sm:px-6 lg:grid-cols-[1fr_1.1fr] lg:px-8 lg:pb-28 lg:pt-20">
+    <div class="reveal">
+      <span class="hero-eyebrow"><span class="badge-dot bg-success"></span> Built for appointment businesses in Kenya</span>
+      <h1 class="mt-6 text-4xl font-bold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl">
+        Your calendar, full.<br><span class="hero-accent">Your no-shows, gone.</span>
+      </h1>
+      <p class="mt-6 max-w-xl text-lg leading-relaxed text-white/70">
+        {{ app_name }} gives your salon, barbershop, spa or clinic a booking page that works 24/7, a calendar your whole team shares, automatic reminders, and a till that takes M-Pesa, card and cash.
+      </p>
+      <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+        <a href="{{ signup_url }}" class="btn btn-lg bg-white text-primary-strong hover:bg-primary-soft" data-no-spa>Start free <i class="fa-solid fa-arrow-right text-sm" aria-hidden="true"></i></a>
+        <a href="/contact" class="btn btn-lg border border-white/25 text-white hover:bg-white/10">Book a demo</a>
+      </div>
+      <ul class="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-white/60">
+        <li><i class="fa-solid fa-check mr-1.5 text-success" aria-hidden="true"></i>Set up in an afternoon</li>
+        <li><i class="fa-solid fa-check mr-1.5 text-success" aria-hidden="true"></i>English & Kiswahili booking</li>
+        <li><i class="fa-solid fa-check mr-1.5 text-success" aria-hidden="true"></i>Prices in KES</li>
+      </ul>
+    </div>
+    <div class="reveal reveal-delay-1 lg:pl-6">
+      {% include 'marketing/_dashboard-mockup.twig' only %}
+    </div>
+  </div>
+</section>
+
+{# ------------------------------------------------------------ Industries #}
+<section class="border-b border-line bg-white">
+  <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <p class="text-center text-xs font-semibold uppercase tracking-[0.18em] text-muted">Made for businesses that run on appointments</p>
+    <ul class="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+      {% for i in [
+        { icon: 'fa-scissors', label: 'Hair salons' },
+        { icon: 'fa-user-tie', label: 'Barbershops' },
+        { icon: 'fa-spa', label: 'Spas & wellness' },
+        { icon: 'fa-hand-sparkles', label: 'Nail & beauty' },
+        { icon: 'fa-stethoscope', label: 'Clinics & therapy' },
+        { icon: 'fa-dumbbell', label: 'Fitness studios' },
+      ] %}
+        <li class="industry-chip"><i class="fa-solid {{ i.icon }} text-primary" aria-hidden="true"></i>{{ i.label }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
+
+{# -------------------------------------------------------------- Features #}
+<section class="mk-section">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="mk-heading reveal">
+      <span class="mk-eyebrow">Everything in one place</span>
+      <h2 class="mk-title">Run the whole day from one screen</h2>
+      <p class="mk-lead">From the first booking to the final payment, {{ app_name }} keeps your front desk, your team and your customers on the same page.</p>
+    </div>
+    <div class="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {% for f in [
+        { icon: 'fa-globe', title: 'Your own booking page', body: 'Customers pick a service, a stylist and a time that is actually free — on their phone, at midnight, in English or Kiswahili.' },
+        { icon: 'fa-calendar-days', title: 'A calendar the team shares', body: 'Staff schedules, breaks, leave and closed days in one view. Double-bookings are blocked, rooms and chairs included.' },
+        { icon: 'fa-bell', title: 'Reminders that cut no-shows', body: 'Confirmations and reminders by SMS, WhatsApp and email go out on their own — 24 hours and 2 hours before each visit.' },
+        { icon: 'fa-cash-register', title: 'A till built for Kenya', body: 'Check out with M-Pesa, Airtel Money, card or cash. Split payments, tips, discounts and refunds, with a clean receipt.' },
+        { icon: 'fa-code-branch', title: 'Many branches, one account', body: 'Give each location its own hours and staff. Managers see only their branch; owners see everything.' },
+        { icon: 'fa-chart-line', title: 'Reports you will actually read', body: 'Sales, bookings, top services, no-shows and room utilisation — exportable whenever your accountant asks.' },
+      ] %}
+        <article class="feature-card reveal">
+          <span class="feature-icon" aria-hidden="true"><i class="fa-solid {{ f.icon }}"></i></span>
+          <h3 class="mt-5 text-lg font-semibold text-ink">{{ f.title }}</h3>
+          <p class="mt-2 text-sm leading-relaxed text-muted">{{ f.body }}</p>
+        </article>
+      {% endfor %}
+    </div>
+    <p class="mt-10 text-center reveal">
+      <a href="/features" class="btn btn-secondary btn-md">See every feature <i class="fa-solid fa-arrow-right text-xs" aria-hidden="true"></i></a>
+    </p>
+  </div>
+</section>
+
+{# ------------------------------------------------------- Booking preview #}
+<section class="mk-section bg-surface">
+  <div class="mx-auto grid max-w-7xl items-center gap-14 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
+    <div class="order-2 reveal lg:order-1">
+      <div class="phone" aria-hidden="true">
+        <div class="phone-notch"></div>
+        <div class="px-4 pb-5 pt-8">
+          <div class="flex items-center gap-2"><span class="brand-mark h-7 w-7 text-xs">G</span><span class="text-sm font-semibold">Glow Studio</span></div>
+          <p class="mt-4 text-xs font-semibold uppercase tracking-wide text-muted">Step 3 of 4 · Pick a time</p>
+          <div class="mt-3 flex gap-1.5">
+            {% for d in [{ d: 'Mon', n: '8' }, { d: 'Tue', n: '9', on: true }, { d: 'Wed', n: '10' }, { d: 'Thu', n: '11' }, { d: 'Fri', n: '12' }] %}
+              <span class="phone-day{% if d.on ?? false %} is-active{% endif %}"><span class="text-[10px]">{{ d.d }}</span><span class="text-sm font-semibold">{{ d.n }}</span></span>
+            {% endfor %}
+          </div>
+          <div class="mt-4 grid grid-cols-3 gap-1.5">
+            {% for t in ['09:00', '09:30', '10:30', '11:00', '13:30', '14:00', '15:30', '16:00', '17:30'] %}
+              <span class="phone-slot{% if t == '10:30' %} is-active{% endif %}">{{ t }}</span>
+            {% endfor %}
+          </div>
+          <div class="mt-4 rounded-lg border border-line p-3 text-xs">
+            <p class="font-semibold text-ink">Knotless braids · 3 h</p>
+            <p class="mt-0.5 text-muted">with Amina · Tue 9 Dec, 10:30</p>
+            <p class="mt-2 font-semibold text-ink">KES 4,500</p>
+          </div>
+          <span class="btn btn-primary btn-md mt-4 w-full text-sm">Confirm booking</span>
+        </div>
+      </div>
+    </div>
+    <div class="order-1 reveal lg:order-2">
+      <span class="mk-eyebrow">For your customers</span>
+      <h2 class="mk-title text-left">Booking that feels like your brand</h2>
+      <p class="mt-4 text-lg leading-relaxed text-muted">Share one link on Instagram, WhatsApp or Google. Customers see only real free times, get an instant confirmation, and can manage their booking without calling you.</p>
+      <ul class="mt-8 space-y-4">
+        {% for p in [
+          { icon: 'fa-palette', t: 'Your colours, logo and photos', b: 'Pick a theme and publish — no designer needed.' },
+          { icon: 'fa-language', t: 'English and Kiswahili', b: 'Customers switch language in one tap.' },
+          { icon: 'fa-shield-halved', t: 'Live availability, never double-booked', b: 'Every booking checks staff, rooms and equipment at the moment it is made.' },
+        ] %}
+          <li class="flex gap-4">
+            <span class="step-number"><i class="fa-solid {{ p.icon }} text-xs" aria-hidden="true"></i></span>
+            <span><span class="font-semibold text-ink">{{ p.t }}</span><br><span class="text-sm text-muted">{{ p.b }}</span></span>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</section>
+
+{# ----------------------------------------------------------- How it works #}
+<section class="mk-section">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="mk-heading reveal">
+      <span class="mk-eyebrow">Up and running today</span>
+      <h2 class="mk-title">Three steps to your first online booking</h2>
+    </div>
+    <ol class="mt-14 grid gap-6 md:grid-cols-3">
+      {% for s in [
+        { n: '1', t: 'Add your services and team', b: 'Prices, durations and who does what. A short guided setup walks you through it.' },
+        { n: '2', t: 'Set your hours', b: 'Opening hours per branch, staff schedules and breaks. Mark holidays and leave once and those times are never offered.' },
+        { n: '3', t: 'Share your booking link', b: 'Publish your page and post the link. Bookings land straight in your calendar.' },
+      ] %}
+        <li class="step-card reveal">
+          <span class="step-badge">{{ s.n }}</span>
+          <h3 class="mt-5 text-lg font-semibold text-ink">{{ s.t }}</h3>
+          <p class="mt-2 text-sm leading-relaxed text-muted">{{ s.b }}</p>
+        </li>
+      {% endfor %}
+    </ol>
+  </div>
+</section>
+
+{# --------------------------------------------------------------- Pricing #}
+<section class="mk-section bg-surface" id="pricing">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="mk-heading reveal">
+      <span class="mk-eyebrow">Simple pricing</span>
+      <h2 class="mk-title">Plans that grow with your business</h2>
+      <p class="mk-lead">Pay monthly in shillings. Upgrade, downgrade or cancel whenever you like.</p>
+    </div>
+    <div class="mt-14">
+      {% include 'marketing/_plans.twig' with { plans: plans, signup_url: signup_url } only %}
+    </div>
+    <p class="mt-8 text-center text-sm text-muted reveal">Need a full comparison? <a href="/pricing" class="font-semibold text-primary-strong hover:underline">Compare plans</a></p>
+  </div>
+</section>
+
+{# ------------------------------------------------------------------- FAQ #}
+<section class="mk-section">
+  <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+    <div class="mk-heading reveal">
+      <span class="mk-eyebrow">Questions</span>
+      <h2 class="mk-title">Good to know</h2>
+    </div>
+    {% include 'marketing/_faq.twig' only %}
+  </div>
+</section>
+
+{% include 'marketing/_cta.twig' with { signup_url: signup_url } only %}
+
+</div>
+{% endblock %}

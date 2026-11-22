@@ -1,0 +1,16 @@
+{# FAQ accordion: native <details>, so it works with no JavaScript. #}
+<div class="mt-10 space-y-3">
+  {% for q in [
+    { q: 'Do my customers need to download an app?', a: 'No. Your booking page opens in any phone browser. Customers get a confirmation and a link to manage their booking.' },
+    { q: 'Which payment methods can I record?', a: 'M-Pesa, Airtel Money, card, bank transfer and cash at the till, including split payments, tips, discounts and refunds.' },
+    { q: 'How are reminders sent?', a: 'By email out of the box. Connect your SMS or WhatsApp provider account and reminders go out there too, 24 hours and 2 hours before each appointment. You choose which messages are on.' },
+    { q: 'Can I run more than one branch?', a: 'Yes. Each branch has its own hours, staff, rooms and timezone. You can limit managers to their own branch.' },
+    { q: 'Can I change plans later?', a: 'Any time. Plans are billed monthly in Kenyan shillings, and your data stays with you when you switch.' },
+    { q: 'Is my data safe?', a: 'Every business is fully separated, staff accounts support two-factor sign-in, and every sensitive action is recorded in an audit log.' },
+  ] %}
+    <details class="faq reveal">
+      <summary class="faq-q">{{ q.q }}<i class="fa-solid fa-plus faq-icon" aria-hidden="true"></i></summary>
+      <p class="faq-a">{{ q.a }}</p>
+    </details>
+  {% endfor %}
+</div>

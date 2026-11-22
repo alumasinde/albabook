@@ -517,6 +517,183 @@
   .receipt-brand {
     @apply text-center text-xs font-semibold uppercase tracking-widest text-muted;
   }
+
+  /* ---------------------------------------------------------- Marketing site (albabook.co.ke)
+     Same tokens as the dashboard: navy canvas for heroes, primary violet
+     accents, white cards. Decorative gradients only — text contrast stays on
+     solid navy/white. */
+  .site-header {
+    @apply sticky top-0 z-30 border-b border-line/70 bg-white/85 backdrop-blur-md;
+  }
+  .site-nav-link {
+    @apply rounded-lg px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface hover:text-ink;
+  }
+  .site-nav-link.is-active {
+    @apply bg-primary-soft text-primary-strong;
+  }
+  .site-drawer {
+    @apply fixed inset-y-0 right-0 z-40 flex w-72 translate-x-full flex-col bg-navy transition-transform duration-200 md:hidden;
+  }
+  .site-drawer.is-open {
+    @apply translate-x-0;
+  }
+  .site-footer {
+    @apply bg-navy;
+  }
+  .site-footer-link {
+    @apply text-white/60 transition-colors hover:text-white;
+  }
+
+  .hero {
+    @apply relative overflow-hidden bg-navy;
+  }
+  .hero-glow {
+    @apply pointer-events-none absolute inset-0;
+    background:
+      radial-gradient(60rem 30rem at 85% -10%, rgb(var(--color-primary) / 0.45), transparent 60%),
+      radial-gradient(40rem 24rem at -5% 110%, rgb(var(--color-success) / 0.18), transparent 60%);
+  }
+  .hero-glow::after {
+    content: '';
+    @apply absolute inset-0 opacity-[0.07];
+    background-image:
+      linear-gradient(to right, #fff 1px, transparent 1px),
+      linear-gradient(to bottom, #fff 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+  }
+  .hero-eyebrow {
+    @apply inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-xs font-semibold text-white/80;
+  }
+  .hero-accent {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(90deg, #c4bbff, #8fe3cf);
+  }
+  .hero-pill {
+    @apply rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/15 hover:text-white;
+  }
+
+  .mk-section { @apply py-20 lg:py-28; }
+  .mk-heading { @apply mx-auto max-w-2xl text-center; }
+  .mk-eyebrow { @apply text-sm font-semibold uppercase tracking-[0.16em] text-primary-strong; }
+  .mk-title { @apply mt-3 text-3xl font-bold tracking-tight text-ink sm:text-4xl; }
+  .mk-lead { @apply mt-4 text-lg leading-relaxed text-muted; }
+
+  .industry-chip {
+    @apply flex items-center justify-center gap-2 rounded-xl border border-line px-3 py-3 text-sm font-medium text-ink;
+  }
+  .feature-card {
+    @apply card p-6 transition duration-200 hover:-translate-y-1 hover:border-primary/30 hover:shadow-lg;
+  }
+  .feature-icon {
+    @apply inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary-soft text-lg text-primary-strong;
+  }
+  .feature-visual {
+    @apply rounded-2xl border border-line bg-gradient-to-br from-primary-soft via-white to-success-soft p-8 shadow-card;
+  }
+  .feature-visual-icon {
+    @apply inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-navy text-2xl text-white shadow-lg;
+  }
+  .step-card {
+    @apply card relative p-6;
+  }
+  .step-badge {
+    @apply inline-flex h-10 w-10 items-center justify-center rounded-full bg-navy text-sm font-bold text-white ring-4 ring-primary-soft;
+  }
+
+  /* Product mockup (hero) */
+  .mockup {
+    @apply overflow-hidden rounded-2xl border border-white/10 bg-white shadow-2xl ring-1 ring-black/5;
+    transform: perspective(1600px) rotateY(-6deg) rotateX(2deg);
+  }
+  .mockup-chrome {
+    @apply flex items-center gap-1.5 border-b border-line bg-surface px-3 py-2;
+  }
+  .mockup-dot { @apply h-2.5 w-2.5 rounded-full; }
+  .mockup-url {
+    @apply ml-3 flex-1 truncate rounded-md bg-white px-2 py-0.5 text-[10px] text-muted;
+  }
+  .mockup-sidebar {
+    @apply hidden w-36 shrink-0 flex-col gap-0.5 bg-navy p-2.5 sm:flex;
+  }
+  .mockup-nav {
+    @apply flex items-center gap-2 rounded-md px-2 py-1.5 text-[11px] font-medium text-white/60;
+  }
+  .mockup-nav.is-active { @apply bg-primary text-white; }
+  .mockup-event {
+    @apply overflow-hidden rounded-md border-l-[3px] px-1.5 py-1 text-[9.5px] leading-tight;
+  }
+
+  /* Customer booking phone (home) */
+  .phone {
+    @apply relative mx-auto w-full max-w-[300px] overflow-hidden rounded-[2.25rem] border-[10px] border-navy bg-white shadow-2xl;
+  }
+  .phone-notch {
+    @apply absolute left-1/2 top-0 h-5 w-28 -translate-x-1/2 rounded-b-2xl bg-navy;
+  }
+  .phone-day {
+    @apply flex flex-1 flex-col items-center rounded-lg border border-line py-1.5 text-muted;
+  }
+  .phone-day.is-active { @apply border-primary bg-primary text-white; }
+  .phone-slot {
+    @apply rounded-md border border-line py-1.5 text-center text-xs font-medium text-ink;
+  }
+  .phone-slot.is-active { @apply border-primary bg-primary-soft text-primary-strong; }
+
+  /* Pricing */
+  .price-card {
+    @apply card relative flex flex-col p-7;
+  }
+  .price-card.is-featured {
+    @apply border-navy bg-navy shadow-2xl lg:-translate-y-3;
+  }
+  .price-ribbon {
+    @apply absolute -top-3 right-6 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-white shadow;
+  }
+  .compare-table { @apply w-full min-w-[640px] text-sm; }
+  .compare-table thead th {
+    @apply bg-surface px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-muted;
+  }
+  .compare-table thead th:first-child { @apply text-left; }
+  .compare-table tbody th, .compare-table tbody td {
+    @apply border-t border-line px-4 py-3;
+  }
+  .compare-table tbody td { @apply text-center; }
+
+  /* FAQ */
+  .faq {
+    @apply card overflow-hidden;
+  }
+  .faq-q {
+    @apply flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-semibold text-ink;
+  }
+  .faq-q::-webkit-details-marker { display: none; }
+  .faq-icon { @apply text-sm text-primary transition-transform duration-200; }
+  .faq[open] .faq-icon { @apply rotate-45; }
+  .faq-a { @apply px-5 pb-5 text-sm leading-relaxed text-muted; }
+
+  .cta-band {
+    @apply relative mx-auto max-w-7xl overflow-hidden rounded-3xl bg-navy px-6 py-16 sm:px-12 lg:py-20;
+  }
+
+  /* Honeypot: off-screen, not display:none (some bots skip hidden inputs). */
+  .hp-field {
+    @apply absolute -left-[9999px] h-px w-px overflow-hidden;
+  }
+
+  /* Scroll reveal — enabled only once marketing.js adds .js-reveal, so
+     content is always visible without JavaScript. */
+  .js-reveal .reveal {
+    @apply translate-y-4 opacity-0 transition duration-700 ease-out;
+  }
+  .js-reveal .reveal.is-visible {
+    @apply translate-y-0 opacity-100;
+  }
+  .js-reveal .reveal-delay-1 { transition-delay: 120ms; }
+
+  @media (max-width: 1023px) {
+    .mockup { transform: none; }
+  }
 }
 
 @media print {

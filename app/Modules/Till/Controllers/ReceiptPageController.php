@@ -60,6 +60,7 @@ final class ReceiptPageController
 
         $items = [];
         $pos = 1;
+        $itemsCount = 0;
         foreach ($booked as $item) {
             $qty = (int) $item['quantity'];
             $items[] = [
@@ -67,17 +68,21 @@ final class ReceiptPageController
                 'label' => (string) $item['label'],
                 'qty' => $qty,
                 'unit' => $fmt((int) $item['unit_amount_minor']),
-                'amount' => $fmt(((int) $item['unit_amount_minor'] + (int) $item['tax_amount_minor']) * $qty),
+                'amount' => $fmt((int) $item['unit_amount_minor'] * $qty),
             ];
+            $itemsCount++;
         }
         foreach ($sale as $item) {
             $items[] = [
                 'no' => $pos++,
                 'label' => (string) $item['label'] . ($item['kind'] === 'discount' ? ' (discount)' : ($item['kind'] === 'tip' ? ' (tip)' : '')),
                 'qty' => (int) $item['quantity'],
-                'unit' => $fmt((int) $item['unit_amount_minor'] + (int) $item['tax_amount_minor']),
+                'unit' => $fmt((int) $item['unit_amount_minor']),
                 'amount' => ((int) $item['total_minor'] < 0 ? '−' : '') . $fmt(abs((int) $item['total_minor'])),
             ];
+            if ($item['kind'] === 'service' || $item['kind'] === 'product') {
+                $itemsCount++;
+            }
         }
 
         $tenders = array_map(fn(array $p): array => [
@@ -97,9 +102,16 @@ final class ReceiptPageController
             'items' => $items,
             'tenders' => $tenders,
             'totals' => $totals,
+            'items_count' => $itemsCount,
+            'tax_rows' => array_map(fn(array $row): array => [
+                'rate' => $row['rate_bp'] > 0 ? number_format($row['rate_bp'] / 100, 2) . '%' : null,
+                'taxable' => $fmt($row['taxable_minor']),
+                'vat' => $fmt($row['vat_minor']),
+            ], $totals['tax_breakdown']),
             'totals_label' => [
                 'subtotal' => $fmt($totals['subtotal_minor']),
                 'discount' => $fmt($totals['discount_minor']),
+                'payable' => $fmt($totals['subtotal_minor'] - $totals['discount_minor']),
                 'service_charge' => $fmt($totals['service_charge_minor']),
                 'tax' => $fmt($totals['tax_minor']),
                 'tips' => $fmt($totals['tip_minor']),

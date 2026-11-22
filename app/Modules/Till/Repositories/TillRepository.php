@@ -24,7 +24,7 @@ final class TillRepository
             'SELECT id, uuid, reference, branch_id, customer_id, staff_id, status,
                     payment_status, total_amount_minor, deposit_amount_minor,
                     currency, customer_name_snapshot, customer_phone_snapshot,
-                    customer_email_snapshot, version
+                    customer_email_snapshot, start_at, end_at, version
              FROM appointments WHERE tenant_id = ? AND uuid = ?'
             . ($lock ? ' FOR UPDATE' : ''),
         );
@@ -388,31 +388,55 @@ final class TillRepository
         ];
     }
 
-    /** Full ticket breakdown: pre-tax subtotal, discount, service charge,
-     * VAT, tips, grand total and tender state. The single source of truth
-     * for ticket math — shared by the till API and the receipt page.
+    /**
+     * Extract the VAT and service-charge portions embedded in a gross
+     * (tax-inclusive) amount. Prices are quoted inclusive — the levies sit
+     * inside the price, computed against the net base like an eTIMS
+     * extraction: gross = net * (1 + vat + sc).
+     * @return array{net_minor: int, vat_minor: int, sc_minor: int}
+     */
+    public function extractLevies(int $grossMinor, int $vatBp, int $scBp): array
+    {
+        if ($grossMinor <= 0) {
+            return ['net_minor' => 0, 'vat_minor' => 0, 'sc_minor' => 0];
+        }
+        $net = intdiv($grossMinor * 10000, 10000 + $vatBp + $scBp);
+        $vat = intdiv($net * $vatBp, 10000);
+        $sc = intdiv($net * $scBp, 10000);
+
+        return ['net_minor' => $grossMinor - $vat - $sc, 'vat_minor' => $vat, 'sc_minor' => $sc];
+    }
+
+    /** Full ticket breakdown: inclusive subtotal, discount, payable,
+     * extracted VAT/service charge, tips, grand total and tender state.
+     * The single source of truth for ticket math — shared by the till API
+     * and the receipt page.
      * @return array{subtotal_minor: int, discount_minor: int, service_charge_minor: int,
-     *               tax_minor: int, tip_minor: int, total_minor: int,
-     *               paid_minor: int, refunded_minor: int, balance_minor: int}
+     *               tax_minor: int, net_minor: int, tip_minor: int, total_minor: int,
+     *               paid_minor: int, refunded_minor: int, balance_minor: int,
+     *               tax_breakdown: list<array{rate_bp: int, taxable_minor: int, vat_minor: int}>}
      */
     public function computeTotals(int $tenantId, int $appointmentId): array
     {
         $subtotal = 0;
         $discount = 0;
         $tips = 0;
-        $tax = 0;
+        /** @var array<int, int> gross inclusive amount per VAT rate group */
+        $grossByRate = [];
+        $addGross = function (int $rateBp, int $amount) use (&$grossByRate, &$subtotal): void {
+            $subtotal += $amount;
+            $grossByRate[$rateBp] = ($grossByRate[$rateBp] ?? 0) + $amount;
+        };
+
         foreach ($this->bookedItems($tenantId, $appointmentId) as $item) {
-            $subtotal += (int) $item['unit_amount_minor'] * (int) $item['quantity'];
-            $tax += (int) $item['tax_amount_minor'] * (int) $item['quantity'];
+            $addGross((int) $item['tax_rate_bp'], (int) $item['unit_amount_minor'] * (int) $item['quantity']);
         }
         foreach ($this->saleItems($tenantId, $appointmentId) as $item) {
-            $unit = (int) $item['unit_amount_minor'];
             $qty = (int) $item['quantity'];
             switch ($item['kind']) {
                 case 'service':
                 case 'product':
-                    $subtotal += $unit * $qty;
-                    $tax += (int) $item['tax_amount_minor'] * $qty;
+                    $addGross((int) $item['tax_rate_bp'], (int) $item['unit_amount_minor'] * $qty);
                     break;
                 case 'discount':
                     $discount += abs((int) $item['total_minor']);
@@ -423,9 +447,33 @@ final class TillRepository
             }
         }
 
-        $net = max(0, $subtotal - $discount);
-        $charge = intdiv($net * $this->serviceChargeBp($tenantId), 10000);
-        $total = max(0, $net + $tax + $charge + $tips);
+        // Allocate the ticket discount pro-rata across VAT rate groups with
+        // cumulative rounding so the group shares sum exactly, then extract
+        // each group's net/VAT/service-charge portions from its post-
+        // discount gross.
+        $scBp = $this->serviceChargeBp($tenantId);
+        $tax = 0;
+        $charge = 0;
+        $netTotal = 0;
+        $breakdown = [];
+        $allocated = 0;
+        $cumGross = 0;
+        foreach ($grossByRate as $rateBp => $gross) {
+            $cumGross += $gross;
+            $groupDiscount = $subtotal > 0 ? min($gross, intdiv($discount * $cumGross, $subtotal) - $allocated) : 0;
+            $allocated += $groupDiscount;
+            $levies = $this->extractLevies($gross - $groupDiscount, (int) $rateBp, $scBp);
+            $tax += $levies['vat_minor'];
+            $charge += $levies['sc_minor'];
+            $netTotal += $levies['net_minor'];
+            $breakdown[] = [
+                'rate_bp' => (int) $rateBp,
+                'taxable_minor' => $levies['net_minor'],
+                'vat_minor' => $levies['vat_minor'],
+            ];
+        }
+
+        $total = max(0, $subtotal - $discount + $tips);
         $paid = $this->paidTotal($tenantId, $appointmentId);
         $refunded = array_sum(array_map(
             static fn(array $r): int => $r['status'] === 'succeeded' ? (int) $r['amount_minor'] : 0,
@@ -437,11 +485,13 @@ final class TillRepository
             'discount_minor' => $discount,
             'service_charge_minor' => $charge,
             'tax_minor' => $tax,
+            'net_minor' => $netTotal,
             'tip_minor' => $tips,
             'total_minor' => $total,
             'paid_minor' => $paid,
             'refunded_minor' => $refunded,
             'balance_minor' => $total - $paid,
+            'tax_breakdown' => $breakdown,
         ];
     }
 

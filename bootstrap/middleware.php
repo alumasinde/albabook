@@ -9,6 +9,7 @@ use App\Middleware\ErrorHandlingMiddleware;
 use App\Middleware\LocaleMiddleware;
 use App\Middleware\MaintenanceMiddleware;
 use App\Middleware\PlatformAuthenticationMiddleware;
+use App\Middleware\PublicPageCacheMiddleware;
 use App\Middleware\RequestIdMiddleware;
 use App\Middleware\SecurityHeadersMiddleware;
 use App\Middleware\SpaFragmentMiddleware;
@@ -39,8 +40,10 @@ return [
         // rejected before any session work, and before route middleware so
         // RequireAuth/Tenant/Permission can rely on AuthContext.
         'app' => [CacheControlMiddleware::class, SpaFragmentMiddleware::class, CsrfMiddleware::class, AuthenticationMiddleware::class],
-        'book' => [SpaFragmentMiddleware::class, CsrfMiddleware::class],
+        'book' => [PublicPageCacheMiddleware::class, SpaFragmentMiddleware::class, CsrfMiddleware::class],
         'admin' => [CacheControlMiddleware::class, SpaFragmentMiddleware::class, CsrfMiddleware::class, PlatformAuthenticationMiddleware::class],
         'api' => [],
+        // Public marketing site: no sessions; CSRF only guards the demo form.
+        'site' => [PublicPageCacheMiddleware::class, SpaFragmentMiddleware::class, CsrfMiddleware::class],
     ],
 ];

@@ -1,0 +1,133 @@
+{% extends 'layouts/marketing.twig' %}
+
+{% block title %}Features · {{ app_name }}{% endblock %}
+{% block description %}Booking page, shared calendar, SMS and WhatsApp reminders, M-Pesa-ready till, multi-branch roles and reports — every {{ app_name }} feature in one place.{% endblock %}
+
+{% block content %}
+<div data-page="marketing">
+
+<section class="hero">
+  <div class="hero-glow" aria-hidden="true"></div>
+  <div class="relative mx-auto max-w-4xl px-4 pb-16 pt-16 text-center sm:px-6 lg:px-8 lg:pb-20 lg:pt-20">
+    <span class="hero-eyebrow reveal">Features</span>
+    <h1 class="mt-6 text-4xl font-bold tracking-tight text-white sm:text-5xl reveal">Everything your front desk does — faster</h1>
+    <p class="mx-auto mt-6 max-w-2xl text-lg text-white/70 reveal">One system for bookings, schedules, reminders and payments, designed around how appointment businesses in Kenya really work.</p>
+    {# In-page jump links #}
+    <nav class="mt-10 flex flex-wrap justify-center gap-2 reveal" aria-label="Feature sections">
+      {% for s in [
+        { id: 'booking', label: 'Online booking' },
+        { id: 'calendar', label: 'Calendar' },
+        { id: 'reminders', label: 'Reminders' },
+        { id: 'till', label: 'Till & payments' },
+        { id: 'teams', label: 'Branches & roles' },
+        { id: 'reports', label: 'Reports' },
+      ] %}
+        <a href="#{{ s.id }}" class="hero-pill">{{ s.label }}</a>
+      {% endfor %}
+    </nav>
+  </div>
+</section>
+
+{% set blocks = [
+  {
+    id: 'booking', icon: 'fa-globe', eyebrow: 'Online booking',
+    title: 'A booking page that sells for you',
+    body: 'Publish a page with your services, prices, team and photos. Customers book in under a minute and only ever see times that are genuinely free.',
+    points: [
+      'Your logo, colours and theme — published in one click',
+      'English and Kiswahili, switchable by the customer',
+      'Minimum notice, booking window and slot length you control',
+      'Customers manage or cancel through their own link',
+    ],
+  },
+  {
+    id: 'calendar', icon: 'fa-calendar-days', eyebrow: 'Calendar & scheduling',
+    title: 'A calendar that never double-books',
+    body: 'See every chair, room and stylist at a glance. Availability respects working hours, breaks, approved leave, blocked time and closed days.',
+    points: [
+      'Day and week views per branch or per staff member',
+      'Rooms and equipment with capacity, checked on every booking',
+      'Walk-ins and phone bookings added in seconds',
+      'Check in, start service and complete from the same screen',
+    ],
+  },
+  {
+    id: 'reminders', icon: 'fa-bell', eyebrow: 'Reminders',
+    title: 'Fewer no-shows, without the phone calls',
+    body: 'Confirmations, reminders and updates go out automatically, in the right timezone, from a sender your customers recognise.',
+    points: [
+      'Email included; connect Africa’s Talking, Twilio or WhatsApp Cloud',
+      'Reminders 24 hours and 2 hours before each visit',
+      'Turn each message type on or off per channel',
+      'Delivery status and retries visible in your dashboard',
+    ],
+  },
+  {
+    id: 'till', icon: 'fa-cash-register', eyebrow: 'Till & payments',
+    title: 'Checkout that matches how Kenya pays',
+    body: 'Close every visit at the till. Add products and extras, apply discounts, take tips and record payments the way your customer wants to pay.',
+    points: [
+      'M-Pesa, Airtel Money, card, bank transfer and cash',
+      'Split a bill across several payment methods',
+      'Refunds tracked against the original payment',
+      'Printable receipts with your KRA PIN',
+    ],
+  },
+  {
+    id: 'teams', icon: 'fa-code-branch', eyebrow: 'Branches & roles',
+    title: 'Grow to many locations without losing control',
+    body: 'Each branch has its own hours, staff, rooms and timezone. Give every team member exactly the access they need.',
+    points: [
+      'Owner, administrator, branch manager, receptionist, accountant and staff roles',
+      'Managers limited to their own branches',
+      'Two-factor sign-in for sensitive roles',
+      'An audit log of every important change',
+    ],
+  },
+  {
+    id: 'reports', icon: 'fa-chart-line', eyebrow: 'Reports',
+    title: 'Know what is working',
+    body: 'Track revenue, bookings and no-shows over any period, by branch or across the whole business.',
+    points: [
+      'Sales and bookings day by day',
+      'Top services and no-shows by service',
+      'Room and equipment utilisation',
+      'Export to CSV for your accountant',
+    ],
+  },
+] %}
+
+{% for b in blocks %}
+  <section id="{{ b.id }}" class="mk-section scroll-mt-20 {{ loop.index is even ? 'bg-surface' : '' }}">
+    <div class="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
+      <div class="reveal {{ loop.index is even ? 'lg:order-2' : '' }}">
+        <span class="mk-eyebrow">{{ b.eyebrow }}</span>
+        <h2 class="mk-title text-left">{{ b.title }}</h2>
+        <p class="mt-4 text-lg leading-relaxed text-muted">{{ b.body }}</p>
+        <ul class="mt-8 grid gap-3 sm:grid-cols-2">
+          {% for p in b.points %}
+            <li class="flex items-start gap-3 text-sm text-ink"><i class="fa-solid fa-circle-check mt-0.5 text-success" aria-hidden="true"></i>{{ p }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="reveal reveal-delay-1 {{ loop.index is even ? 'lg:order-1' : '' }}">
+        <div class="feature-visual" aria-hidden="true">
+          <span class="feature-visual-icon"><i class="fa-solid {{ b.icon }}"></i></span>
+          <div class="mt-6 grid gap-2">
+            {% for p in b.points|slice(0, 3) %}
+              <div class="card flex items-center gap-3 p-3 text-sm">
+                <span class="stat-icon h-8 w-8"><i class="fa-solid fa-check text-xs"></i></span>
+                <span class="truncate text-ink">{{ p }}</span>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+{% endfor %}
+
+{% include 'marketing/_cta.twig' with { signup_url: signup_url } only %}
+
+</div>
+{% endblock %}

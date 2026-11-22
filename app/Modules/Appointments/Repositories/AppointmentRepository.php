@@ -182,6 +182,29 @@ final class AppointmentRepository
         return $row ?: null;
     }
 
+    /** Visit-window policy for time-gated transitions (check-in, service
+     * start, completion, no-show). Stored in tenant_settings.preferences.
+     * @return array{early_minutes: int, late_minutes: int, no_show_grace_minutes: int}
+     */
+    public function visitWindowPrefs(int $tenantId): array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT preferences FROM tenant_settings WHERE tenant_id = ?',
+        );
+        $stmt->execute([$tenantId]);
+        $raw = $stmt->fetchColumn();
+        $prefs = is_string($raw) ? (json_decode($raw, true) ?: []) : [];
+        /** @var array<string, mixed> $prefs */
+        $clamp = static fn(mixed $v, int $default, int $max): int =>
+            is_numeric($v) ? max(0, min($max, (int) $v)) : $default;
+
+        return [
+            'early_minutes' => $clamp($prefs['visit_early_minutes'] ?? null, 60, 1440),
+            'late_minutes' => $clamp($prefs['visit_late_minutes'] ?? null, 240, 2880),
+            'no_show_grace_minutes' => $clamp($prefs['no_show_grace_minutes'] ?? null, 15, 480),
+        ];
+    }
+
     /** @return list<array<string, mixed>> */
     public function itemsFor(int $tenantId, int $appointmentId): array
     {

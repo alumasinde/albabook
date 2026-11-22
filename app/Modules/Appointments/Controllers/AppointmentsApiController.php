@@ -97,6 +97,20 @@ final class AppointmentsApiController
             fn(string $to) => ($perm = $this->transitions->permissionFor($to)) === null || $membership->can($perm),
         ));
 
+        // Visit transitions are time-gated — tell the UI which actions are
+        // outside their window so buttons disable with a reason instead of
+        // failing on submit.
+        $prefs = $this->appointments->visitWindowPrefs($tenant->tenantId);
+        $transitionStates = [];
+        foreach ($allowed as $to) {
+            $issue = $this->transitions->timingError($to, (string) $row['start_at'], (string) $row['end_at'], $prefs);
+            $transitionStates[$to] = [
+                'ok' => $issue === null,
+                'code' => $issue[0] ?? null,
+                'reason' => $issue[1] ?? null,
+            ];
+        }
+
         $branchTz = $row['branch_timezone'] ?: $tenant->timezone;
 
         return ApiResponse::ok([
@@ -124,6 +138,7 @@ final class AppointmentsApiController
             'total_label' => $row['total_amount_minor'] !== null ? $this->money((int) $row['total_amount_minor'], (string) $row['currency']) : null,
             'notes' => $row['notes'] ?? null,
             'allowed_transitions' => $allowed,
+            'transition_states' => $transitionStates,
             'history' => array_map(fn(array $event) => [
                 'label' => $this->eventLabel($event),
                 'at' => (string) $event['created_at'],

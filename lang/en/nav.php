@@ -26,5 +26,6 @@ return [
     'platform' => 'Platform',
     'tenants' => 'Tenants',
     'plans' => 'Plans',
+    'leads' => 'Demo requests',
     'audit_logs' => 'Audit logs',
 ];

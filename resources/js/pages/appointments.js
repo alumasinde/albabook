@@ -102,10 +102,20 @@
         d.allowed_transitions.forEach((to) => {
           const spec = TRANSITIONS[to];
           if (!spec) return;
+          const state = d.transition_states && d.transition_states[to];
           const btn = el('button', 'btn btn-' + spec.tone + ' btn-md w-full');
           btn.type = 'button';
           btn.append(el('i', 'fa-solid ' + spec.icon));
           btn.append(document.createTextNode(' ' + spec.label));
+          if (state && state.ok === false) {
+            btn.disabled = true;
+            btn.title = state.reason || 'Not available right now.';
+            actions.append(btn);
+            if (state.reason) {
+              actions.append(el('p', '-mt-1 text-xs text-muted', state.reason));
+            }
+            return;
+          }
           btn.addEventListener('click', () => appointmentDrawer._transition(d, to, btn, body, onChange));
           actions.append(btn);
         });

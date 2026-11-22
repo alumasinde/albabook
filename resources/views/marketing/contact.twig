@@ -1,0 +1,88 @@
+{% extends 'layouts/marketing.twig' %}
+
+{% block title %}Book a demo · {{ app_name }}{% endblock %}
+{% block description %}Book a free walkthrough of {{ app_name }}. We will show you online booking, reminders and the till using your own services.{% endblock %}
+
+{% block content %}
+<div data-page="marketing">
+
+<section class="hero">
+  <div class="hero-glow" aria-hidden="true"></div>
+  <div class="relative mx-auto max-w-3xl px-4 pb-24 pt-16 text-center sm:px-6 lg:px-8 lg:pt-20">
+    <span class="hero-eyebrow reveal">Book a demo</span>
+    <h1 class="mt-6 text-4xl font-bold tracking-tight text-white sm:text-5xl reveal">See {{ app_name }} with your own services</h1>
+    <p class="mx-auto mt-6 max-w-xl text-lg text-white/70 reveal">A 20-minute walkthrough. Tell us a little about your business and we will get back to you within one working day.</p>
+  </div>
+</section>
+
+<section class="relative -mt-14 pb-20">
+  <div class="mx-auto grid max-w-6xl gap-8 px-4 sm:px-6 lg:grid-cols-[1.4fr_1fr] lg:px-8">
+
+    <div class="card p-6 sm:p-8 reveal">
+      <div data-demo-done {% if not sent %}hidden{% endif %} class="py-10 text-center" tabindex="-1">
+        <span class="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-success-soft text-xl text-success-strong" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
+        <h2 class="mt-5 text-xl font-semibold text-ink">Thanks — we have your request</h2>
+        <p class="mx-auto mt-2 max-w-sm text-sm text-muted">Someone from the {{ app_name }} team will contact you within one working day to arrange a time.</p>
+        <div class="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+          <a href="{{ signup_url }}" class="btn btn-primary btn-md" data-no-spa>Start free while you wait</a>
+          <a href="/features" class="btn btn-secondary btn-md">Explore features</a>
+        </div>
+      </div>
+
+      <form method="post" action="/contact" data-ajax-form data-ajax-busy="Sending…" data-demo-form {% if sent %}hidden{% endif %} novalidate class="grid gap-5 sm:grid-cols-2">
+        {{ csrf_field() }}
+        <div class="sm:col-span-2">
+          <h2 class="text-lg font-semibold text-ink">Tell us about your business</h2>
+          <p class="mt-1 text-sm text-muted">Fields marked <span class="text-danger">*</span> are required.</p>
+        </div>
+
+        {% include 'components/forms/input.twig' with { name: 'full_name', label: 'Your name', value: old.full_name ?? '', error: errors.full_name ?? '', required: true, autocomplete: 'name' } only %}
+        {% include 'components/forms/input.twig' with { name: 'business_name', label: 'Business name', value: old.business_name ?? '', error: errors.business_name ?? '', required: true, autocomplete: 'organization' } only %}
+        {% include 'components/forms/input.twig' with { name: 'email', label: 'Work email', type: 'email', value: old.email ?? '', error: errors.email ?? '', required: true, autocomplete: 'email', inputmode: 'email' } only %}
+        {% include 'components/forms/input.twig' with { name: 'phone', label: 'Phone (optional)', type: 'tel', value: old.phone ?? '', error: errors.phone ?? '', autocomplete: 'tel', placeholder: '+254 712 345 678', inputmode: 'tel' } only %}
+        {% include 'components/forms/select.twig' with {
+          name: 'business_type', label: 'Type of business', value: old.business_type ?? '', error: errors.business_type ?? '', required: true, placeholder: 'Choose one',
+          options: business_types|map((label, value) => { value: value, label: label }),
+        } only %}
+        {% include 'components/forms/select.twig' with {
+          name: 'branch_count', label: 'Locations', value: old.branch_count ?? '', error: errors.branch_count ?? '', required: true, placeholder: 'Choose one',
+          options: branch_counts|map((label, value) => { value: value, label: label }),
+        } only %}
+        <div class="sm:col-span-2">
+          {% include 'components/forms/textarea.twig' with { name: 'message', label: 'Anything we should know? (optional)', value: old.message ?? '', rows: 4, maxlength: 2000 } only %}
+        </div>
+
+        {# Honeypot — hidden from people and assistive tech; bots fill it. #}
+        <div class="hp-field" aria-hidden="true">
+          <label for="field-website">Website</label>
+          <input id="field-website" name="website" type="text" tabindex="-1" autocomplete="off">
+        </div>
+
+        <div class="flex flex-col gap-3 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+          <p class="text-xs text-muted">We only use these details to arrange your demo.</p>
+          <button type="submit" class="btn btn-primary btn-lg">Request my demo <i class="fa-solid fa-paper-plane text-sm" aria-hidden="true"></i></button>
+        </div>
+      </form>
+    </div>
+
+    <aside class="space-y-4">
+      {% for c in [
+        { icon: 'fa-display', t: 'A live walkthrough', b: 'We set up a sample of your services and show the booking page, calendar and till end to end.' },
+        { icon: 'fa-comments', t: 'Answers for your setup', b: 'Branches, rooms, M-Pesa, SMS sender IDs — bring your questions.' },
+        { icon: 'fa-rocket', t: 'Or start right now', b: 'The free trial needs no card. You can book a demo later.' },
+      ] %}
+        <div class="card flex gap-4 p-5 reveal">
+          <span class="feature-icon h-11 w-11 shrink-0 text-base" aria-hidden="true"><i class="fa-solid {{ c.icon }}"></i></span>
+          <div>
+            <h3 class="font-semibold text-ink">{{ c.t }}</h3>
+            <p class="mt-1 text-sm leading-relaxed text-muted">{{ c.b }}</p>
+          </div>
+        </div>
+      {% endfor %}
+      <a href="{{ signup_url }}" class="btn btn-secondary btn-md w-full" data-no-spa>Create a free account</a>
+    </aside>
+  </div>
+</section>
+
+</div>
+{% endblock %}

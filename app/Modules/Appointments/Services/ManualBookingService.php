@@ -10,6 +10,7 @@ use App\Modules\Appointments\Repositories\AppointmentRepository;
 use App\Modules\Billing\Services\FeatureGate;
 use App\Modules\Booking\Repositories\BookingPageRepository;
 use App\Modules\Notifications\Services\AppointmentEventService;
+use App\Modules\Till\Repositories\TillRepository;
 use App\Shared\Support\UuidFactory;
 use App\Shared\Time\DateTimeService;
 
@@ -32,6 +33,7 @@ final class ManualBookingService
         private readonly UuidFactory $uuids,
         private readonly AppointmentEventService $events,
         private readonly FeatureGate $features,
+        private readonly TillRepository $till,
     ) {}
 
     /**
@@ -152,6 +154,16 @@ final class ManualBookingService
 
             $customerId = $this->upsertCustomer($tenantId, $customer, $actorType);
 
+            // Prices are tax-inclusive: the service price already contains
+            // VAT and service charge. Snapshot the rates at booking time so
+            // the till/receipt extraction matches what the customer saw.
+            $itemTaxBp = $this->till->tenantTaxRateBp($tenantId);
+            $itemTaxPerUnit = $this->till->extractLevies(
+                $price,
+                $itemTaxBp,
+                $this->till->serviceChargeBp($tenantId),
+            )['vat_minor'];
+
             $reference = $this->generateReference($tenantId);
             $uuid = $this->uuids->generate();
             $policyVersion = $this->appointments->policyVersionFor($tenantId, $branchId) ?? 1;
@@ -202,8 +214,8 @@ final class ManualBookingService
                 'end_at' => $this->dates->toDb($end),
                 'occupied_start_at' => $this->dates->toDb($occupiedStart),
                 'occupied_end_at' => $this->dates->toDb($occupiedEnd),
-                'tax_rate_bp' => 0,
-                'tax_amount_minor' => 0,
+                'tax_rate_bp' => $itemTaxBp,
+                'tax_amount_minor' => $itemTaxPerUnit,
                 'currency' => $currency,
                 'policy_version' => $policyVersion,
             ]);

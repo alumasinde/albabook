@@ -1,0 +1,49 @@
+{#
+  Plan cards, read live from the plans / plan_features tables.
+  Params: plans, signup_url, highlight? (plan code to feature; defaults to the
+  middle plan when there are three or more — "growth" with the seeded four).
+#}
+{% set featured = highlight|default(plans|length >= 3 ? plans[(plans|length / 2)|round(0, 'floor')].code : '') %}
+{% set grid_cols = {1: 'mx-auto max-w-md', 2: 'md:grid-cols-2', 3: 'lg:grid-cols-3'}[plans|length] ?? 'md:grid-cols-2 xl:grid-cols-4' %}
+{% if plans is empty %}
+  <div class="card mx-auto max-w-xl p-8 text-center">
+    <span class="empty-state-icon mx-auto" aria-hidden="true"><i class="fa-solid fa-tags"></i></span>
+    <p class="mt-4 font-semibold text-ink">Pricing is being finalised</p>
+    <p class="mt-1 text-sm text-muted">Book a demo and we will walk you through the plan that fits your business.</p>
+    <a href="/contact" class="btn btn-primary btn-md mt-5">Book a demo</a>
+  </div>
+{% else %}
+  <div class="grid gap-6 {{ grid_cols }}">
+    {% for plan in plans %}
+      {% set is_featured = plan.code == featured %}
+      <article class="price-card{% if is_featured %} is-featured{% endif %} reveal">
+        {% if is_featured %}<span class="price-ribbon">Most popular</span>{% endif %}
+        <h3 class="text-lg font-semibold {{ is_featured ? 'text-white' : 'text-ink' }}">{{ plan.name }}</h3>
+        {% if plan.description %}<p class="mt-1 text-sm {{ is_featured ? 'text-white/70' : 'text-muted' }}">{{ plan.description }}</p>{% endif %}
+        <p class="mt-6 flex items-baseline gap-1.5">
+          {% if plan.is_free %}
+            <span class="text-4xl font-bold tracking-tight {{ is_featured ? 'text-white' : 'text-ink' }}">Free</span>
+          {% else %}
+            <span class="text-4xl font-bold tracking-tight {{ is_featured ? 'text-white' : 'text-ink' }}">{{ plan.price|money }}</span>
+            <span class="text-sm {{ is_featured ? 'text-white/60' : 'text-muted' }}">/ {{ plan.billing_interval == 'yearly' ? 'year' : 'month' }}</span>
+          {% endif %}
+        </p>
+        <a href="{{ signup_url }}?plan={{ plan.code|url_encode }}" class="btn btn-md mt-6 w-full {{ is_featured ? 'bg-white text-primary-strong hover:bg-primary-soft' : 'btn-primary' }}" data-no-spa>
+          {{ plan.is_free ? 'Start free' : 'Start with ' ~ plan.name }}
+        </a>
+        {% if plan.feature_lines is not empty %}
+          <ul class="mt-6 space-y-3 border-t pt-6 text-sm {{ is_featured ? 'border-white/15' : 'border-line' }}">
+            {% for line in plan.feature_lines %}
+              <li class="flex items-start gap-3">
+                <i class="fa-solid fa-circle-check mt-0.5 {{ is_featured ? 'text-white' : 'text-success' }}" aria-hidden="true"></i>
+                <span class="{{ is_featured ? 'text-white/90' : 'text-ink' }}">
+                  {{ line.label }}{% if line.value %} <span class="{{ is_featured ? 'text-white/60' : 'text-muted' }}">· {{ line.value }}</span>{% endif %}
+                </span>
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </article>
+    {% endfor %}
+  </div>
+{% endif %}

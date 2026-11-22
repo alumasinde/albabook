@@ -179,9 +179,12 @@ final class HttpClient
     {
         [$net, $bits] = explode('/', $cidr);
         $mask = $bits === '0' ? 0 : (~0 << (32 - (int) $bits)) & 0xFFFFFFFF;
-        $ip = unpack('N', $packed)[1];
-        $base = unpack('N', (string) inet_pton($net))[1];
+        $ipU = unpack('N', $packed);
+        $baseU = unpack('N', (string) inet_pton($net));
+        if ($ipU === false || $baseU === false) {
+            return false;
+        }
 
-        return ($ip & $mask) === ($base & $mask);
+        return ($ipU[1] & $mask) === ($baseU[1] & $mask);
     }
 }

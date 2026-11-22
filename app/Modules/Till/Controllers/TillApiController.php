@@ -8,6 +8,7 @@ use App\Core\Database\Database;
 use App\Core\Http\Request;
 use App\Core\Http\Response;
 use App\Modules\Appointments\Repositories\AppointmentRepository;
+use App\Modules\Appointments\Services\AppointmentTransitionService;
 use App\Modules\Appointments\Services\TransitionException;
 use App\Modules\Auth\Context\MembershipContext;
 use App\Modules\Notifications\Services\NotificationPolicy;
@@ -36,6 +37,7 @@ final class TillApiController
         private readonly UuidFactory $uuids,
         private readonly NotificationPolicy $notificationPolicy,
         private readonly AppointmentRepository $appointments,
+        private readonly AppointmentTransitionService $transitions,
     ) {}
 
     /** Full ticket state for the checkout drawer.
@@ -139,7 +141,7 @@ final class TillApiController
                 $signed = $item['kind'] === 'discount' ? -1 : 1;
                 $this->till->updateSaleItem($tenant->tenantId, (int) $item['id'], [
                     'quantity' => $quantity,
-                    'total_minor' => $signed * $unit * $quantity + (int) $item['tax_amount_minor'] * $quantity,
+                    'total_minor' => $signed * $unit * $quantity,
                 ]);
 
                 $derived = $this->refreshTotals($tenant->tenantId, (int) $appointment['id']);
@@ -404,6 +406,19 @@ final class TillApiController
                 $this->assertBranch($membership, $appointment);
                 $this->assertOpen($appointment);
 
+                // Same visit-window gate as the status-transition path:
+                // a ticket can't be checked out before its appointment
+                // window opens.
+                $issue = $this->transitions->timingError(
+                    'completed',
+                    (string) $appointment['start_at'],
+                    (string) $appointment['end_at'],
+                    $this->appointments->visitWindowPrefs($tenant->tenantId),
+                );
+                if ($issue !== null) {
+                    throw new TransitionException($issue[0], $issue[1], 409);
+                }
+
                 $totals = $this->computeTotals($tenant->tenantId, (int) $appointment['id']);
                 $balance = $totals['total_minor'] - $totals['paid_minor'];
 
@@ -481,8 +496,9 @@ final class TillApiController
 
     /** Ticket breakdown — the repository owns the math (receipt shares it).
      * @return array{subtotal_minor: int, discount_minor: int, service_charge_minor: int,
-     *               tax_minor: int, tip_minor: int, total_minor: int,
-     *               paid_minor: int, refunded_minor: int, balance_minor: int}
+     *               tax_minor: int, net_minor: int, tip_minor: int, total_minor: int,
+     *               paid_minor: int, refunded_minor: int, balance_minor: int,
+     *               tax_breakdown: list<array{rate_bp: int, taxable_minor: int, vat_minor: int}>}
      */
     private function computeTotals(int $tenantId, int $appointmentId): array
     {
@@ -554,7 +570,10 @@ final class TillApiController
             $taxBp = $kind === 'service'
                 ? $this->till->tenantTaxRateBp($tenantId)
                 : (int) $source['tax_rate_bp'];
-            $taxPerUnit = intdiv($unit * $taxBp, 10000);
+            // Prices are tax-inclusive: the quoted unit already contains
+            // VAT and service charge. Store only the VAT portion per unit
+            // for line-level records; totals re-extract authoritatively.
+            $taxPerUnit = $this->till->extractLevies($unit, $taxBp, $this->till->serviceChargeBp($tenantId))['vat_minor'];
 
             return [
                 'kind' => $kind,
@@ -566,7 +585,7 @@ final class TillApiController
                 'rate_bp' => null,
                 'tax_rate_bp' => $taxBp,
                 'tax_amount_minor' => $taxPerUnit,
-                'total_minor' => ($unit + $taxPerUnit) * $quantity,
+                'total_minor' => $unit * $quantity,
             ];
         }
 
@@ -597,8 +616,9 @@ final class TillApiController
     /** Receipt notification + outbox event on completion.
      * @param array<string, mixed> $appointment
      * @param array{subtotal_minor: int, discount_minor: int, service_charge_minor: int,
-     *               tax_minor: int, tip_minor: int, total_minor: int,
-     *               paid_minor: int, refunded_minor: int, balance_minor: int} $totals
+     *               tax_minor: int, net_minor: int, tip_minor: int, total_minor: int,
+     *               paid_minor: int, refunded_minor: int, balance_minor: int,
+     *               tax_breakdown: list<array{rate_bp: int, taxable_minor: int, vat_minor: int}>} $totals
      */
     private function emitNotifications(int $tenantId, array $appointment, array $totals): void
     {

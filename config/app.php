@@ -14,6 +14,8 @@ return [
         'book' => env('APP_HOST_BOOKING', 'book.albabook.co.ke'),
         'api' => env('APP_HOST_API', 'api.albabook.co.ke'),
         'admin' => env('APP_HOST_ADMIN', 'admin.albabook.co.ke'),
+        // Public marketing site on the bare domain.
+        'site' => env('APP_HOST_MARKETING', 'albabook.co.ke'),
     ],
 
     'default_tenant_timezone' => env('DEFAULT_TENANT_TIMEZONE', 'Africa/Nairobi'),

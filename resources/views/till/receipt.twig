@@ -82,11 +82,12 @@
       {% if totals.discount_minor > 0 %}
         <div><dt>{{ t('receipt.discount') }}</dt><dd>−{{ totals_label.discount }}</dd></div>
       {% endif %}
-      {% if totals.service_charge_minor > 0 %}
-        <div><dt>{{ t('receipt.service_charge', { rate: (service_charge_bp / 100)|number_format(2) }) }}</dt><dd>{{ totals_label.service_charge }}</dd></div>
-      {% endif %}
+      <div><dt>{{ t('receipt.payable') }}</dt><dd>{{ totals_label.payable }}</dd></div>
       {% if totals.tax_minor > 0 %}
         <div><dt>{{ t('receipt.vat', { rate: (tax_rate_bp / 100)|number_format(2) }) }}</dt><dd>{{ totals_label.tax }}</dd></div>
+      {% endif %}
+      {% if totals.service_charge_minor > 0 %}
+        <div><dt>{{ t('receipt.service_charge', { rate: (service_charge_bp / 100)|number_format(2) }) }}</dt><dd>{{ totals_label.service_charge }}</dd></div>
       {% endif %}
       {% if totals.tip_minor > 0 %}
         <div><dt>{{ t('receipt.tips') }}</dt><dd>{{ totals_label.tips }}</dd></div>
@@ -107,6 +108,27 @@
     {% else %}
       <p class="receipt-meta">{{ t('receipt.no_payments') }}</p>
     {% endfor %}
+    <div class="receipt-rule"></div>
+
+    <table class="receipt-table receipt-tax-table">
+      <thead>
+        <tr>
+          <th scope="col">{{ t('receipt.rate_col') }}</th>
+          <th scope="col" class="text-right">{{ t('receipt.taxable_col') }}</th>
+          <th scope="col" class="text-right">{{ t('receipt.vat_col') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in tax_rows %}
+          <tr>
+            <td>{{ row.rate|default(t('receipt.exempt')) }}</td>
+            <td class="text-right">{{ row.taxable }}</td>
+            <td class="text-right">{{ row.vat }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="receipt-meta">{{ t('receipt.items_number') }}: {{ items_count }}</p>
     <div class="receipt-rule"></div>
 
     <p class="receipt-thanks">{{ footer_note|default(t('receipt.thank_you')) }}</p>

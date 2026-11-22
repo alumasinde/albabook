@@ -9,6 +9,7 @@ use App\Middleware\PlatformPermissionMiddleware;
 use App\Middleware\PlatformRequireAuthMiddleware;
 use App\Modules\Platform\Controllers\AuditLogsController;
 use App\Modules\Platform\Controllers\DashboardController;
+use App\Modules\Platform\Controllers\LeadsController;
 use App\Modules\Platform\Controllers\LoginController;
 use App\Modules\Platform\Controllers\PlansController;
 use App\Modules\Platform\Controllers\LogoutController;
@@ -35,6 +36,10 @@ return static function (RouteRegistrar $r): void {
     $r->post('/mfa/enroll', [MfaEnrollmentController::class, 'confirm'], name: 'admin.mfa.confirm');
 
     $r->get('/dashboard', [DashboardController::class, 'index'], $admin, name: 'admin.dashboard');
+
+    // Demo requests from the marketing site.
+    $r->get('/leads', [LeadsController::class, 'index'], [...$admin, PlatformPermissionMiddleware::class], name: 'admin.leads', options: ['platform_permission' => PlatformPermission::TenantsManage->value]);
+    $r->post('/leads/{uuid}/status', [LeadsController::class, 'updateStatus'], [...$admin, PlatformPermissionMiddleware::class], name: 'admin.leads.status', options: ['platform_permission' => PlatformPermission::TenantsManage->value]);
 
     $billing = [...$admin, PlatformPermissionMiddleware::class];
     $r->get('/plans', [PlansController::class, 'index'], $billing, name: 'admin.plans', options: ['platform_permission' => PlatformPermission::BillingManage->value]);

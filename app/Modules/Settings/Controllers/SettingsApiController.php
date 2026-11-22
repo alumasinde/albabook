@@ -347,6 +347,9 @@ final class SettingsApiController
             'service_charge_bp' => (int) ($this->settings->jsonPreferences($tenant->tenantId)['service_charge_bp'] ?? 0),
             'receipt_footer_note' => (string) ($this->settings->jsonPreferences($tenant->tenantId)['receipt_footer_note'] ?? ''),
             'tax_rate_bp' => (int) $this->settings->profile($tenant->tenantId)['tax_rate_bp'],
+            'visit_early_minutes' => (int) ($this->settings->jsonPreferences($tenant->tenantId)['visit_early_minutes'] ?? 60),
+            'visit_late_minutes' => (int) ($this->settings->jsonPreferences($tenant->tenantId)['visit_late_minutes'] ?? 240),
+            'no_show_grace_minutes' => (int) ($this->settings->jsonPreferences($tenant->tenantId)['no_show_grace_minutes'] ?? 15),
             'recent_payments' => $membership->can('payments.view')
                 ? $this->settings->recentPayments($tenant->tenantId)
                 : [],
@@ -378,6 +381,22 @@ final class SettingsApiController
         if (mb_strlen($note) > 200) {
             $fields['receipt_footer_note'] = 'Receipt note is too long (max 200 characters).';
         }
+        $window = static function (array $body, string $key, int $max, array &$fields): ?int {
+            if (!array_key_exists($key, $body)) {
+                return null;
+            }
+            $v = $body[$key];
+            if (!is_numeric($v) || (int) $v < 0 || (int) $v > $max) {
+                $fields[$key] = sprintf('Between 0 and %d minutes.', $max);
+
+                return null;
+            }
+
+            return (int) $v;
+        };
+        $visitEarly = $window($body, 'visit_early_minutes', 1440, $fields);
+        $visitLate = $window($body, 'visit_late_minutes', 2880, $fields);
+        $noShowGrace = $window($body, 'no_show_grace_minutes', 480, $fields);
         if ($fields !== []) {
             return ApiResponse::error('VALIDATION', 'Fix the highlighted fields.', 422, $fields);
         }
@@ -388,6 +407,15 @@ final class SettingsApiController
         ]);
         $this->settings->updateJsonPreferences($tenant->tenantId, 'service_charge_bp', (int) $charge);
         $this->settings->updateJsonPreferences($tenant->tenantId, 'receipt_footer_note', $note !== '' ? $note : null);
+        if ($visitEarly !== null) {
+            $this->settings->updateJsonPreferences($tenant->tenantId, 'visit_early_minutes', $visitEarly);
+        }
+        if ($visitLate !== null) {
+            $this->settings->updateJsonPreferences($tenant->tenantId, 'visit_late_minutes', $visitLate);
+        }
+        if ($noShowGrace !== null) {
+            $this->settings->updateJsonPreferences($tenant->tenantId, 'no_show_grace_minutes', $noShowGrace);
+        }
         if ($tax !== null) {
             $this->settings->updateProfile($tenant->tenantId, ['tax_rate_bp' => (int) $tax]);
         }
@@ -399,6 +427,9 @@ final class SettingsApiController
             'service_charge_bp' => (int) ($prefs['service_charge_bp'] ?? 0),
             'receipt_footer_note' => (string) ($prefs['receipt_footer_note'] ?? ''),
             'tax_rate_bp' => (int) $this->settings->profile($tenant->tenantId)['tax_rate_bp'],
+            'visit_early_minutes' => (int) ($prefs['visit_early_minutes'] ?? 60),
+            'visit_late_minutes' => (int) ($prefs['visit_late_minutes'] ?? 240),
+            'no_show_grace_minutes' => (int) ($prefs['no_show_grace_minutes'] ?? 15),
         ]);
     }
 

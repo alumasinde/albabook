@@ -125,6 +125,27 @@
           <p class="mt-1 text-xs text-muted">{{ t('settings.receipt_note_hint') }}</p>
         </div>
       </div>
+      <div class="mt-5 border-t border-line pt-5">
+        <h4 class="text-sm font-semibold text-ink">{{ t('settings.visit_window_heading') }}</h4>
+        <p class="mt-1 text-xs text-muted">{{ t('settings.visit_window_subtitle') }}</p>
+        <div class="mt-4 grid gap-4 sm:grid-cols-3">
+          <div>
+            <label for="visit-early" class="field-label">{{ t('settings.visit_early_label') }}</label>
+            <input id="visit-early" type="number" min="0" max="1440" step="5" class="input mt-1" data-visit-early {% if not membership.can('settings.update') %}disabled{% endif %}>
+            <p class="mt-1 text-xs text-muted">{{ t('settings.visit_early_hint') }}</p>
+          </div>
+          <div>
+            <label for="visit-late" class="field-label">{{ t('settings.visit_late_label') }}</label>
+            <input id="visit-late" type="number" min="0" max="2880" step="5" class="input mt-1" data-visit-late {% if not membership.can('settings.update') %}disabled{% endif %}>
+            <p class="mt-1 text-xs text-muted">{{ t('settings.visit_late_hint') }}</p>
+          </div>
+          <div>
+            <label for="no-show-grace" class="field-label">{{ t('settings.no_show_grace_label') }}</label>
+            <input id="no-show-grace" type="number" min="0" max="480" step="5" class="input mt-1" data-no-show-grace {% if not membership.can('settings.update') %}disabled{% endif %}>
+            <p class="mt-1 text-xs text-muted">{{ t('settings.no_show_grace_hint') }}</p>
+          </div>
+        </div>
+      </div>
       {% if membership.can('settings.update') %}
       <button type="button" class="btn btn-primary btn-md mt-5" data-policy-save>
         <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>

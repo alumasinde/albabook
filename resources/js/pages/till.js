@@ -86,7 +86,7 @@
         lines.append(lineRow(
           item.label + (item.quantity > 1 ? ' ×' + item.quantity : ''),
           'Booked service',
-          fmt(item.unit_amount_minor * item.quantity + (item.tax_amount_minor || 0) * item.quantity, cur),
+          fmt(item.unit_amount_minor * item.quantity, cur),
         ));
       });
       (t.sale_items || []).forEach((item) => {
@@ -119,8 +119,9 @@
       };
       totals.append(totalRow('Subtotal', fmt(t.totals.subtotal_minor, cur)));
       if (t.totals.discount_minor > 0) totals.append(totalRow('Discount', '−' + fmt(t.totals.discount_minor, cur)));
-      if (t.totals.service_charge_minor > 0) totals.append(totalRow('Service charge (' + (t.service_charge_bp / 100).toFixed(2) + '%)', fmt(t.totals.service_charge_minor, cur)));
-      if (t.totals.tax_minor > 0) totals.append(totalRow('VAT', fmt(t.totals.tax_minor, cur)));
+      totals.append(totalRow('Payable', fmt(t.totals.subtotal_minor - t.totals.discount_minor, cur)));
+      if (t.totals.tax_minor > 0) totals.append(totalRow('VAT (incl.)', fmt(t.totals.tax_minor, cur)));
+      if (t.totals.service_charge_minor > 0) totals.append(totalRow('Service charge ' + (t.service_charge_bp / 100).toFixed(2) + '% (incl.)', fmt(t.totals.service_charge_minor, cur)));
       if (t.totals.tip_minor > 0) totals.append(totalRow('Tips', fmt(t.totals.tip_minor, cur)));
       totals.append(
         totalRow('Total', fmt(t.totals.total_minor, cur), true),

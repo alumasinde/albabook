@@ -9,17 +9,22 @@ Composer and coverage tooling, and must never be deployed.
 ## Prerequisites
 
 - Docker + Compose plugin on the host.
-- A TLS certificate covering `*.albabook.co.ke` placed in `./tls/` as
-  `fullchain.pem` and `privkey.pem` (nginx terminates TLS).
+- A TLS certificate covering **both** `albabook.co.ke` and `*.albabook.co.ke`
+  (a wildcard does not cover the bare domain, which serves the marketing
+  site) placed in `./tls/` as `fullchain.pem` and `privkey.pem` (nginx
+  terminates TLS). DNS for `albabook.co.ke` and `www.albabook.co.ke` must
+  point at the server too; `www.` redirects to the bare domain.
 - `.env.production` (copy `.env.example` and fill in):
 
 ```dotenv
 APP_ENV=production
 APP_KEY=<32-byte key from php bin/console key:generate>
-APP_URL=https://app.albabook.co.ke
-BOOK_URL=https://book.albabook.co.ke
-API_URL=https://api.albabook.co.ke
-ADMIN_URL=https://admin.albabook.co.ke
+# Hostnames only — no scheme or port (ConfigValidator rejects them).
+APP_HOST_TENANT=app.albabook.co.ke
+APP_HOST_BOOKING=book.albabook.co.ke
+APP_HOST_API=api.albabook.co.ke
+APP_HOST_ADMIN=admin.albabook.co.ke
+APP_HOST_MARKETING=albabook.co.ke
 
 DB_DATABASE=albabook
 DB_USERNAME=albabook

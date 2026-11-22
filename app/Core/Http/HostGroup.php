@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace App\Core\Http;
 
 /**
- * The four AlbaBook interfaces (plan.md §2.1, decisions.md D-005).
- * Each has its own routes and middleware stack.
+ * The AlbaBook interfaces (plan.md §2.1, decisions.md D-005), plus the
+ * public marketing site on the bare domain. Each has its own routes and
+ * middleware stack.
  */
 enum HostGroup: string
 {
@@ -14,6 +15,7 @@ enum HostGroup: string
     case Booking = 'book';
     case Api = 'api';
     case Admin = 'admin';
+    case Marketing = 'site';
 
     public function usesCsrf(): bool
     {

@@ -103,7 +103,7 @@ final class TenantsController
         $state = (string) $request->input('state', 'enabled');
         $limitRaw = trim((string) $request->input('limit', ''));
         $limit = $limitRaw === '' ? null : max(0, (int) $limitRaw);
-        // A strict Y-m-d calendar date (the form's <input type="date">);
+        // A strict Y-m-d calendar value (the form's <input type="date">);
         // anything else would reach MySQL as an invalid DATETIME and 500.
         $expiresRaw = trim((string) $request->input('expires_at', ''));
         $expiresAt = null;

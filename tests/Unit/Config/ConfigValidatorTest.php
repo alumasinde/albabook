@@ -88,7 +88,7 @@ final class ConfigValidatorTest extends TestCase
                 'env' => 'local',
                 'debug' => true,
                 'key' => self::KEY,
-                'hosts' => ['app' => 'app.albabook.test', 'book' => 'book.albabook.test', 'api' => 'api.albabook.test', 'admin' => 'admin.albabook.test'],
+                'hosts' => ['app' => 'app.albabook.test', 'book' => 'book.albabook.test', 'api' => 'api.albabook.test', 'admin' => 'admin.albabook.test', 'site' => 'albabook.test'],
                 'default_tenant_timezone' => 'Africa/Nairobi',
                 'default_tenant_currency' => 'KES',
             ],

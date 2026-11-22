@@ -20,6 +20,7 @@ return static function (Router $router, string $basePath): void {
         'public.php' => HostGroup::Booking,
         'api.php' => HostGroup::Api,
         'admin.php' => HostGroup::Admin,
+        'site.php' => HostGroup::Marketing,
     ];
 
     foreach ($files as $file => $group) {

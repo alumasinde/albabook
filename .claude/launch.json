@@ -1,0 +1,13 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "albabook-site",
+      "runtimeExecutable": "php",
+      "runtimeArgs": ["-S", "127.0.0.1:8010", "-t", "public", "server.php"],
+      "port": 8010,
+      "autoPort": false,
+      "url": "http://albabook.localhost:8010"
+    }
+  ]
+}

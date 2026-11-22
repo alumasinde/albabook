@@ -1,0 +1,108 @@
+{#
+  Public marketing shell (albabook.co.ke). Same design system as the tenant
+  dashboard — navy, primary violet, Inter, cards — on a light, open canvas.
+  Links inside [data-spa-shell] are upgraded to SPA fragment swaps (spa.js);
+  every page still renders fully server-side for crawlers and no-JS visitors.
+#}
+{% extends 'layouts/base.twig' %}
+
+{% block robots %}index, follow{% endblock %}
+
+{% block head %}
+  <meta name="description" content="{% block description %}AlbaBook is online booking, scheduling and payments for salons, barbershops, spas and clinics in Kenya. Take bookings 24/7, cut no-shows with reminders and get paid by M-Pesa, card or cash.{% endblock %}">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ app_name }}">
+  <meta property="og:title" content="{{ block('title') }}">
+  <meta property="og:description" content="{{ block('description') }}">
+  <meta name="theme-color" content="#171A2C">
+{% endblock %}
+
+{% block body_class %}min-h-full bg-white text-ink antialiased{% endblock %}
+
+{% set site_nav = [
+  { key: 'home', label: 'Home', href: '/' },
+  { key: 'features', label: 'Features', href: '/features' },
+  { key: 'pricing', label: 'Pricing', href: '/pricing' },
+  { key: 'contact', label: 'Book a demo', href: '/contact' },
+] %}
+
+{% block body %}
+<div class="flex min-h-screen flex-col" data-spa-shell>
+  <header class="site-header">
+    <div class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+      <a href="/" class="flex items-center gap-2.5 text-lg font-semibold text-ink" aria-label="{{ app_name }} home">
+        <span class="brand-mark" aria-hidden="true">A</span>
+        {{ app_name }}
+      </a>
+
+      <nav class="hidden items-center gap-1 md:flex" aria-label="Main">
+        {% for item in site_nav %}
+          <a href="{{ item.href }}" class="site-nav-link{% if active_nav == item.key %} is-active{% endif %}"{% if active_nav == item.key %} aria-current="page"{% endif %}>{{ item.label }}</a>
+        {% endfor %}
+      </nav>
+
+      <div class="hidden items-center gap-2 md:flex">
+        <a href="{{ login_url }}" class="btn btn-ghost btn-sm" data-no-spa>Sign in</a>
+        <a href="{{ signup_url }}" class="btn btn-primary btn-sm" data-no-spa>Start free <i class="fa-solid fa-arrow-right text-xs" aria-hidden="true"></i></a>
+      </div>
+
+      <button type="button" class="icon-button md:hidden" data-drawer-toggle="site-nav" aria-controls="site-drawer" aria-expanded="false" aria-label="Open menu">
+        <i class="fa-solid fa-bars" aria-hidden="true"></i>
+      </button>
+    </div>
+  </header>
+
+  {# Mobile drawer (reuses the dashboard drawer behaviour in app.js) #}
+  <div class="drawer-backdrop" data-drawer-backdrop="site-nav" hidden></div>
+  <aside id="site-drawer" class="site-drawer" data-drawer="site-nav" aria-label="Menu">
+    <div class="flex items-center justify-between px-5 py-4">
+      <span class="flex items-center gap-2.5 font-semibold text-white"><span class="brand-mark" aria-hidden="true">A</span>{{ app_name }}</span>
+      <button type="button" class="icon-button text-white/70 hover:bg-white/10 hover:text-white" data-drawer-close="site-nav" aria-label="Close menu">
+        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+      </button>
+    </div>
+    <nav class="flex flex-col gap-1 px-3" aria-label="Main">
+      {% for item in site_nav %}
+        <a href="{{ item.href }}" class="sidebar-link site-drawer-link{% if active_nav == item.key %} is-active{% endif %}" data-drawer-close="site-nav">{{ item.label }}</a>
+      {% endfor %}
+    </nav>
+    <div class="mt-auto grid gap-2 p-5">
+      <a href="{{ signup_url }}" class="btn btn-primary btn-md" data-no-spa>Start free</a>
+      <a href="{{ login_url }}" class="btn btn-md border border-white/20 text-white hover:bg-white/10" data-no-spa>Sign in</a>
+    </div>
+  </aside>
+
+  <main id="main" class="flex-1" tabindex="-1">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="mx-auto grid max-w-7xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-4 lg:px-8">
+      <div class="md:col-span-2">
+        <a href="/" class="flex items-center gap-2.5 text-lg font-semibold text-white">
+          <span class="brand-mark" aria-hidden="true">A</span>{{ app_name }}
+        </a>
+        <p class="mt-4 max-w-sm text-sm leading-relaxed text-white/60">Online booking, scheduling and payments for appointment businesses — built in Kenya for salons, barbershops, spas and clinics.</p>
+      </div>
+      <div>
+        <h2 class="text-sm font-semibold text-white">Product</h2>
+        <ul class="mt-4 space-y-2.5 text-sm">
+          <li><a href="/features" class="site-footer-link">Features</a></li>
+          <li><a href="/pricing" class="site-footer-link">Pricing</a></li>
+          <li><a href="/contact" class="site-footer-link">Book a demo</a></li>
+        </ul>
+      </div>
+      <div>
+        <h2 class="text-sm font-semibold text-white">Get started</h2>
+        <ul class="mt-4 space-y-2.5 text-sm">
+          <li><a href="{{ signup_url }}" class="site-footer-link" data-no-spa>Create an account</a></li>
+          <li><a href="{{ login_url }}" class="site-footer-link" data-no-spa>Sign in</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="border-t border-white/10">
+      <p class="mx-auto max-w-7xl px-4 py-6 text-xs text-white/50 sm:px-6 lg:px-8">© {{ 'now'|date('Y') }} {{ app_name }}. Prices in Kenyan shillings.</p>
+    </div>
+  </footer>
+</div>
+{% endblock %}

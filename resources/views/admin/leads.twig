@@ -1,0 +1,66 @@
+{% extends 'layouts/admin.twig' %}
+
+{% block title %}Demo requests · {{ app_name }}{% endblock %}
+
+{% block content %}
+{% if status == '1' %}
+  {% include 'components/feedback/alert.twig' with { tone: 'success', message: 'Request updated.', dismissible: true } only %}
+{% endif %}
+
+<nav class="mt-2 flex flex-wrap gap-2" aria-label="Filter by status">
+  {% for s in statuses %}
+    <a href="/leads?status={{ s }}" class="btn btn-sm {{ filter == s ? 'btn-primary' : 'btn-secondary' }}"{% if filter == s %} aria-current="page"{% endif %}>
+      {{ s|capitalize }} <span class="badge {{ filter == s ? 'bg-white/20 text-white' : 'badge-neutral' }}">{{ counts[s] ?? 0 }}</span>
+    </a>
+  {% endfor %}
+  <a href="/leads?status=all" class="btn btn-sm {{ filter == 'all' ? 'btn-primary' : 'btn-secondary' }}">All</a>
+</nav>
+
+<section class="card mt-4 overflow-x-auto" aria-label="Demo requests">
+  {% if rows is empty %}
+    <p class="p-8 text-center text-sm text-muted">No demo requests here yet.</p>
+  {% else %}
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th class="text-left">Received</th>
+          <th class="text-left">Contact</th>
+          <th class="text-left">Business</th>
+          <th class="text-left">Message</th>
+          <th class="text-left">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td data-label="Received" class="whitespace-nowrap">{{ row.created_at|date('j M Y H:i') }} UTC</td>
+            <td data-label="Contact">
+              <span class="font-medium">{{ row.full_name }}</span><br>
+              <a href="mailto:{{ row.email }}" class="text-primary-strong hover:underline">{{ row.email }}</a>
+              {% if row.phone %}<br><a href="tel:{{ row.phone }}" class="text-muted">{{ row.phone }}</a>{% endif %}
+            </td>
+            <td data-label="Business">
+              <span class="font-medium">{{ row.business_name }}</span><br>
+              <span class="text-muted">{{ business_types[row.business_type] ?? row.business_type }} · {{ branch_counts[row.branch_count] ?? row.branch_count }}</span>
+            </td>
+            <td data-label="Message" class="max-w-xs whitespace-pre-line text-muted">{{ row.message ?: '—' }}</td>
+            <td data-label="Status">
+              <form method="post" action="/leads/{{ row.uuid }}/status" class="flex items-center gap-2">
+                {{ csrf_field() }}
+                <input type="hidden" name="back" value="{{ filter }}">
+                <label class="sr-only" for="lead-{{ row.uuid }}">Status</label>
+                <select id="lead-{{ row.uuid }}" name="status" class="input select py-1.5 text-sm">
+                  {% for s in statuses %}
+                    <option value="{{ s }}" {{ row.status == s ? 'selected' }}>{{ s|capitalize }}</option>
+                  {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-secondary btn-sm">Save</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</section>
+{% endblock %}

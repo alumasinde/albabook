@@ -5,7 +5,8 @@
 #   docker compose exec app php bin/console key:generate
 #   docker compose exec app php bin/console migrate
 #
-# Then open http://app.albabook.localhost:8080 (and book., api., admin.).
+# Then open http://app.albabook.localhost:8080 (and book., api., admin., and the
+# marketing site at http://albabook.localhost:8080).
 # MySQL 8 is required, not MariaDB: the booking engine's lock protocol and the
 # migrations depend on MySQL 8 behaviour (decisions.md D-009, D-024).
 

@@ -1,0 +1,83 @@
+{% extends 'layouts/marketing.twig' %}
+
+{% block title %}Pricing · {{ app_name }}{% endblock %}
+{% block description %}Simple monthly plans in Kenyan shillings. Start with a free trial, then upgrade as your team and branches grow.{% endblock %}
+
+{% block content %}
+<div data-page="marketing">
+
+<section class="hero">
+  <div class="hero-glow" aria-hidden="true"></div>
+  <div class="relative mx-auto max-w-3xl px-4 pb-14 pt-16 text-center sm:px-6 lg:px-8 lg:pt-20">
+    <span class="hero-eyebrow reveal">Pricing</span>
+    <h1 class="mt-6 text-4xl font-bold tracking-tight text-white sm:text-5xl reveal">Pay for what you use. Nothing hidden.</h1>
+    <p class="mx-auto mt-6 max-w-xl text-lg text-white/70 reveal">Monthly plans in shillings. Start on the free trial, upgrade when your team grows, cancel whenever you like.</p>
+  </div>
+</section>
+
+<section class="relative -mt-2 pb-20 pt-12">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    {% include 'marketing/_plans.twig' with { plans: plans, signup_url: signup_url } only %}
+  </div>
+</section>
+
+{% if comparison is not empty and plans|length > 1 %}
+<section class="mk-section bg-surface">
+  <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+    <div class="mk-heading reveal">
+      <span class="mk-eyebrow">Compare</span>
+      <h2 class="mk-title">Side by side</h2>
+    </div>
+    <div class="card mt-10 overflow-x-auto reveal">
+      <table class="compare-table">
+        <caption class="sr-only">Plan comparison</caption>
+        <thead>
+          <tr>
+            <th scope="col" class="text-left">Feature</th>
+            {% for plan in plans %}<th scope="col">{{ plan.name }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for label, cells in comparison %}
+            <tr>
+              <th scope="row" class="text-left font-medium text-ink">{{ label }}</th>
+              {% for cell in cells %}
+                <td>
+                  {% if cell is same as(true) %}
+                    <i class="fa-solid fa-check text-success-strong" aria-hidden="true"></i><span class="sr-only">Included</span>
+                  {% elseif cell is null %}
+                    <i class="fa-solid fa-minus text-line" aria-hidden="true"></i><span class="sr-only">Not included</span>
+                  {% else %}
+                    <span class="text-sm text-ink">{{ cell|replace({'Up to ': ''}) }}</span>
+                  {% endif %}
+                </td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+          <tr>
+            <th scope="row" class="text-left font-medium text-ink">Price</th>
+            {% for plan in plans %}
+              <td class="font-semibold text-ink">{{ plan.is_free ? 'Free' : plan.price|money }}</td>
+            {% endfor %}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<section class="mk-section">
+  <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+    <div class="mk-heading reveal">
+      <span class="mk-eyebrow">Questions</span>
+      <h2 class="mk-title">Pricing questions</h2>
+    </div>
+    {% include 'marketing/_faq.twig' only %}
+  </div>
+</section>
+
+{% include 'marketing/_cta.twig' with { signup_url: signup_url } only %}
+
+</div>
+{% endblock %}

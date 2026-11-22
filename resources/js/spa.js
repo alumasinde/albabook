@@ -9,7 +9,9 @@
 
   const AlbaBook = (window.AlbaBook = window.AlbaBook || {});
   const spa = (AlbaBook.spa = AlbaBook.spa || {});
-  const SHELL_SELECTOR = '.sidebar, main, .topbar';
+  // [data-spa-shell] opts a whole layout in (marketing site: header, drawer,
+  // footer and content links all swap without a full reload).
+  const SHELL_SELECTOR = '.sidebar, main, .topbar, [data-spa-shell]';
   let currentAbort = null;
   let progress = null;
 
@@ -75,6 +77,13 @@
       const href = link.getAttribute('href') || '';
       const active = href !== '#' && href !== '/' && (path === href || path.startsWith(href + '/'))
         || href === '/dashboard' && (path === '/' || path === '/dashboard');
+      link.classList.toggle('is-active', active);
+      if (active) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
+    });
+    // Marketing site: exact-path matching ("/" must not light up everywhere).
+    document.querySelectorAll('.site-nav-link, .site-drawer-link').forEach((link) => {
+      const active = (link.getAttribute('href') || '') === path;
       link.classList.toggle('is-active', active);
       if (active) link.setAttribute('aria-current', 'page');
       else link.removeAttribute('aria-current');
