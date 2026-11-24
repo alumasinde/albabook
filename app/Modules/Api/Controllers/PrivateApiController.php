@@ -296,7 +296,7 @@ final class PrivateApiController
                 (int) $request->attribute('api_credential_id'),
                 'api_credential',
                 $reason,
-                !empty($request->body()['force']),
+                force: !empty($request->body()['force']),
             );
         } catch (TransitionException $e) {
             return ApiResponse::error($e->apiCode, $e->getMessage(), $e->status, $e->fields ?: null);

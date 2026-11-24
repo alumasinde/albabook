@@ -29,7 +29,7 @@
         <button type="button" class="icon-button lg:hidden" data-drawer-toggle="sidebar" aria-controls="sidebar" aria-expanded="false">
           <i class="fa-solid fa-bars" aria-hidden="true"></i><span class="sr-only">{{ t('common.open_menu') }}</span>
         </button>
-        <h1 class="text-xl font-semibold text-ink sm:text-2xl">{{ page_title|default(t('nav.platform')) }}</h1>
+        <h1 class="text-xl font-semibold text-ink sm:text-2xl" data-page-heading>{{ page_title|default(t('nav.platform')) }}</h1>
         <span class="rounded-md bg-navy/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-navy">{{ t('nav.platform') }}</span>
       </div>
       <div class="flex items-center gap-3">

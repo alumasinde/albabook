@@ -45,7 +45,13 @@ final class NotificationDispatcher
         return $this->db->transaction(function () use ($limit): array {
             $stmt = $this->db->pdo()->prepare(
                 "SELECT q.id, q.tenant_id, q.channel, q.recipient, q.payload,
-                        COALESCE(t.default_locale, 'en') AS locale
+                        COALESCE(
+                            (SELECT a.locale FROM appointments a
+                              WHERE a.id = q.appointment_id
+                                AND a.tenant_id = q.tenant_id),
+                            t.default_locale,
+                            'en'
+                        ) AS locale
                    FROM notification_queue q
                    JOIN tenants t ON t.id = q.tenant_id
                   WHERE q.status = 'pending' AND q.scheduled_at <= UTC_TIMESTAMP()

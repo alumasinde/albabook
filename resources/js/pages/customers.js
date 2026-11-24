@@ -32,6 +32,69 @@
       .then((data) => { state.meta = data; })
       .catch(() => { state.meta = { staff: [], services: [] }; });
 
+    /* Possible duplicates: same phone or email. "Keep" folds every other
+     * member of the group into the chosen customer (sequential merges). */
+    const dupPanel = root.querySelector('[data-dup-panel]');
+
+    function loadDuplicates() {
+      api.get('/api/customers/duplicates')
+        .then((data) => renderDuplicates(data.groups || []))
+        .catch(() => {});
+    }
+
+    function renderDuplicates(groups) {
+      dupPanel.replaceChildren();
+      dupPanel.hidden = groups.length === 0;
+      groups.forEach((g) => {
+        const card = el('div', 'card mb-4 border-l-4 border-warning p-4');
+        const head = el('div', 'mb-2 flex items-center gap-2 text-sm text-muted');
+        head.append(ui.badge(g.match_type === 'phone' ? 'same phone' : 'same email', 'warning'));
+        head.append(el('span', 'font-mono text-xs', g.key));
+        card.append(head);
+        const wrap = el('div', 'flex flex-wrap items-center gap-2');
+        g.customers.forEach((c) => {
+          const chip = el('div', 'flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm');
+          chip.append(el('span', 'font-medium text-ink', c.name));
+          chip.append(el('span', 'text-xs text-muted',
+            `${c.appointment_count} bookings · since ${c.created_at}`));
+          if (canUpdate) {
+            const keep = el('button', 'btn btn-ghost btn-sm text-xs');
+            keep.type = 'button';
+            keep.append(document.createTextNode('Keep this one'));
+            keep.addEventListener('click', () => mergeGroup(g, c));
+            chip.append(keep);
+          }
+          wrap.append(chip);
+        });
+        card.append(wrap);
+        dupPanel.append(card);
+      });
+    }
+
+    async function mergeGroup(group, winner) {
+      const losers = group.customers.filter((c) => c.uuid !== winner.uuid);
+      const names = losers.map((c) => c.name).join(', ');
+      const yes = await ui.confirm({
+        title: 'Merge customers?',
+        message: `${names} will be merged into ${winner.name}. Their booking and payment history moves over; the merged record cannot be edited afterwards.`,
+        confirmLabel: 'Merge',
+      });
+      if (!yes) return;
+      try {
+        for (const loser of losers) {
+          await api.post(`/api/customers/${loser.uuid}/merge`, { into: winner.uuid });
+        }
+        AlbaBook.toast('Customers merged.', 'success');
+      } catch (error) {
+        AlbaBook.toast(error.message || 'Merge failed.', 'danger');
+      }
+      state.page = 1;
+      load();
+      loadDuplicates();
+    }
+
+    loadDuplicates();
+
     function query() {
       const params = new URLSearchParams({ page: state.page });
       filterInputs.forEach((input) => {

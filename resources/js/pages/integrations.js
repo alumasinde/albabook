@@ -47,9 +47,21 @@ AlbaBook.pages.register('integrations', function (root) {
 
       if (canManage) {
         const actions = el('div', 'flex shrink-0 gap-1');
+        const test = iconBtn('fa-paper-plane', 'Send test event');
         const edit = iconBtn('fa-pen', 'Edit endpoint');
         const toggle = iconBtn(ep.is_active ? 'fa-pause' : 'fa-play', ep.is_active ? 'Pause' : 'Resume');
         const del = iconBtn('fa-trash', 'Delete endpoint');
+        test.addEventListener('click', () => {
+          test.disabled = true;
+          api.post('/api/integrations/' + ep.uuid + '/test')
+            .then(() => {
+              AlbaBook.toast('Test event queued — watch the deliveries panel.');
+              reload();
+              window.setTimeout(reload, 8000);
+            })
+            .catch((error) => AlbaBook.toast(error.message, 'danger'))
+            .finally(() => { test.disabled = false; });
+        });
         edit.addEventListener('click', () => endpointDrawer(ep));
         toggle.addEventListener('click', () => {
           api.patch('/api/integrations/' + ep.uuid, { is_active: !ep.is_active })
@@ -69,7 +81,7 @@ AlbaBook.pages.register('integrations', function (root) {
               .catch((error) => AlbaBook.toast(error.message, 'danger'));
           });
         });
-        actions.append(edit, toggle, del);
+        actions.append(test, edit, toggle, del);
         top.append(actions);
       }
       card.append(top);

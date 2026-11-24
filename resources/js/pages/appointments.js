@@ -163,32 +163,56 @@
       }
 
       if (d.history && d.history.length) {
+        // Status-colored event timeline: who did what, when, and any
+        // reason / timing-override / reschedule detail the event carries.
+        const DOT = {
+          cancelled: 'bg-danger', no_show: 'bg-danger', expired: 'bg-warning',
+          completed: 'bg-success',
+        };
         body.append(el('h4', 'mt-6 text-sm font-semibold text-ink', 'History'));
-        const list = el('ul', 'mt-2 space-y-1.5 text-sm text-muted');
-        d.history.forEach((event) => {
-          const li = el('li', 'flex gap-2');
-          li.append(el('span', 'text-ink', event.label));
-          li.append(el('span', 'ml-auto shrink-0 text-xs', event.at));
+        const list = el('ol', 'mt-3');
+        d.history.forEach((event, i) => {
+          const li = el('li', 'relative flex gap-3' + (i < d.history.length - 1 ? ' pb-4' : ''));
+          if (i < d.history.length - 1) {
+            li.append(el('span', 'absolute left-[4.5px] top-3.5 h-full w-px bg-line'));
+          }
+          li.append(el('span', 'relative mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ' + (DOT[event.status] || 'bg-primary')));
+          const text = el('div', 'min-w-0 flex-1');
+          text.append(el('p', 'text-sm font-medium text-ink', event.label));
+          const meta = [event.at, event.actor].filter(Boolean).join(' · ');
+          if (meta) text.append(el('p', 'text-xs text-muted', meta));
+          if (event.detail) text.append(el('p', 'mt-0.5 text-xs text-warning-strong', event.detail));
+          if (event.reason) text.append(el('p', 'mt-0.5 text-xs italic text-muted', '“' + event.reason + '”'));
+          li.append(text);
           list.append(li);
         });
         body.append(list);
       }
     },
 
-    async _transition(d, to, btn, body, onChange, force) {
+    async _transition(d, to, btn, body, onChange, force, extra) {
       const spec = TRANSITIONS[to];
-      if (to === 'cancelled' || to === 'no_show') {
+      if (to === 'cancelled' && !extra) {
+        // Structured reason capture — replaces the bare confirm so cancels
+        // feed the cancellations-by-reason report.
+        btn.disabled = true;
+        const actions = btn.parentElement;
+        actions.append(appointmentDrawer._cancelForm(d, actions, onChange, btn));
+        return;
+      }
+      if (to === 'no_show') {
         const yes = await ui.confirm({
           title: spec.label,
           message: 'This changes the appointment status to ' + to.replace(/_/g, ' ') + '.',
           confirmLabel: spec.label,
-          danger: to === 'cancelled',
+          danger: false,
         });
         if (!yes) return;
       }
       ui.setBusy(btn, true, 'Working…');
       AlbaBook.api
-        .post('/api/appointments/' + encodeURIComponent(d.uuid) + '/transition', { to, version: d.version, force: !!force })
+        .post('/api/appointments/' + encodeURIComponent(d.uuid) + '/transition',
+          Object.assign({ to, version: d.version, force: !!force }, extra || {}))
         .then(() => {
           AlbaBook.toast('Appointment updated.', 'success');
           ui.drawer.close();
@@ -205,13 +229,69 @@
               message: error.message || 'This is outside the appointment window. Proceed anyway?',
               confirmLabel: 'Proceed anyway',
             });
-            if (yes) appointmentDrawer._transition(d, to, btn, body, onChange, true);
+            if (yes) appointmentDrawer._transition(d, to, btn, body, onChange, true, extra);
             return;
           }
           ui.setBusy(btn, false);
           AlbaBook.toast(error.message || 'Update failed.', 'danger');
           if (error.code === 'STALE_APPOINTMENT') appointmentDrawer.open(d.uuid, onChange);
         });
+    },
+
+    /* Cancel reasons — mirrors AppointmentTransitionService::CANCEL_REASON_CODES. */
+    CANCEL_REASONS: [
+      ['illness', 'Illness / emergency'],
+      ['schedule_conflict', 'Schedule conflict'],
+      ['price', 'Price'],
+      ['found_alternative', 'Found another provider'],
+      ['no_longer_needed', 'No longer needed'],
+      ['other', 'Other'],
+    ],
+
+    /* Inline cancel form: reason dropdown (required) + optional note. Mounted
+     * under the action buttons like the reschedule form. */
+    _cancelForm(d, actions, onChange, cancelBtn) {
+      const form = el('form', 'mt-2 space-y-3 rounded-lg border border-line p-4');
+      form.noValidate = true;
+
+      const reasonSel = el('select', 'input w-full');
+      reasonSel.append(el('option', '', 'Reason for cancelling…'));
+      appointmentDrawer.CANCEL_REASONS.forEach(([code, label]) => {
+        const opt = el('option', '', label);
+        opt.value = code;
+        reasonSel.appendChild(opt);
+      });
+
+      const noteInput = el('input', 'input w-full');
+      noteInput.type = 'text';
+      noteInput.placeholder = 'Note (optional)';
+      noteInput.maxLength = 255;
+
+      const errorEl = el('p', 'text-sm text-danger hidden');
+      const buttons = el('div', 'flex gap-2');
+      const confirmBtn = el('button', 'btn btn-danger btn-md flex-1');
+      confirmBtn.type = 'submit';
+      confirmBtn.append(document.createTextNode('Confirm cancel'));
+      const backBtn = el('button', 'btn btn-ghost btn-md');
+      backBtn.type = 'button';
+      backBtn.append(document.createTextNode('Back'));
+      buttons.append(confirmBtn, backBtn);
+      form.append(reasonSel, noteInput, errorEl, buttons);
+
+      backBtn.addEventListener('click', () => { form.remove(); cancelBtn.disabled = false; });
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (!reasonSel.value) {
+          errorEl.textContent = 'Pick a reason — it feeds the cancellation report.';
+          errorEl.classList.remove('hidden');
+          return;
+        }
+        appointmentDrawer._transition(d, 'cancelled', cancelBtn, actions.parentElement, onChange, false, {
+          reason_code: reasonSel.value,
+          reason: noteInput.value.trim() || undefined,
+        });
+      });
+      return form;
     },
 
     /* Reschedule form — same dependent-dropdown model as the create modal:

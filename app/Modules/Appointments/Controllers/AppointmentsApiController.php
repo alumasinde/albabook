@@ -151,10 +151,7 @@ final class AppointmentsApiController
             'branch_id' => (int) $row['branch_id'],
             'service_id' => (int) ($items[0]['service_id'] ?? 0),
             'staff_id' => (int) ($items[0]['staff_id'] ?? 0),
-            'history' => array_map(fn(array $event) => [
-                'label' => $this->eventLabel($event),
-                'at' => (string) $event['created_at'],
-            ], $events),
+            'history' => array_map(fn(array $event) => $this->historyEntry($event, $branchTz), $events),
         ]);
     }
 
@@ -167,6 +164,8 @@ final class AppointmentsApiController
         $to = (string) ($body['to'] ?? '');
         $version = isset($body['version']) ? (int) $body['version'] : null;
         $reason = isset($body['reason']) ? trim((string) $body['reason']) : null;
+        $reasonCode = isset($body['reason_code']) ? trim((string) $body['reason_code']) : null;
+        $reasonCode = $reasonCode === '' ? null : $reasonCode;
 
         $permission = $this->transitions->permissionFor($to);
         if ($permission === null) {
@@ -179,7 +178,7 @@ final class AppointmentsApiController
         try {
             $row = $this->transitions->transition(
                 $tenant->tenantId, $uuid, $to, $version, $membership->actorUserId(),
-                force: !empty($body['force']),
+                reason: $reason, cancelCode: $reasonCode, force: !empty($body['force']),
             );
         } catch (TransitionException $e) {
             return ApiResponse::error($e->apiCode, $e->getMessage(), $e->status, $e->fields ?: null);
@@ -531,16 +530,87 @@ final class AppointmentsApiController
     }
 
     /** @param array<string, mixed> $event */
-    private function eventLabel(array $event): string
+    /**
+     * One timeline row for the details drawer: human label, who did it,
+     * localized time, plus reason / timing-override / reschedule detail
+     * pulled out of the event metadata.
+     *
+     * @param array<string, mixed> $event
+     * @return array<string, mixed>
+     */
+    private function historyEntry(array $event, string $tz): array
     {
         $type = (string) $event['event_type'];
-        if ($type === 'status.created') {
-            return 'Created';
-        }
-        if (str_starts_with($type, 'status.')) {
-            return 'Status → ' . str_replace('_', ' ', substr($type, 7));
+        $to = (string) ($event['to_status'] ?? '');
+        $label = match ($type) {
+            'status.created' => 'Created',
+            'rescheduled' => 'Rescheduled',
+            default => $to !== '' ? self::STATUS_LABELS[$to] ?? str_replace('_', ' ', $to) : str_replace('_', ' ', $type),
+        };
+
+        $meta = [];
+        if (is_string($event['metadata'] ?? null) && $event['metadata'] !== '') {
+            $decoded = json_decode((string) $event['metadata'], true);
+            $meta = is_array($decoded) ? $decoded : [];
         }
 
-        return str_replace('_', ' ', $type);
+        $detail = null;
+        if ($type === 'rescheduled' && isset($meta['to_start']) && is_string($meta['to_start'])) {
+            $detail = 'Moved to ' . $this->localDate($meta['to_start'], $tz) . ' ' . $this->localTime($meta['to_start'], $tz);
+        } elseif (isset($meta['timing_override']) && is_string($meta['timing_override'])) {
+            $detail = 'Timing rule overridden — ' . $meta['timing_override'];
+        }
+        if (isset($meta['cancel_reason_code']) && is_string($meta['cancel_reason_code'])) {
+            $label = self::CANCEL_REASON_LABELS[$meta['cancel_reason_code']] ?? str_replace('_', ' ', $meta['cancel_reason_code']);
+            $detail = ($detail !== null ? $detail . ' · ' : '') . 'Reason: ' . $label;
+        }
+
+        return [
+            'label' => $label,
+            'status' => $to !== '' ? $to : null,
+            'actor' => $this->actorLabel($event),
+            'at' => $this->dates->toLocal($this->dates->fromDb((string) $event['created_at']), $tz)->format('M j, g:i A'),
+            'reason' => $event['reason'] !== null && $event['reason'] !== '' ? (string) $event['reason'] : null,
+            'detail' => $detail,
+        ];
     }
+
+    /** @param array<string, mixed> $event */
+    private function actorLabel(array $event): ?string
+    {
+        $name = trim((string) ($event['actor_name'] ?? ''));
+        if ($name !== '') {
+            return $name;
+        }
+
+        return match ($event['actor_type'] ?? null) {
+            'customer' => 'Customer',
+            'system' => 'System',
+            'api_credential' => 'API',
+            'platform_user' => 'Platform',
+            'support_session' => 'Support',
+            'tenant_user' => 'Staff',
+            default => null,
+        };
+    }
+
+    private const CANCEL_REASON_LABELS = [
+        'illness' => 'Illness / emergency',
+        'schedule_conflict' => 'Schedule conflict',
+        'price' => 'Price',
+        'found_alternative' => 'Found another provider',
+        'no_longer_needed' => 'No longer needed',
+        'other' => 'Other',
+    ];
+
+    private const STATUS_LABELS = [
+        'pending' => 'Pending',
+        'confirmed' => 'Confirmed',
+        'checked_in' => 'Checked in',
+        'in_service' => 'In service',
+        'completed' => 'Completed',
+        'cancelled' => 'Cancelled',
+        'no_show' => 'No-show',
+        'expired' => 'Expired',
+    ];
 }

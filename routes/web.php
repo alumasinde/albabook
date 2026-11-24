@@ -144,12 +144,16 @@ return static function (RouteRegistrar $r): void {
     $r->post('/api/staff', [StaffApiController::class, 'create'], $workspace, name: 'api.staff.create');
     $r->get('/api/staff/{uuid}', [StaffApiController::class, 'show'], $workspace, name: 'api.staff.show');
     $r->patch('/api/staff/{uuid}', [StaffApiController::class, 'update'], $workspace, name: 'api.staff.update');
+    $r->post('/api/staff/{uuid}/calendar-feed', [StaffApiController::class, 'calendarFeed'], $workspace, name: 'api.staff.calendar-feed');
+    $r->delete('/api/staff/{uuid}/calendar-feed', [StaffApiController::class, 'calendarFeedRevoke'], $workspace, name: 'api.staff.calendar-feed.revoke');
     $r->delete('/api/staff/{uuid}', [StaffApiController::class, 'destroy'], $workspace, name: 'api.staff.destroy');
     $r->get('/api/customers/meta', [CustomersApiController::class, 'meta'], $workspace, name: 'api.customers.meta');
+    $r->get('/api/customers/duplicates', [CustomersApiController::class, 'duplicates'], $workspace, name: 'api.customers.duplicates');
     $r->get('/api/customers', [CustomersApiController::class, 'list'], $workspace, name: 'api.customers.list');
     $r->post('/api/customers', [CustomersApiController::class, 'create'], $workspace, name: 'api.customers.create');
     $r->get('/api/customers/{uuid}', [CustomersApiController::class, 'show'], $workspace, name: 'api.customers.show');
     $r->patch('/api/customers/{uuid}', [CustomersApiController::class, 'update'], $workspace, name: 'api.customers.update');
+    $r->post('/api/customers/{uuid}/merge', [CustomersApiController::class, 'merge'], $workspace, name: 'api.customers.merge');
     $r->delete('/api/customers/{uuid}', [CustomersApiController::class, 'destroy'], $workspace, name: 'api.customers.destroy');
     $r->get('/api/settings/categories', [SettingsApiController::class, 'categories'], $workspace, name: 'api.settings.categories');
     $r->post('/api/settings/categories', [SettingsApiController::class, 'createCategory'], $workspace, name: 'api.settings.categories.create');
@@ -195,6 +199,7 @@ return static function (RouteRegistrar $r): void {
     $r->post('/api/integrations', [IntegrationsApiController::class, 'create'], $workspace, name: 'api.integrations.create');
     $r->patch('/api/integrations/{uuid}', [IntegrationsApiController::class, 'update'], $workspace, name: 'api.integrations.update');
     $r->delete('/api/integrations/{uuid}', [IntegrationsApiController::class, 'destroy'], $workspace, name: 'api.integrations.destroy');
+    $r->post('/api/integrations/{uuid}/test', [IntegrationsApiController::class, 'testEndpoint'], $workspace, name: 'api.integrations.test');
     // Private API credentials — separate literal segment so they are never
     // shadowed by the {uuid} webhook routes above.
     $r->post('/api/integrations/credentials', [IntegrationsApiController::class, 'createCredential'], $workspace, name: 'api.integrations.credentials.create');

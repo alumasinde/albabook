@@ -226,6 +226,75 @@ final class ReportRepository
         return array_values($stmt->fetchAll());
     }
 
+    /**
+     * Punctuality / utilization metrics per staff member, built on the
+     * transition-timestamp columns (checked_in_at, in_service_at, completed_at):
+     * wait = check-in -> service start; start delay = booked start -> service
+     * start (positive = late); overrun = actual vs booked service duration.
+     * Each appointment attributes to its primary (first) item's staff member,
+     * so multi-item bookings never skew the averages.
+     * @param list<int>|null $branchIds
+     * @return list<array<string, mixed>>
+     */
+    public function punctuality(int $tenantId, string $from, string $to, ?array $branchIds = null): array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT s.display_name AS staff,
+                    COALESCE(b.name, '') AS branch,
+                    COUNT(*) AS bookings,
+                    SUM(ap.status = 'completed') AS completed,
+                    SUM(ap.status = 'no_show') AS no_shows,
+                    ROUND(AVG(TIMESTAMPDIFF(SECOND, ap.checked_in_at, ap.in_service_at)) / 60, 1) AS avg_wait_min,
+                    ROUND(AVG(TIMESTAMPDIFF(SECOND, ap.start_at, ap.in_service_at)) / 60, 1) AS avg_start_delay_min,
+                    ROUND(AVG(
+                        100 * (TIMESTAMPDIFF(SECOND, ap.in_service_at, ap.completed_at)
+                               - TIMESTAMPDIFF(SECOND, ap.start_at, ap.end_at))
+                        / TIMESTAMPDIFF(SECOND, ap.start_at, ap.end_at)
+                    ), 1) AS avg_overrun_pct
+             FROM (
+                SELECT a.id, a.tenant_id, a.branch_id, a.status, a.start_at, a.end_at,
+                       a.checked_in_at, a.in_service_at, a.completed_at,
+                       (SELECT MIN(i.staff_id) FROM appointment_items i
+                         WHERE i.tenant_id = a.tenant_id AND i.appointment_id = a.id) AS staff_id
+                  FROM appointments a
+                 WHERE a.tenant_id = ? AND a.start_at >= ? AND a.start_at < ?
+                   AND a.status IN ('completed','no_show','in_service','checked_in','confirmed','cancelled','pending','expired','rejected')
+             ) ap
+             JOIN staff s ON s.tenant_id = ap.tenant_id AND s.id = ap.staff_id
+             LEFT JOIN branches b ON b.tenant_id = ap.tenant_id AND b.id = ap.branch_id
+             WHERE 1=1" . $this->inBranch($branchIds, 'ap.branch_id') . "
+             GROUP BY s.id, s.display_name, b.name
+             ORDER BY bookings DESC, staff",
+        );
+        $stmt->execute([$tenantId, $from, $to]);
+
+        /** @var list<array<string, mixed>> */
+        return array_values($stmt->fetchAll());
+    }
+
+    /** Cancellations grouped by the structured reason code (M2); NULL codes
+     *  bucket as 'unspecified' so legacy cancels still count.
+     * @param list<int>|null $branchIds
+     * @return list<array<string, mixed>>
+     */
+    public function cancellationsByReason(int $tenantId, string $from, string $to, ?array $branchIds = null): array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT COALESCE(cancellation_code, 'unspecified') AS code,
+                    COUNT(*) AS count,
+                    SUM(cancelled_by = 'customer') AS by_customer
+             FROM appointments
+             WHERE tenant_id = ? AND start_at >= ? AND start_at < ?
+               AND status = 'cancelled'" . $this->inBranch($branchIds, 'branch_id') . "
+             GROUP BY COALESCE(cancellation_code, 'unspecified')
+             ORDER BY count DESC, code",
+        );
+        $stmt->execute([$tenantId, $from, $to]);
+
+        /** @var list<array<string, mixed>> */
+        return array_values($stmt->fetchAll());
+    }
+
     /** Occupied minutes per resource for the Resources tab.
      * @param list<int>|null $branchIds
      * @return list<array<string, mixed>>
@@ -249,6 +318,36 @@ final class ReportRepository
              ORDER BY occupied_minutes DESC, resource",
         );
         $stmt->execute([$tenantId, $to, $from]);
+
+        /** @var list<array<string, mixed>> */
+        return array_values($stmt->fetchAll());
+    }
+
+    /** Revenue + commission per staff member with a configured rate, via
+     *  payments -> appointment (primary staff). Commission = succeeded
+     *  revenue in the window x commission_pct. (reports.view_financial)
+     * @param list<int>|null $branchIds
+     * @return list<array<string, mixed>>
+     */
+    public function commission(int $tenantId, string $from, string $to, ?array $branchIds = null): array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT s.display_name AS staff,
+                    s.commission_pct,
+                    COUNT(p.id) AS payments,
+                    COALESCE(SUM(p.amount_minor), 0) AS revenue_minor,
+                    ROUND(COALESCE(SUM(p.amount_minor), 0) * s.commission_pct / 100) AS commission_minor
+             FROM staff s
+             JOIN appointments a
+               ON a.tenant_id = s.tenant_id AND a.staff_id = s.id
+             JOIN payments p
+               ON p.tenant_id = a.tenant_id AND p.appointment_id = a.id
+                  AND p.status = 'succeeded' AND p.received_at >= ? AND p.received_at < ?
+             WHERE s.tenant_id = ? AND s.commission_pct IS NOT NULL" . $this->inBranch($branchIds, 'a.branch_id') . "
+             GROUP BY s.id, s.display_name, s.commission_pct
+             ORDER BY commission_minor DESC, staff",
+        );
+        $stmt->execute([$from, $to, $tenantId]);
 
         /** @var list<array<string, mixed>> */
         return array_values($stmt->fetchAll());

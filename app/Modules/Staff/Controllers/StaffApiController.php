@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace App\Modules\Staff\Controllers;
 
 use App\Core\Database\Database;
+use App\Core\Http\HostGroup;
 use App\Core\Http\Request;
 use App\Core\Http\Response;
 use App\Modules\Auth\Context\MembershipContext;
 use App\Modules\Billing\Services\FeatureGate;
 use App\Modules\Staff\Repositories\StaffRepository;
 use App\Shared\Http\ApiResponse;
+use App\Shared\Http\AppUrl;
 use App\Shared\Support\UuidFactory;
 use App\Tenancy\TenantContext;
 
@@ -27,6 +29,7 @@ final class StaffApiController
         private readonly Database $db,
         private readonly UuidFactory $uuids,
         private readonly FeatureGate $features,
+        private readonly AppUrl $urls,
     ) {}
 
     /** @param array<string, string> $params */
@@ -188,6 +191,48 @@ final class StaffApiController
     }
 
     /**
+     * Mint (or rotate) the member's public .ics feed token and return the
+     * subscription URL. Only the SHA-256 is stored; the raw token leaves in
+     * this response only — like booking manage tokens.
+     * @param array<string, string> $params
+     */
+    public function calendarFeed(Request $request, array $params): Response
+    {
+        [$tenant, $membership] = $this->context($request);
+        if (!$membership->can('staff.manage')) {
+            return ApiResponse::error('FORBIDDEN', 'You do not have permission to manage staff.', 403);
+        }
+
+        $member = $this->staff->findByUuid($tenant->tenantId, (string) $params['uuid']);
+        if ($member === null) {
+            return ApiResponse::error('NOT_FOUND', 'Staff member not found.', 404);
+        }
+
+        $token = bin2hex(random_bytes(32));
+        $this->staff->setCalendarTokenHash($tenant->tenantId, (int) $member['id'], hash('sha256', $token));
+
+        return ApiResponse::ok(['url' => $this->urls->to(HostGroup::Api, '/v1/staff-calendar/' . $token . '.ics', $request)]);
+    }
+
+    /** @param array<string, string> $params */
+    public function calendarFeedRevoke(Request $request, array $params): Response
+    {
+        [$tenant, $membership] = $this->context($request);
+        if (!$membership->can('staff.manage')) {
+            return ApiResponse::error('FORBIDDEN', 'You do not have permission to manage staff.', 403);
+        }
+
+        $member = $this->staff->findByUuid($tenant->tenantId, (string) $params['uuid']);
+        if ($member === null) {
+            return ApiResponse::error('NOT_FOUND', 'Staff member not found.', 404);
+        }
+
+        $this->staff->setCalendarTokenHash($tenant->tenantId, (int) $member['id'], null);
+
+        return ApiResponse::ok(['revoked' => true]);
+    }
+
+    /**
      * @param array<string, mixed> $body
      * @return array{0: array<string, mixed>, 1: list<int>, 2: list<int>,
      *               3: list<array{weekday: int, starts_at: string, ends_at: string}>,
@@ -270,6 +315,8 @@ final class StaffApiController
             'email' => $email !== '' ? $email : null,
             'phone_e164' => $phone !== '' ? $phone : null,
             'bio' => trim((string) ($body['bio'] ?? '')) ?: null,
+            'commission_pct' => $body['commission_pct'] !== null && $body['commission_pct'] !== ''
+                ? min(100, max(0, (float) $body['commission_pct'])) : null,
             'booking_priority' => max(0, (int) ($body['booking_priority'] ?? 0)),
             'is_bookable_online' => !empty($body['is_bookable_online']) ? 1 : 0,
             'status' => $status,
@@ -292,6 +339,7 @@ final class StaffApiController
             'first_name' => $member['first_name'],
             'last_name' => $member['last_name'],
             'bio' => $member['bio'],
+            'commission_pct' => $member['commission_pct'] !== null ? (float) $member['commission_pct'] : null,
             'tenant_user_id' => $member['tenant_user_id'] !== null ? (int) $member['tenant_user_id'] : null,
             'booking_priority' => (int) $member['booking_priority'],
             'services' => count($serviceIds),
@@ -299,6 +347,7 @@ final class StaffApiController
             'service_ids' => $serviceIds,
             'schedule' => $this->scheduleRows($member),
             'references' => $this->staff->referenceCount($tenantId, $staffId),
+            'has_calendar_feed' => $this->staff->hasCalendarToken($tenantId, $staffId),
         ]);
     }
 

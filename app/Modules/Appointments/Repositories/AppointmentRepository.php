@@ -255,10 +255,12 @@ final class AppointmentRepository
     public function eventsFor(int $tenantId, int $appointmentId): array
     {
         $stmt = $this->db->pdo()->prepare(
-            'SELECT event_type, actor_type, from_status, to_status, reason, created_at
-               FROM appointment_events
-              WHERE tenant_id = :t AND appointment_id = :a
-           ORDER BY created_at, id',
+            'SELECT e.event_type, e.actor_type, e.from_status, e.to_status, e.reason, e.metadata, e.created_at,
+                    TRIM(CONCAT_WS(\' \', u.first_name, u.last_name)) AS actor_name
+               FROM appointment_events e
+               LEFT JOIN users u ON e.actor_type = \'tenant_user\' AND e.actor_id = u.id
+              WHERE e.tenant_id = :t AND e.appointment_id = :a
+           ORDER BY e.created_at, e.id',
         );
         $stmt->execute(['t' => $tenantId, 'a' => $appointmentId]);
 
@@ -291,8 +293,10 @@ final class AppointmentRepository
             $sets[] = 'cancelled_at = UTC_TIMESTAMP(6)';
             $sets[] = 'cancelled_by = :cancelled_by';
             $sets[] = 'cancellation_reason = :cancellation_reason';
+            $sets[] = 'cancellation_code = :cancellation_code';
             $params['cancelled_by'] = $extra['cancelled_by'] ?? 'business';
             $params['cancellation_reason'] = $extra['reason'] ?? null;
+            $params['cancellation_code'] = $extra['cancel_code'] ?? null;
         }
         $sql = 'UPDATE appointments SET ' . implode(', ', $sets)
              . ' WHERE tenant_id = :t AND id = :id AND version = :v';

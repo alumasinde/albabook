@@ -63,6 +63,19 @@ final class BookingPageController
         );
         $openingHours = $branches !== [] ? $this->pages->openingHours((int) $tenant['id'], (int) $branches[0]['id']) : [];
 
+        // Slugless endpoints when the request arrived on the tenant's
+        // verified custom domain; canonical slug endpoints otherwise.
+        $apiBase = $this->context->customDomain !== null ? '' : '/' . $tenant['slug'];
+
+        // Canonical URL = the address actually being served, so custom-domain
+        // tenants get their own domain in og:url/canonical, not book.*.
+        $port = $request->port();
+        $canonical = ($request->isSecure() ? 'https' : 'http') . '://' . $request->host()
+            . ($port !== null && $port !== 80 && $port !== 443 ? ':' . $port : '')
+            . ($apiBase === '' ? '/' : $apiBase);
+
+        $seoDescription = trim((string) ($settings['seo_description'] ?? ''));
+
         return $this->view->response('booking/page.twig', [
             'tenant' => $tenant,
             'settings' => $settings,
@@ -75,9 +88,15 @@ final class BookingPageController
             'sections' => $this->pages->sections((int) $tenant['id']),
             'faqs' => $this->pages->faqs((int) $tenant['id']),
             'show_powered_by' => !$this->features->enabled((int) $tenant['id'], 'white_label'),
-            // Slugless endpoints when the request arrived on the tenant's
-            // verified custom domain; canonical slug endpoints otherwise.
-            'api_base' => $this->context->customDomain !== null ? '' : '/' . $tenant['slug'],
+            'api_base' => $apiBase,
+            // Brand link returns to this booking page in the visitor's locale.
+            'home_url' => $apiBase . '?lang=' . $this->context->locale,
+            'canonical_url' => $canonical,
+            'seo' => [
+                'description' => $seoDescription,
+                // JSON_HEX_* flags keep tenant text inert inside <script>.
+                'structured' => $this->structuredData($tenant, $branches[0] ?? null, $services, $openingHours, $canonical, $seoDescription),
+            ],
             // Bookings submitted from the framed widget are recorded with
             // booking_source 'widget' (the page JS reads data-embed).
             'embed' => str_ends_with($request->path(), '/embed'),
@@ -120,6 +139,71 @@ final class BookingPageController
      *
      * @param array<string, mixed>|null $branding
      */
+    /**
+     * schema.org LocalBusiness + OfferCatalog for the booking page — lets
+     * search engines and WhatsApp/social previews understand the business.
+     * Output is JSON_HEX_* escaped so tenant text cannot break the tag.
+     *
+     * @param array<string, mixed> $tenant
+     * @param array<string, mixed>|null $branch
+     * @param list<array<string, mixed>> $services
+     * @param list<array<string, mixed>> $openingHours
+     */
+    private function structuredData(array $tenant, ?array $branch, array $services, array $openingHours, string $canonical, string $description): string
+    {
+        $business = [
+            '@context' => 'https://schema.org',
+            '@type' => 'LocalBusiness',
+            'name' => (string) $tenant['name'],
+            'url' => $canonical,
+        ];
+        if ($description !== '') {
+            $business['description'] = $description;
+        }
+        if ($branch !== null) {
+            $street = trim(implode(' ', array_filter([(string) ($branch['address_line1'] ?? ''), (string) ($branch['address_line2'] ?? '')])));
+            $address = array_filter([
+                '@type' => 'PostalAddress',
+                'streetAddress' => $street !== '' ? $street : null,
+                'addressLocality' => ($branch['town'] ?? '') !== '' ? (string) $branch['town'] : null,
+                'addressRegion' => ($branch['county'] ?? '') !== '' ? (string) $branch['county'] : null,
+                'addressCountry' => 'KE',
+            ]);
+            if (count($address) > 2) {
+                $business['address'] = $address;
+            }
+            if (($branch['phone'] ?? '') !== '') {
+                $business['telephone'] = (string) $branch['phone'];
+            }
+        }
+
+        if ($openingHours !== []) {
+            $days = [1 => 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+            $business['openingHoursSpecification'] = array_map(static fn(array $row): array => [
+                '@type' => 'OpeningHoursSpecification',
+                'dayOfWeek' => $days[(int) $row['weekday']] ?? 'Monday',
+                'opens' => substr((string) $row['opens_at'], 0, 5),
+                'closes' => substr((string) $row['closes_at'], 0, 5),
+            ], $openingHours);
+        }
+
+        $offers = [];
+        foreach ($services as $service) {
+            $offer = ['@type' => 'Offer', 'itemOffered' => ['@type' => 'Service', 'name' => (string) $service['name']]];
+            if ($service['price_type'] === 'fixed' && $service['price_amount_minor'] !== null) {
+                $offer['price'] = number_format(((int) $service['price_amount_minor']) / 100, 2, '.', '');
+                $offer['priceCurrency'] = (string) $service['currency'];
+            }
+            $offers[] = $offer;
+        }
+        if ($offers !== []) {
+            $business['hasOfferCatalog'] = ['@type' => 'OfferCatalog', 'name' => 'Services', 'itemListElement' => $offers];
+        }
+
+        return json_encode($business, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_THROW_ON_ERROR);
+    }
+
+    /** @param array<string, mixed>|null $branding */
     private function themeCss(?array $branding): ?string
     {
         if ($branding === null) {

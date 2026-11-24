@@ -51,6 +51,7 @@
     <button type="button" class="tab-btn" data-rep-tab="sales" role="tab">{{ t('reports.tab_sales') }}</button>
     {% endif %}
     <button type="button" class="tab-btn" data-rep-tab="noshows" role="tab">{{ t('reports.tab_noshows') }}</button>
+    <button type="button" class="tab-btn" data-rep-tab="punctuality" role="tab">{{ t('reports.tab_punctuality') }}</button>
     <button type="button" class="tab-btn" data-rep-tab="resources" role="tab">{{ t('reports.tab_resources') }}</button>
   </div>
 
@@ -109,6 +110,11 @@
       <h3 class="text-lg font-semibold text-ink">{{ t('reports.sales_by_method') }}</h3>
       <div data-rep-method-table class="mt-5"></div>
     </div>
+    <div class="card mt-6 p-6">
+      <h3 class="text-lg font-semibold text-ink">{{ t('reports.commission_heading') }}</h3>
+      <p class="mt-1 text-sm text-muted">{{ t('reports.commission_subtitle') }}</p>
+      <div data-rep-commission class="mt-5"></div>
+    </div>
   </div>
   {% endif %}
 
@@ -116,6 +122,18 @@
     <div class="card p-6">
       <h3 class="text-lg font-semibold text-ink">{{ t('reports.noshows_heading') }}</h3>
       <div data-rep-noshows-table class="mt-5"></div>
+    </div>
+    <div class="card mt-6 p-6">
+      <h3 class="text-lg font-semibold text-ink">{{ t('reports.cancel_reasons_heading') }}</h3>
+      <div data-rep-cancel-reasons class="mt-5"></div>
+    </div>
+  </div>
+
+  <div data-rep-panel="punctuality" hidden>
+    <div class="card p-6">
+      <h3 class="text-lg font-semibold text-ink">{{ t('reports.punctuality_heading') }}</h3>
+      <p class="mt-1 text-sm text-muted">{{ t('reports.punctuality_subtitle') }}</p>
+      <div data-rep-punctuality-table class="mt-5"></div>
     </div>
   </div>
 

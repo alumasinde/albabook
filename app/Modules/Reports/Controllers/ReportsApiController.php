@@ -47,12 +47,15 @@ final class ReportsApiController
             'appointments_by_day' => $this->reports->appointmentsByDay($tenant->tenantId, $from, $to, $membership->branchIds),
             'by_service' => $this->reports->byService($tenant->tenantId, $from, $to, $membership->branchIds),
             'noshows_by_service' => $this->reports->noShowsByService($tenant->tenantId, $from, $to, $membership->branchIds),
+            'punctuality' => $this->reports->punctuality($tenant->tenantId, $from, $to, $membership->branchIds),
+            'cancellations_by_reason' => $this->reports->cancellationsByReason($tenant->tenantId, $from, $to, $membership->branchIds),
             'resource_utilization' => $this->reports->resourceUtilization($tenant->tenantId, $from, $to, $membership->branchIds),
             'currency' => $this->reports->currency($tenant->tenantId),
         ];
         if ($membership->can('reports.view_financial')) {
             $data['financial'] = $this->reports->financial($tenant->tenantId, $from, $to, $membership->branchIds);
             $data['sales_by_day'] = $this->reports->salesByDay($tenant->tenantId, $from, $to, $membership->branchIds);
+            $data['commission'] = $this->reports->commission($tenant->tenantId, $from, $to, $membership->branchIds);
         }
 
         return ApiResponse::ok($data);

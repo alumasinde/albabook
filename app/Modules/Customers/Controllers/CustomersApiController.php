@@ -96,11 +96,22 @@ final class CustomersApiController
             return ApiResponse::error('VALIDATION', 'Fix the highlighted fields.', 422, $fields);
         }
 
+        $dup = $this->customers->findActiveByPhoneOrEmail(
+            $tenant->tenantId, $data['phone_e164'] ?? null, $data['email'] ?? null,
+        );
+        if ($dup !== null) {
+            return ApiResponse::error('DUPLICATE', 'A customer with this phone or email already exists.', 409, [
+                'existing_uuid' => (string) $dup['uuid'],
+                'existing_name' => trim((string) $dup['first_name'] . ' ' . (string) $dup['last_name']),
+            ]);
+        }
+
         $uuid = $this->uuids->generate();
-        $this->customers->insert($data + [
+        $customerId = $this->customers->insert($data + [
             'uuid' => $uuid,
             'tenant_id' => $tenant->tenantId,
         ]);
+        $this->customers->syncMatchKeys($tenant->tenantId, $customerId, $data['phone_e164'] ?? null, $data['email'] ?? null);
 
         $created = $this->customers->findByUuid($tenant->tenantId, $uuid);
 
@@ -126,6 +137,7 @@ final class CustomersApiController
         }
 
         $this->customers->update($tenant->tenantId, (int) $customer['id'], $data);
+        $this->customers->syncMatchKeys($tenant->tenantId, (int) $customer['id'], $data['phone_e164'] ?? null, $data['email'] ?? null);
         $updated = $this->customers->findByUuid($tenant->tenantId, (string) $params['uuid']);
 
         return ApiResponse::ok(['customer' => $updated !== null ? $this->detail($tenant->tenantId, $updated, $membership) : null]);
@@ -155,6 +167,61 @@ final class CustomersApiController
         $this->customers->delete($tenant->tenantId, (int) $customer['id']);
 
         return ApiResponse::ok(['deleted' => true]);
+    }
+
+    /** Active customers sharing a phone or email — the merge-candidates list.
+     * @param array<string, string> $params */
+    public function duplicates(Request $request, array $params): Response
+    {
+        [$tenant, $membership] = $this->context($request);
+        if (!$membership->can('customers.view')) {
+            return ApiResponse::error('FORBIDDEN', 'You do not have permission to view customers.', 403);
+        }
+
+        $groups = array_map(
+            fn(array $g): array => [
+                'match_type' => $g['match_type'],
+                'key' => $g['key'],
+                'customers' => array_map(fn(array $c): array => [
+                    'uuid' => (string) $c['uuid'],
+                    'name' => trim((string) $c['first_name'] . ' ' . (string) $c['last_name']),
+                    'phone_e164' => $c['phone_e164'],
+                    'email' => $c['email'],
+                    'appointment_count' => (int) $c['appointment_count'],
+                    'created_at' => substr((string) $c['created_at'], 0, 10),
+                ], $g['customers']),
+            ],
+            $this->customers->duplicateGroups($tenant->tenantId),
+        );
+
+        return ApiResponse::ok(['groups' => $groups]);
+    }
+
+    /** Merge {uuid} into {into}: repoints history, marks the loser 'merged'.
+     * @param array<string, string> $params */
+    public function merge(Request $request, array $params): Response
+    {
+        [$tenant, $membership] = $this->context($request);
+        if (!$membership->can('customers.update')) {
+            return ApiResponse::error('FORBIDDEN', 'You do not have permission to edit customers.', 403);
+        }
+
+        $loser = $this->customers->findByUuid($tenant->tenantId, (string) $params['uuid']);
+        $into = trim((string) ($request->body()['into'] ?? ''));
+        $winner = $into !== '' ? $this->customers->findByUuid($tenant->tenantId, $into) : null;
+        if ($loser === null || $winner === null) {
+            return ApiResponse::error('NOT_FOUND', 'Customer not found.', 404);
+        }
+        if ((int) $loser['id'] === (int) $winner['id']) {
+            return ApiResponse::error('VALIDATION', 'Cannot merge a customer into itself.', 422);
+        }
+        if ($loser['status'] === 'merged' || $winner['status'] !== 'active') {
+            return ApiResponse::error('INVALID_TRANSITION', 'The customer to keep must be active.', 409);
+        }
+
+        $this->customers->merge($tenant->tenantId, (int) $loser['id'], (int) $winner['id']);
+
+        return ApiResponse::ok(['merged' => true]);
     }
 
     /**

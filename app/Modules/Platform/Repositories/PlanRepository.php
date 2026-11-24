@@ -96,10 +96,14 @@ final class PlanRepository
     /** @param array<string, mixed> $data */
     public function insert(array $data): int
     {
+        $params = array_intersect_key($data, array_flip(
+            ['uuid', 'code', 'name', 'description', 'price_minor', 'currency', 'billing_interval', 'is_active', 'sort_position'],
+        ));
+
         $this->db->pdo()->prepare(
             'INSERT INTO plans (uuid, code, name, description, price_minor, currency, billing_interval, is_active, sort_position)
              VALUES (:uuid, :code, :name, :description, :price_minor, :currency, :billing_interval, :is_active, :sort_position)',
-        )->execute($data);
+        )->execute($params);
 
         return (int) $this->db->pdo()->lastInsertId();
     }
@@ -122,13 +126,19 @@ final class PlanRepository
     /** @param array<string, mixed> $data */
     public function update(int $planId, array $data): void
     {
+        // Whitelist bound columns: PDO throws HY093 for params with no
+        // placeholder, so caller arrays wider than the UPDATE would fatal.
+        $params = array_intersect_key($data, array_flip(
+            ['code', 'name', 'description', 'price_minor', 'currency', 'billing_interval', 'is_active', 'sort_position'],
+        ));
+
         $this->db->pdo()->prepare(
             'UPDATE plans SET code = :code, name = :name, description = :description,
                     price_minor = :price_minor, currency = :currency,
                     billing_interval = :billing_interval, is_active = :is_active,
                     sort_position = :sort_position
              WHERE id = :id',
-        )->execute($data + ['id' => $planId]);
+        )->execute($params + ['id' => $planId]);
     }
 
     /**

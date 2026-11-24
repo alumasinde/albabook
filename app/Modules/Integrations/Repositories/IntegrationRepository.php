@@ -77,6 +77,19 @@ final class IntegrationRepository
         )->execute([$tenantId, $id]);
     }
 
+    /**
+     * Queue one delivery directly (test pings) — bypasses the outbox fan-out
+     * so it works regardless of the endpoint's event subscriptions; the
+     * normal sender/signing/retry path still applies from here on.
+     */
+    public function insertDelivery(int $tenantId, int $endpointId, string $eventType, string $uuid, string $payload): void
+    {
+        $this->db->pdo()->prepare(
+            "INSERT INTO webhook_deliveries (uuid, tenant_id, endpoint_id, event_type, payload, status)
+             VALUES (:u, :t, :e, :et, :p, 'pending')",
+        )->execute(['u' => $uuid, 't' => $tenantId, 'e' => $endpointId, 'et' => $eventType, 'p' => $payload]);
+    }
+
     /** Recent deliveries for an endpoint (or all endpoints).
      * @return list<array<string, mixed>>
      */

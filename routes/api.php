@@ -6,6 +6,7 @@ use App\Core\Routing\RouteRegistrar;
 use App\Modules\Api\Controllers\PrivateApiController;
 use App\Modules\Api\Controllers\PublicBookingApiController;
 use App\Modules\Api\Middleware\ApiCredentialMiddleware;
+use App\Modules\Staff\Controllers\StaffCalendarController;
 use App\Modules\System\Controllers\HomeController;
 
 // Public API — api.albabook.co.ke (booking-engine.md §18, decisions.md
@@ -30,6 +31,8 @@ return static function (RouteRegistrar $r): void {
     $r->post('/v1/public/bookings/{manageToken}/cancel', [PublicBookingApiController::class, 'bookingCancel'], name: 'api.public.booking.cancel');
     $r->post('/v1/public/bookings/{manageToken}/reschedule', [PublicBookingApiController::class, 'bookingReschedule'], name: 'api.public.booking.reschedule');
     $r->get('/v1/public/bookings/{manageToken}/calendar.ics', [PublicBookingApiController::class, 'bookingCalendar'], name: 'api.public.booking.calendar');
+    // Per-staff .ics subscription feed — the token is the capability.
+    $r->get('/v1/staff-calendar/{token}.ics', [StaffCalendarController::class, 'feed'], name: 'api.staff-calendar.feed');
 
     // Private API — Bearer credential + per-route scope (D-008, plan.md
     // §12.3). The tenant is the credential's tenant; uuids in URLs.

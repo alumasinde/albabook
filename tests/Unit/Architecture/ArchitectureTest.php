@@ -86,6 +86,14 @@ final class ArchitectureTest extends TestCase
                 continue;
             }
             $html = (string) file_get_contents($file->getPathname());
+            // application/ld+json is an inert data block (schema.org SEO), not
+            // executable script — CSP script-src does not apply. Content must
+            // stay JSON_HEX_*-escaped so no </script> breakout is possible.
+            $html = (string) preg_replace(
+                '#<script[^>]*type=["\']application/ld\+json["\'][^>]*>.*?</script>#is',
+                '',
+                $html,
+            );
             self::assertDoesNotMatchRegularExpression('/<script(?![^>]*\bsrc=)[^>]*>/i', $html, $file->getFilename() . ': inline <script> breaks the CSP.');
             self::assertDoesNotMatchRegularExpression('/\son[a-z]+\s*=/i', $html, $file->getFilename() . ': inline event handlers break the CSP.');
             self::assertDoesNotMatchRegularExpression('/\sstyle\s*=/i', $html, $file->getFilename() . ': inline style attributes break the CSP.');

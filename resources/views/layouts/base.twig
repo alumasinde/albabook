@@ -4,7 +4,7 @@
   SPA fragment mode (X-SPA: fragment): emit only the content block plus a title
   marker; the client swaps it into the live document (spa.js).
 #}
-{% if spa|default(false) %}<template data-spa-title>{{ block('title') }}</template>{{ block('content') }}{% else %}<!doctype html>
+{% if spa|default(false) %}<template data-spa-title>{{ block('title') }}</template><template data-spa-heading>{{ page_title|default('') }}</template>{{ block('content') }}{% else %}<!doctype html>
 <html lang="{{ locale() }}" class="h-full">
 <head>
   <meta charset="utf-8">

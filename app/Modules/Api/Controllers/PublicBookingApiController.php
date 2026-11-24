@@ -17,6 +17,7 @@ use App\Modules\Booking\Repositories\BookingPageRepository;
 use App\Modules\Booking\Services\AvailabilityService;
 use App\Modules\Booking\Services\BookingHoldService;
 use App\Modules\Notifications\Repositories\NotificationRepository;
+use App\Shared\Calendar\IcsDocument;
 use App\Shared\Http\ApiResponse;
 use App\Shared\Http\AppUrl;
 use App\Shared\Security\RateLimiter;
@@ -516,25 +517,17 @@ final class PublicBookingApiController
         $location = $branch !== null
             ? trim(implode(', ', array_filter([(string) $branch['name'], (string) ($branch['address_line1'] ?? '')])))
             : '';
-        $stamp = gmdate('Ymd\THis\Z');
-        $ics = implode("\r\n", [
-            'BEGIN:VCALENDAR',
-            'VERSION:2.0',
-            'PRODID:-//AlbaBook//Booking//EN',
-            'BEGIN:VEVENT',
-            'UID:' . (string) $appointment['uuid'] . '@albabook',
-            'DTSTAMP:' . $stamp,
-            'DTSTART:' . str_replace(['-', ':'], '', (string) $appointment['start_at']) . 'Z',
-            'DTEND:' . str_replace(['-', ':'], '', (string) $appointment['end_at']) . 'Z',
-            'SUMMARY:' . $this->icsEscape($summary),
-            $location !== '' ? 'LOCATION:' . $this->icsEscape($location) : 'LOCATION:',
-            'DESCRIPTION:' . $this->icsEscape('Booking reference ' . (string) $appointment['reference']),
-            'END:VEVENT',
-            'END:VCALENDAR',
-            '',
+        $ics = new IcsDocument();
+        $ics->addEvent([
+            'uid' => (string) $appointment['uuid'] . '@albabook',
+            'start' => (string) $appointment['start_at'],
+            'end' => (string) $appointment['end_at'],
+            'summary' => $summary,
+            'location' => $location,
+            'description' => 'Booking reference ' . (string) $appointment['reference'],
         ]);
 
-        return new Response($ics, 200, ['Content-Type' => 'text/calendar; charset=utf-8']);
+        return new Response($ics->render('AlbaBook//Booking'), 200, ['Content-Type' => 'text/calendar; charset=utf-8']);
     }
 
     /**
@@ -824,8 +817,4 @@ final class PublicBookingApiController
         return ApiResponse::error($e->apiCode, $e->getMessage(), $e->status, $details);
     }
 
-    private function icsEscape(string $text): string
-    {
-        return str_replace(["\\", ',', ';', "\n"], ['\\\\', '\\,', '\\;', '\\n'], $text);
-    }
 }

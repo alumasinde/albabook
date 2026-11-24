@@ -109,8 +109,11 @@ AlbaBook.pages.register('reports', function (root) {
         renderAppointments(data.appointments_by_day || []);
         renderByService(data.by_service || [], data.currency);
         renderNoShows(data.noshows_by_service || []);
+        renderCancelReasons(data.cancellations_by_reason || []);
+        renderPunctuality(data.punctuality || []);
         renderResources(data.resource_utilization || []);
         if (data.sales_by_day) renderSales(data.sales_by_day, data.currency);
+        if (data.commission) renderCommission(data.commission, data.currency);
       })
       .catch((error) => {
         cards.replaceChildren(ui.errorState(error.message, load));
@@ -263,6 +266,58 @@ AlbaBook.pages.register('reports', function (root) {
           return booked > 0 ? Math.round((ns / booked) * 100) + '%' : '—';
         })()] : null,
       'No completed or past bookings in this range.',
+    ));
+  }
+
+  function renderCommission(rows, currency) {
+    const host = root.querySelector('[data-rep-commission]');
+    if (!host) return;
+    host.replaceChildren(dataTable(
+      ['Staff', 'Rate', 'Payments', 'Revenue', 'Commission'],
+      rows.map((r) => [
+        r.staff, Number(r.commission_pct).toFixed(1) + '%', r.payments,
+        money(r.revenue_minor, currency), money(r.commission_minor, currency),
+      ]),
+      rows.length ? ['Total', '',
+        rows.reduce((n, r) => n + Number(r.payments), 0),
+        money(rows.reduce((n, r) => n + Number(r.revenue_minor), 0), currency),
+        money(rows.reduce((n, r) => n + Number(r.commission_minor), 0), currency)] : null,
+      'No commission-tracked staff with payments in this range.',
+    ));
+  }
+
+  const CANCEL_LABELS = {
+    illness: 'Illness / emergency', schedule_conflict: 'Schedule conflict',
+    price: 'Price', found_alternative: 'Found another provider',
+    no_longer_needed: 'No longer needed', other: 'Other',
+    unspecified: 'Not specified',
+  };
+
+  function renderCancelReasons(rows) {
+    const host = root.querySelector('[data-rep-cancel-reasons]');
+    const total = rows.reduce((n, r) => n + Number(r.count), 0);
+    host.replaceChildren(dataTable(
+      ['Reason', 'Cancellations', 'By customer', 'Share'],
+      rows.map((r) => [
+        CANCEL_LABELS[r.code] || r.code, r.count, r.by_customer,
+        total > 0 ? Math.round((Number(r.count) / total) * 100) + '%' : '—',
+      ]),
+      rows.length ? ['Total', total, rows.reduce((n, r) => n + Number(r.by_customer), 0), ''] : null,
+      'No cancellations in this range.',
+    ));
+  }
+
+  function renderPunctuality(rows) {
+    const host = root.querySelector('[data-rep-punctuality-table]');
+    const mins = (v) => (v === null || v === undefined) ? '—' : `${Number(v) > 0 ? '+' : ''}${Number(v).toFixed(1)} min`;
+    const pct = (v) => (v === null || v === undefined) ? '—' : `${Number(v) > 0 ? '+' : ''}${Number(v).toFixed(1)}%`;
+    const rate = (r) => Number(r.bookings) > 0
+      ? Math.round((Number(r.no_shows) / Number(r.bookings)) * 100) + '%' : '—';
+    host.replaceChildren(dataTable(
+      ['Staff', 'Branch', 'Bookings', 'No-show rate', 'Avg wait', 'Avg start delay', 'Avg overrun'],
+      rows.map((r) => [r.staff, r.branch, r.bookings, rate(r), mins(r.avg_wait_min), mins(r.avg_start_delay_min), pct(r.avg_overrun_pct)]),
+      null,
+      'No staff bookings in this range.',
     ));
   }
 

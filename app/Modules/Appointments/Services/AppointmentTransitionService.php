@@ -43,6 +43,13 @@ final class AppointmentTransitionService
      * visits that haven't started or have long passed. */
     private const VISIT_WINDOW = ['checked_in', 'in_service', 'completed'];
 
+    /** Structured cancellation reasons captured in the cancel form; reported
+     *  in Reports → No-shows. Free-text `reason` stays optional detail. */
+    public const CANCEL_REASON_CODES = [
+        'illness', 'schedule_conflict', 'price',
+        'found_alternative', 'no_longer_needed', 'other',
+    ];
+
     /** Edges a tenant can opt into via visit policy (tenant_settings
      * .preferences). The base GRAPH is the platform ceiling — policies can
      * only unlock edges declared here, never invent new ones. */
@@ -148,13 +155,16 @@ final class AppointmentTransitionService
      *
      * @return array<string, mixed> updated appointment row
      */
-    public function transition(int $tenantId, string $uuid, string $to, ?int $expectedVersion, ?int $actorUserId, string $actorType = 'tenant_user', ?string $reason = null, bool $force = false): array
+    public function transition(int $tenantId, string $uuid, string $to, ?int $expectedVersion, ?int $actorUserId, string $actorType = 'tenant_user', ?string $reason = null, ?string $cancelCode = null, bool $force = false): array
     {
         if (!array_key_exists($to, self::PERMISSION)) {
             throw new TransitionException('INVALID_TRANSITION', 'Unknown transition target.', 400);
         }
+        if ($to === 'cancelled' && $cancelCode !== null && !in_array($cancelCode, self::CANCEL_REASON_CODES, true)) {
+            throw new TransitionException('VALIDATION', 'Choose a valid cancellation reason.', 422, ['cancel_code' => 'Unknown reason.']);
+        }
 
-        return $this->db->transaction(function () use ($tenantId, $uuid, $to, $expectedVersion, $actorUserId, $actorType, $reason, $force): array {
+        return $this->db->transaction(function () use ($tenantId, $uuid, $to, $expectedVersion, $actorUserId, $actorType, $reason, $cancelCode, $force): array {
             $row = $this->appointments->lockForUpdate($tenantId, $uuid);
             if ($row === null) {
                 throw new TransitionException('NOT_FOUND', 'Appointment not found.', 404);
@@ -183,14 +193,22 @@ final class AppointmentTransitionService
             $newVersion = $this->appointments->updateStatus($tenantId, (int) $row['id'], $to, (int) $row['version'], [
                 'cancelled_by' => $actorType === 'customer' ? 'customer' : 'business',
                 'reason' => $reason,
+                'cancel_code' => $to === 'cancelled' ? $cancelCode : null,
             ]);
             if ($newVersion === null) {
                 throw new TransitionException('STALE_APPOINTMENT', 'This appointment was changed by someone else. Reload it and retry.', 409);
             }
 
+            $meta = [];
+            if ($override !== null) {
+                $meta['timing_override'] = $override;
+            }
+            if ($cancelCode !== null) {
+                $meta['cancel_reason_code'] = $cancelCode;
+            }
             $this->appointments->insertEvent(
                 $tenantId, (int) $row['id'], 'status.' . $to, $actorType, $actorUserId, $from, $to, $reason,
-                $override !== null ? ['timing_override' => $override] : null,
+                $meta !== [] ? $meta : null,
             );
             $this->events->onTransitioned($tenantId, (int) $row['id'], $to);
             $row['status'] = $to;

@@ -186,6 +186,41 @@ final class IntegrationsApiController
     }
 
     /**
+     * Queue a signed test.ping delivery to this endpoint — exercises the real
+     * send path (URL, HMAC signature, retries) so tenants can prove their
+     * receiver before subscribing it to live events.
+     * @param array<string, string> $params
+     */
+    public function testEndpoint(Request $request, array $params): Response
+    {
+        [$tenant, $membership] = $this->context($request);
+        if (!$membership->can('integrations.manage')) {
+            return ApiResponse::error('FORBIDDEN', 'You do not have permission to manage integrations.', 403);
+        }
+
+        $endpoint = $this->integrations->findEndpoint($tenant->tenantId, (string) $params['uuid']);
+        if ($endpoint === null) {
+            return ApiResponse::error('NOT_FOUND', 'Endpoint not found.', 404);
+        }
+
+        $payload = json_encode([
+            'event' => 'test.ping',
+            'message' => 'AlbaBook webhook test — your endpoint is wired correctly.',
+            'endpoint_uuid' => (string) $params['uuid'],
+            'sent_at' => gmdate('c'),
+        ], JSON_THROW_ON_ERROR);
+        $this->integrations->insertDelivery(
+            $tenant->tenantId,
+            (int) $endpoint['id'],
+            'test.ping',
+            $this->uuids->generate(),
+            $payload,
+        );
+
+        return ApiResponse::ok(['queued' => true], 202);
+    }
+
+    /**
      * Create a private API credential. The full bearer token is returned
      * exactly once; only its SHA-256 hash is stored (plan.md §12.4).
      * @param array<string, string> $params

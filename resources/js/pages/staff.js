@@ -159,6 +159,9 @@
           fact('Phone', s.phone || '—');
           fact('Services', String(s.services));
           fact('Priority', String(s.booking_priority));
+          if (s.commission_pct !== null && s.commission_pct !== undefined) {
+            fact('Commission', Number(s.commission_pct).toFixed(1) + '%');
+          }
           fact('Status', s.status === 'active' ? 'Active' : 'Inactive');
           fact('Online booking', s.is_bookable_online ? 'Enabled' : 'Disabled');
           fact('Linked bookings', String(s.references));
@@ -180,6 +183,63 @@
           }
 
           if (!canManage) return;
+          // .ics subscription feed — staff add their bookings to Google/Outlook.
+          const feed = el('div', 'mt-6 rounded-lg border border-line p-3');
+          feed.append(el('p', 'text-sm font-medium text-ink', 'Calendar feed'));
+          feed.append(el('p', 'mt-0.5 text-xs text-muted', 'An .ics link this member can subscribe to in Google Calendar or Outlook.'));
+          const feedActions = el('div', 'mt-2 flex gap-2');
+          const copyBtn = el('button', 'btn btn-secondary btn-sm');
+          copyBtn.type = 'button';
+          copyBtn.append(el('i', 'fa-regular fa-calendar'));
+          copyBtn.append(document.createTextNode(s.has_calendar_feed ? ' Rotate & copy link' : ' Create & copy link'));
+          copyBtn.addEventListener('click', () => {
+            const doMint = () => {
+              ui.setBusy(copyBtn, true);
+              api.post('/api/staff/' + encodeURIComponent(s.uuid) + '/calendar-feed', {})
+                .then((data) => {
+                  if (navigator.clipboard && data.url) navigator.clipboard.writeText(data.url).catch(() => {});
+                  AlbaBook.toast('Feed link copied — share it with ' + s.display_name + '.', 'success');
+                  s.has_calendar_feed = true;
+                  copyBtn.lastChild.textContent = ' Rotate & copy link';
+                  revokeBtn.classList.remove('hidden');
+                })
+                .catch((e) => AlbaBook.toast(e.message || 'Could not create the feed.', 'danger'))
+                .finally(() => ui.setBusy(copyBtn, false));
+            };
+            if (s.has_calendar_feed) {
+              ui.confirm({
+                title: 'Rotate feed link?',
+                message: 'The existing link stops working — the member will need the new one.',
+                confirmLabel: 'Rotate',
+              }).then((ok) => { if (ok) doMint(); });
+            } else {
+              doMint();
+            }
+          });
+          const revokeBtn = el('button', 'btn btn-outline btn-sm' + (s.has_calendar_feed ? '' : ' hidden'), 'Revoke');
+          revokeBtn.type = 'button';
+          revokeBtn.addEventListener('click', () => {
+            ui.confirm({
+              title: 'Revoke feed link?',
+              message: 'The calendar subscription stops updating immediately.',
+              confirmLabel: 'Revoke',
+              danger: true,
+            }).then((ok) => {
+              if (!ok) return;
+              api.del('/api/staff/' + encodeURIComponent(s.uuid) + '/calendar-feed')
+                .then(() => {
+                  AlbaBook.toast('Feed link revoked.');
+                  s.has_calendar_feed = false;
+                  revokeBtn.classList.add('hidden');
+                  copyBtn.lastChild.textContent = ' Create & copy link';
+                })
+                .catch((e) => AlbaBook.toast(e.message || 'Could not revoke.', 'danger'));
+            });
+          });
+          feedActions.append(copyBtn, revokeBtn);
+          feed.append(feedActions);
+          drawerBody.append(feed);
+
           const actions = el('div', 'mt-6 flex gap-2');
           const edit = el('button', 'btn btn-primary btn-md', 'Edit');
           edit.type = 'button';
@@ -278,6 +338,11 @@
       bioInput.rows = 3;
       bioInput.value = member && member.bio ? member.bio : '';
       const priorityInput = input('number', member ? member.booking_priority : 0);
+      const commissionInput = input('number', member && member.commission_pct !== null ? member.commission_pct : '');
+      commissionInput.min = '0';
+      commissionInput.max = '100';
+      commissionInput.step = '0.1';
+      commissionInput.placeholder = 'e.g. 10';
       priorityInput.min = 0;
 
       const memberSelect = el('select', 'input select');
@@ -351,6 +416,7 @@
         field('Team member account (for own-appointments view)', memberSelect, 'tenant_user_id'),
         field('Bio', bioInput, 'bio'),
         field('Booking priority (lower shows first)', priorityInput, 'booking_priority'),
+        field('Commission % (optional)', commissionInput, 'commission_pct'),
         field('Status', statusSelect, 'status'),
         checkboxGroup('branch_ids', 'Works at branches', meta.branches || [], member ? member.branch_ids : (meta.branches || []).map((b) => b.id), 'name'),
         checkboxGroup('service_ids', 'Services offered', meta.services || [], member ? member.service_ids : [], 'name'),
@@ -373,6 +439,7 @@
           bio: bioInput.value.trim(),
           tenant_user_id: memberSelect.value === '' ? 0 : Number(memberSelect.value),
           booking_priority: Number(priorityInput.value || 0),
+          commission_pct: commissionInput.value === '' ? null : Number(commissionInput.value),
           status: statusSelect.value,
           is_bookable_online: onlineFlag.box.checked,
           branch_ids: checked('branch_ids'),

@@ -50,6 +50,7 @@
   function applyFragment(html, url, push) {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const title = doc.querySelector('template[data-spa-title]');
+    const heading = doc.querySelector('template[data-spa-heading]');
     const main = document.getElementById('main');
     // A full document contains its own #main — refuse to nest it inside ours.
     if (!main || doc.getElementById('main')) return false;
@@ -63,6 +64,13 @@
 
     main.replaceChildren(fragment);
     if (title) document.title = title.content.textContent.trim();
+    // The shell topbar lives outside #main: carry the page heading with the
+    // fragment so it does not go stale on client-side navigation.
+    if (heading) {
+      const text = heading.content.textContent.trim();
+      const h1 = text !== '' ? document.querySelector('[data-page-heading]') : null;
+      if (h1) h1.textContent = text;
+    }
     if (push !== false) history.pushState({ spa: true }, '', url);
     updateNav(url);
     main.scrollTo(0, 0);

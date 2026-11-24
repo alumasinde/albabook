@@ -55,10 +55,13 @@ final class ManageBookingController
 
         $data = $this->viewData($tenant, $appointment);
 
+        // Slugless endpoints on a verified custom domain.
+        $bookingBase = $this->context->customDomain !== null ? '' : '/' . $tenant['slug'];
+
         return $this->view->response('booking/manage.twig', [
             'tenant' => $tenant,
-            // Slugless endpoints on a verified custom domain.
-            'base' => ($this->context->customDomain !== null ? '' : '/' . $tenant['slug']) . '/manage/' . $params['token'],
+            'base' => $bookingBase . '/manage/' . $params['token'],
+            'home_url' => $bookingBase . '?lang=' . $this->context->locale,
             'appointment' => $appointment,
             'view' => $data,
             'token' => (string) $params['token'],
@@ -92,6 +95,8 @@ final class ManageBookingController
 
         $body = $request->body();
         $reason = isset($body['reason']) ? mb_substr(trim((string) $body['reason']), 0, 255) : null;
+        $reasonCode = isset($body['reason_code']) ? trim((string) $body['reason_code']) : null;
+        $reasonCode = $reasonCode === '' ? null : $reasonCode;
 
         try {
             $row = $this->transitions->transition(
@@ -102,6 +107,7 @@ final class ManageBookingController
                 null,
                 'customer',
                 $reason,
+                $reasonCode,
             );
         } catch (TransitionException $e) {
             return ApiResponse::error($e->apiCode, $e->getMessage(), $e->status, $e->fields ?: null);

@@ -285,6 +285,66 @@ final class StaffRepository
         return (int) $stmt->fetchColumn();
     }
 
+    /** Public .ics feed lookup — the URL token is looked up by its SHA-256.
+     * @return array<string, mixed>|null */
+    public function findByCalendarTokenHash(string $hash): ?array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT id, tenant_id, display_name, first_name, last_name FROM staff
+              WHERE calendar_token_hash = :h AND status = \'active\' LIMIT 1',
+        );
+        $stmt->execute(['h' => $hash]);
+        $row = $stmt->fetch();
+
+        return $row === false ? null : $row;
+    }
+
+    /** Set or clear (null) the member's feed token hash. */
+    public function setCalendarTokenHash(int $tenantId, int $staffId, ?string $hash): void
+    {
+        $this->db->pdo()->prepare(
+            'UPDATE staff SET calendar_token_hash = :h WHERE tenant_id = :t AND id = :id',
+        )->execute(['h' => $hash, 't' => $tenantId, 'id' => $staffId]);
+    }
+
+    public function hasCalendarToken(int $tenantId, int $staffId): bool
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT calendar_token_hash IS NOT NULL FROM staff WHERE tenant_id = :t AND id = :id',
+        );
+        $stmt->execute(['t' => $tenantId, 'id' => $staffId]);
+
+        return (bool) $stmt->fetchColumn();
+    }
+
+    /**
+     * Occupying appointments in [from, to) for one member — the .ics feed
+     * mirrors what the dashboard shows: statuses flagged blocks_time.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function feedAppointments(int $tenantId, int $staffId, string $fromUtc, string $toUtc): array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT DISTINCT a.id, a.uuid, a.reference, a.start_at, a.end_at,
+                    a.customer_name_snapshot,
+                    b.name AS branch_name, b.address_line1, b.town,
+                    (SELECT GROUP_CONCAT(s.service_name_snapshot SEPARATOR \', \')
+                       FROM appointment_items s
+                      WHERE s.tenant_id = a.tenant_id AND s.appointment_id = a.id) AS service_names
+               FROM appointment_items ai
+               JOIN appointments a ON a.tenant_id = ai.tenant_id AND a.id = ai.appointment_id
+               JOIN appointment_statuses st ON st.code = a.status AND st.blocks_time = 1
+               LEFT JOIN branches b ON b.tenant_id = a.tenant_id AND b.id = a.branch_id
+              WHERE ai.tenant_id = :t AND ai.staff_id = :s
+                AND a.end_at >= :from AND a.start_at <= :to
+           ORDER BY a.start_at',
+        );
+        $stmt->execute(['t' => $tenantId, 's' => $staffId, 'from' => $fromUtc, 'to' => $toUtc]);
+
+        return array_values($stmt->fetchAll());
+    }
+
     public function delete(int $tenantId, int $staffId): void
     {
         $this->db->pdo()->prepare('DELETE FROM staff WHERE tenant_id = :t AND id = :s')

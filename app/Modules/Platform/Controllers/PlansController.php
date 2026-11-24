@@ -260,7 +260,6 @@ final class PlansController
         }
 
         $data = [
-            'uuid' => '',
             'code' => $code,
             'name' => $name,
             'description' => $description === '' ? null : $description,

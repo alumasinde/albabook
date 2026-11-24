@@ -10,15 +10,11 @@
 <div class="booking-page flex min-h-screen flex-col">
   <header class="border-b border-line bg-white">
     <div class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4">
-      <a href="/" class="flex items-center gap-2 font-semibold text-lg text-ink">
+      <a href="{{ home_url|default('/') }}" class="flex items-center gap-2 font-semibold text-lg text-ink">
         <span class="brand-mark" aria-hidden="true">A</span>
         {{ business_name|default(app_name) }}
       </a>
-      <nav aria-label="{{ t('common.language') }}" class="flex items-center gap-1 text-sm">
-        {% for code, label in { en: 'English', sw: 'Kiswahili' } %}
-          <a href="?lang={{ code }}" lang="{{ code }}" class="lang-switch{% if locale() == code %} is-active{% endif %}"{% if locale() == code %} aria-current="true"{% endif %}>{{ label }}</a>
-        {% endfor %}
-      </nav>
+     
     </div>
   </header>
 

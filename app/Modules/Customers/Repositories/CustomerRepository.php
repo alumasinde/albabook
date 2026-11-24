@@ -158,6 +158,172 @@ final class CustomerRepository
         $stmt->execute($data + ['__t' => $tenantId, '__id' => $customerId]);
     }
 
+    /**
+     * First active customer matching phone (e164) or lowercased email — the
+     * pre-create duplicate check. Both are optional; pass what was provided.
+     * @return array<string, mixed>|null
+     */
+    public function findActiveByPhoneOrEmail(int $tenantId, ?string $phone, ?string $email, ?int $excludeId = null): ?array
+    {
+        $or = [];
+        $params = ['t' => $tenantId];
+        if ($phone !== null && $phone !== '') {
+            $or[] = 'phone_e164 = :p';
+            $params['p'] = $phone;
+        }
+        if ($email !== null && $email !== '') {
+            $or[] = 'LOWER(email) = :e';
+            $params['e'] = strtolower($email);
+        }
+        if ($or === []) {
+            return null;
+        }
+        $sql = "SELECT * FROM customers WHERE tenant_id = :t AND status = 'active'"
+            . ($excludeId !== null ? ' AND id != :x' : '')
+            . ' AND (' . implode(' OR ', $or) . ') LIMIT 1';
+        if ($excludeId !== null) {
+            $params['x'] = $excludeId;
+        }
+        $stmt = $this->db->pdo()->prepare($sql);
+        $stmt->execute($params);
+        $row = $stmt->fetch();
+
+        return $row === false ? null : $row;
+    }
+
+    /**
+     * Rebuild this customer's match keys from its current contact fields.
+     * Without this, customers created/edited via the directory stay invisible
+     * to the booking flow's phone dedup and silently duplicate. A 1062 means
+     * another customer owns the key — the caller's dup check already covers
+     * that UX, so a stray race is skipped, not stolen.
+     */
+    public function syncMatchKeys(int $tenantId, int $customerId, ?string $phone, ?string $email): void
+    {
+        $this->db->pdo()->prepare(
+            'DELETE FROM customer_match_keys WHERE tenant_id = :t AND customer_id = :c',
+        )->execute(['t' => $tenantId, 'c' => $customerId]);
+
+        foreach (['phone' => $phone, 'email' => $email !== null && $email !== '' ? strtolower($email) : null] as $type => $value) {
+            if ($value === null || $value === '') {
+                continue;
+            }
+            try {
+                $this->db->pdo()->prepare(
+                    'INSERT INTO customer_match_keys (tenant_id, match_type, match_value, customer_id)
+                     VALUES (:t, :ty, :v, :c)',
+                )->execute(['t' => $tenantId, 'ty' => $type, 'v' => $value, 'c' => $customerId]);
+            } catch (\PDOException $e) {
+                if ((int) ($e->errorInfo[1] ?? 0) !== 1062) {
+                    throw $e;
+                }
+            }
+        }
+    }
+
+    /**
+     * Groups of active customers sharing the same phone or email — candidate
+     * duplicates for the merge UI.
+     * @return list<array{match_type: string, key: string, customers: list<array<string, mixed>>}>
+     */
+    public function duplicateGroups(int $tenantId): array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT match_type, dup_key FROM (
+                SELECT 'phone' AS match_type, phone_e164 AS dup_key
+                  FROM customers
+                 WHERE tenant_id = :t1 AND status = 'active'
+                   AND phone_e164 IS NOT NULL AND phone_e164 <> ''
+                UNION ALL
+                SELECT 'email', LOWER(email)
+                  FROM customers
+                 WHERE tenant_id = :t2 AND status = 'active'
+                   AND email IS NOT NULL AND email <> ''
+             ) d
+             GROUP BY match_type, dup_key HAVING COUNT(*) > 1
+             ORDER BY match_type, dup_key",
+        );
+        $stmt->execute(['t1' => $tenantId, 't2' => $tenantId]);
+        $groups = $stmt->fetchAll();
+
+        $out = [];
+        foreach ($groups as $g) {
+            $isPhone = $g['match_type'] === 'phone';
+            $stmt2 = $this->db->pdo()->prepare(sprintf(
+                "SELECT c.*,
+                        (SELECT COUNT(*) FROM appointments a
+                          WHERE a.tenant_id = c.tenant_id AND a.customer_id = c.id) AS appointment_count
+                   FROM customers c
+                  WHERE c.tenant_id = :t AND c.status = 'active' AND %s = :k
+                  ORDER BY c.created_at",
+                $isPhone ? 'c.phone_e164' : 'LOWER(c.email)',
+            ));
+            $stmt2->execute(['t' => $tenantId, 'k' => (string) $g['dup_key']]);
+            $customers = array_values($stmt2->fetchAll());
+            if (count($customers) >= 2) {
+                $out[] = [
+                    'match_type' => (string) $g['match_type'],
+                    'key' => (string) $g['dup_key'],
+                    'customers' => $customers,
+                ];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Merge $loserId into $winnerId: repoint every customer FK (appointments,
+     * payments, consents), transfer match keys the winner lacks, backfill the
+     * winner's empty contact fields, then mark the loser merged.
+     */
+    public function merge(int $tenantId, int $loserId, int $winnerId): void
+    {
+        $this->db->transaction(function () use ($tenantId, $loserId, $winnerId): void {
+            $pdo = $this->db->pdo();
+            foreach (['appointments', 'payments', 'customer_consents'] as $table) {
+                $pdo->prepare("UPDATE {$table} SET customer_id = :w WHERE tenant_id = :t AND customer_id = :l")
+                    ->execute(['w' => $winnerId, 't' => $tenantId, 'l' => $loserId]);
+            }
+
+            // Match keys the winner already owns would collide on the PK —
+            // drop those losers' copies, move the rest over.
+            $pdo->prepare(
+                "DELETE mk FROM customer_match_keys mk
+                  JOIN customer_match_keys wk
+                    ON wk.tenant_id = mk.tenant_id AND wk.match_type = mk.match_type
+                       AND wk.match_value = mk.match_value AND wk.customer_id = :w
+                 WHERE mk.tenant_id = :t AND mk.customer_id = :l",
+            )->execute(['w' => $winnerId, 't' => $tenantId, 'l' => $loserId]);
+            $pdo->prepare('UPDATE customer_match_keys SET customer_id = :w WHERE tenant_id = :t AND customer_id = :l')
+                ->execute(['w' => $winnerId, 't' => $tenantId, 'l' => $loserId]);
+
+            // Backfill the winner's empty contact fields from the loser.
+            $byId = [];
+            $full = $pdo->prepare('SELECT id, phone_e164, email, preferred_staff_id, preferred_service_id, notes FROM customers WHERE tenant_id = :t AND id IN (:l, :w)');
+            $full->execute(['t' => $tenantId, 'l' => $loserId, 'w' => $winnerId]);
+            foreach ($full as $f) {
+                $byId[(int) $f['id']] = $f;
+            }
+            $w = $byId[$winnerId] ?? [];
+            $l = $byId[$loserId] ?? [];
+            $fill = [];
+            foreach (['phone_e164', 'email', 'preferred_staff_id', 'preferred_service_id', 'notes'] as $col) {
+                if (($w[$col] ?? null) === null && ($l[$col] ?? null) !== null) {
+                    $fill[$col] = $l[$col];
+                }
+            }
+            if ($fill !== []) {
+                $this->update($tenantId, $winnerId, $fill);
+            }
+
+            $pdo->prepare(
+                "UPDATE customers SET status = 'merged', merged_into_customer_id = :w
+                  WHERE tenant_id = :t AND id = :l",
+            )->execute(['w' => $winnerId, 't' => $tenantId, 'l' => $loserId]);
+        });
+    }
+
     public function delete(int $tenantId, int $customerId): void
     {
         $stmt = $this->db->pdo()->prepare(
