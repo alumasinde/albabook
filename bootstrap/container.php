@@ -58,7 +58,15 @@ return static function (Container $c, Config $config, string $basePath): void {
     $c->set(Database::class, static fn(): Database => new Database($config->array('database')));
 
     $c->set(MigrationRunner::class, static fn(Container $c): MigrationRunner => new MigrationRunner(
-        $c->get(Database::class),
+        // CLI migrations connect as the schema owner when one is configured;
+        // web requests (the /health migration check is read-only) never get
+        // those credentials.
+        PHP_SAPI === 'cli' && $config->string('database.migration_username') !== ''
+            ? new Database([
+                'username' => $config->string('database.migration_username'),
+                'password' => $config->string('database.migration_password'),
+            ] + $config->array('database'))
+            : $c->get(Database::class),
         $basePath . '/' . $config->string('database.migrations_path', 'database/migrations'),
     ));
 

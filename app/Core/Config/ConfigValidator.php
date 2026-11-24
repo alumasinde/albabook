@@ -20,7 +20,6 @@ final class ConfigValidator
     {
         $errors = [];
         $env = $config->string('app.env');
-        $production = $env === 'production';
         $deployed = in_array($env, ['staging', 'production'], true);
 
         if (!in_array($env, self::ENVIRONMENTS, true)) {
@@ -31,8 +30,10 @@ final class ConfigValidator
             $errors[] = 'APP_KEY must be "base64:" followed by 32 random bytes (run: php bin/console key:generate).';
         }
 
-        if ($production && $config->bool('app.debug')) {
-            $errors[] = 'APP_DEBUG must be false in production.';
+        // Debug output includes exception traces, file paths and SQL in error
+        // responses — never on an internet-reachable host, staging included.
+        if ($deployed && $config->bool('app.debug')) {
+            $errors[] = 'APP_DEBUG must be false in staging and production.';
         }
 
         $hosts = $config->array('app.hosts');

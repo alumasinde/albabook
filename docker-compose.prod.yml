@@ -39,9 +39,14 @@ services:
     image: mysql:8.4
     environment:
       MYSQL_DATABASE: ${DB_DATABASE:-albabook}
-      MYSQL_USER: ${DB_USERNAME:-albabook}
-      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
+      # Least privilege: the image's MYSQL_USER gets ALL on the database, so
+      # it is the schema OWNER, used only by `php bin/console migrate`.
+      MYSQL_USER: ${DB_MIGRATE_USERNAME:?DB_MIGRATE_USERNAME must be set}
+      MYSQL_PASSWORD: ${DB_MIGRATE_PASSWORD:?DB_MIGRATE_PASSWORD must be set}
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD must be set}
+      # The web app's runtime user (DML only), created by prod-init.sh.
+      APP_DB_USERNAME: ${DB_USERNAME:?DB_USERNAME must be set}
+      APP_DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
     command:
       - --default-time-zone=+00:00
       - --character-set-server=utf8mb4
@@ -51,7 +56,9 @@ services:
       - --log-bin-trust-function-creators=1
     volumes:
       - db-data:/var/lib/mysql
-      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      # Production init: creates the DML-only runtime user. (The dev
+      # init.sql — which creates albabook_test — is not mounted here.)
+      - ./docker/mysql/prod-init.sh:/docker-entrypoint-initdb.d/01-prod-init.sh:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
       interval: 5s

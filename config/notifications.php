@@ -17,6 +17,10 @@ return [
                 'api_key' => env('SMS_API_KEY', '') ?: '',
             ],
             'sender_id' => env('SMS_SENDER_ID', 'AlbaBook') ?: 'AlbaBook',
+            // Anti-pumping: the platform-paid account only messages these
+            // E.164 prefixes (comma-separated). Tenants' own accounts are
+            // unrestricted.
+            'allowed_prefixes' => array_values(array_filter(array_map('trim', explode(',', (string) (env('SMS_ALLOWED_PREFIXES', '+254') ?: '+254'))))),
         ],
         'whatsapp' => [
             'provider' => env('WHATSAPP_PROVIDER', '') ?: '',
@@ -25,6 +29,7 @@ return [
                 'access_token' => env('WHATSAPP_ACCESS_TOKEN', '') ?: '',
             ],
             'sender_id' => env('WHATSAPP_SENDER_ID', '') ?: '',
+            'allowed_prefixes' => array_values(array_filter(array_map('trim', explode(',', (string) (env('WHATSAPP_ALLOWED_PREFIXES', '+254') ?: '+254'))))),
         ],
     ],
 ];

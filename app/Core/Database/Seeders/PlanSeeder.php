@@ -15,15 +15,24 @@ final class PlanSeeder
 {
     /** @var array<string, array{price:int, features: array<string, array{enabled: bool, limit: ?int}>}> */
     private const PLANS = [
+        // Every plan lists EVERY feature explicitly — nothing is left to
+        // FeatureGate defaults. SMS/WhatsApp quotas are per calendar month
+        // and cap messages sent through the platform-owned account.
         'trial' => [
             'price' => 0,
             'features' => [
                 'max_staff' => ['enabled' => true, 'limit' => 3],
                 'max_branches' => ['enabled' => true, 'limit' => 1],
                 'monthly_bookings' => ['enabled' => true, 'limit' => 100],
-                'advanced_reports' => ['enabled' => false, 'limit' => null],
-                'api_access' => ['enabled' => false, 'limit' => null],
+                'sms_messages' => ['enabled' => true, 'limit' => 25],
+                'whatsapp_messages' => ['enabled' => false, 'limit' => null],
                 'custom_booking_domain' => ['enabled' => false, 'limit' => null],
+                'advanced_themes' => ['enabled' => false, 'limit' => null],
+                'white_label' => ['enabled' => false, 'limit' => null],
+                'api_access' => ['enabled' => false, 'limit' => null],
+                'advanced_reports' => ['enabled' => false, 'limit' => null],
+                'sms_custom_sender_id' => ['enabled' => false, 'limit' => null],
+                'gallery_images' => ['enabled' => true, 'limit' => 5],
             ],
         ],
         'starter' => [
@@ -32,9 +41,15 @@ final class PlanSeeder
                 'max_staff' => ['enabled' => true, 'limit' => 5],
                 'max_branches' => ['enabled' => true, 'limit' => 2],
                 'monthly_bookings' => ['enabled' => true, 'limit' => 500],
-                'advanced_reports' => ['enabled' => true, 'limit' => null],
-                'api_access' => ['enabled' => false, 'limit' => null],
+                'sms_messages' => ['enabled' => true, 'limit' => 200],
+                'whatsapp_messages' => ['enabled' => true, 'limit' => 100],
                 'custom_booking_domain' => ['enabled' => false, 'limit' => null],
+                'advanced_themes' => ['enabled' => false, 'limit' => null],
+                'white_label' => ['enabled' => false, 'limit' => null],
+                'api_access' => ['enabled' => false, 'limit' => null],
+                'advanced_reports' => ['enabled' => true, 'limit' => null],
+                'sms_custom_sender_id' => ['enabled' => false, 'limit' => null],
+                'gallery_images' => ['enabled' => true, 'limit' => 20],
             ],
         ],
         'growth' => [
@@ -43,9 +58,15 @@ final class PlanSeeder
                 'max_staff' => ['enabled' => true, 'limit' => 15],
                 'max_branches' => ['enabled' => true, 'limit' => 5],
                 'monthly_bookings' => ['enabled' => true, 'limit' => 2000],
-                'advanced_reports' => ['enabled' => true, 'limit' => null],
-                'api_access' => ['enabled' => true, 'limit' => null],
+                'sms_messages' => ['enabled' => true, 'limit' => 1000],
+                'whatsapp_messages' => ['enabled' => true, 'limit' => 500],
                 'custom_booking_domain' => ['enabled' => true, 'limit' => null],
+                'advanced_themes' => ['enabled' => true, 'limit' => null],
+                'white_label' => ['enabled' => false, 'limit' => null],
+                'api_access' => ['enabled' => true, 'limit' => null],
+                'advanced_reports' => ['enabled' => true, 'limit' => null],
+                'sms_custom_sender_id' => ['enabled' => true, 'limit' => null],
+                'gallery_images' => ['enabled' => true, 'limit' => 50],
             ],
         ],
         'pro' => [
@@ -54,10 +75,15 @@ final class PlanSeeder
                 'max_staff' => ['enabled' => true, 'limit' => 50],
                 'max_branches' => ['enabled' => true, 'limit' => 10],
                 'monthly_bookings' => ['enabled' => true, 'limit' => null],
-                'advanced_reports' => ['enabled' => true, 'limit' => null],
-                'api_access' => ['enabled' => true, 'limit' => null],
+                'sms_messages' => ['enabled' => true, 'limit' => 3000],
+                'whatsapp_messages' => ['enabled' => true, 'limit' => 2000],
                 'custom_booking_domain' => ['enabled' => true, 'limit' => null],
+                'advanced_themes' => ['enabled' => true, 'limit' => null],
                 'white_label' => ['enabled' => true, 'limit' => null],
+                'api_access' => ['enabled' => true, 'limit' => null],
+                'advanced_reports' => ['enabled' => true, 'limit' => null],
+                'sms_custom_sender_id' => ['enabled' => true, 'limit' => null],
+                'gallery_images' => ['enabled' => true, 'limit' => null],
             ],
         ],
     ];

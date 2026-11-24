@@ -115,6 +115,11 @@ final class NotificationDispatcher
             $this->db->pdo()->prepare(
                 "UPDATE notification_queue SET status = 'sent', sent_at = UTC_TIMESTAMP(), last_error = NULL WHERE id = :id",
             )->execute(['id' => $id]);
+        } catch (RecipientNotAllowedException $e) {
+            // Permanent: retrying cannot succeed. Park it without burning attempts.
+            $this->db->pdo()->prepare(
+                "UPDATE notification_queue SET status = 'skipped', last_error = :e WHERE id = :id",
+            )->execute(['e' => mb_substr($e->getMessage(), 0, 500), 'id' => $id]);
         } catch (\Throwable $e) {
             $this->fail($id, $e->getMessage());
         }

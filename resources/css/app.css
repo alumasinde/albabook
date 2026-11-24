@@ -438,84 +438,164 @@
 
 /* ------------------------------------------------------------ receipts */
 @layer components {
-  .receipt {
-    @apply mx-auto w-full max-w-sm rounded-xl border border-line bg-white p-6 font-mono text-sm text-ink shadow-sm;
+  /* Thermal receipt (80 mm default, 58 mm option). Screen: paper card with
+     torn top/bottom edges; print: exact paper width, no chrome. Ink is pure
+     black so thermal printers render crisply. */
+  .receipt-page {
+    @apply mx-auto w-full max-w-md px-4 py-8;
   }
+  .receipt-toolbar {
+    @apply mb-4 flex items-center justify-between gap-3;
+  }
+  .receipt {
+    @apply relative mx-auto w-full bg-white px-5 pb-8 pt-8 text-[13px] leading-snug text-black;
+    max-width: 80mm;
+    filter: drop-shadow(0 1px 2px rgb(23 26 44 / 0.08)) drop-shadow(0 6px 16px rgb(23 26 44 / 0.08));
+    /* Zig-zag tear on both edges (screen only). */
+    --tear: 7px;
+    -webkit-mask:
+      conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) top / var(--tear) 51% repeat-x,
+      conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / var(--tear) 51% repeat-x;
+    mask:
+      conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) top / var(--tear) 51% repeat-x,
+      conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / var(--tear) 51% repeat-x;
+  }
+  .receipt--58mm {
+    max-width: 58mm;
+    @apply px-3 text-[11px];
+  }
+  .receipt-mono {
+    @apply font-mono;
+  }
+
   .receipt-header {
     @apply text-center;
   }
   .receipt-logo {
-    @apply mx-auto mb-2 flex h-12 w-12 items-center justify-center text-2xl text-ink;
+    @apply mx-auto mb-2 flex h-14 w-14 items-center justify-center text-5xl leading-none text-black;
+  }
+  .receipt-logo--initial {
+    @apply h-12 w-12 rounded-full border-2 border-black text-2xl font-bold;
   }
   .receipt-business {
-    @apply text-xl font-bold uppercase tracking-wide;
+    @apply text-[21px] font-extrabold leading-tight tracking-tight text-black;
+  }
+  .receipt--58mm .receipt-business {
+    @apply text-lg;
   }
   .receipt-tagline {
-    @apply mt-1 text-xs uppercase tracking-widest text-muted;
+    @apply mt-1 text-xs font-semibold tracking-[0.25em] text-black;
   }
   .receipt-meta {
-    @apply mt-1 text-xs text-muted;
+    @apply mt-1 text-[13px] text-black;
   }
-  .receipt-rule {
-    @apply my-4 border-t border-dashed border-ink/30;
+  .receipt-meta > i {
+    @apply mr-1;
   }
-  .receipt-title {
-    @apply text-center text-lg font-bold uppercase tracking-widest;
+
+  .receipt-dash {
+    @apply my-3 border-0 border-t-2 border-dashed border-black/70;
   }
-  .receipt-sub {
-    @apply mt-1 text-center text-xs text-muted;
+  .receipt-bar {
+    @apply mx-auto my-3 block w-[88%] rounded-md bg-black px-3 py-1.5 text-center text-lg font-extrabold tracking-wider text-white;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
-  .receipt-facts {
-    @apply space-y-1 text-xs;
+
+  .receipt-rows > div {
+    @apply flex items-baseline justify-between gap-3 py-0.5;
   }
-  .receipt-facts > div {
-    @apply flex justify-between gap-4;
+  .receipt-rows dt {
+    @apply min-w-0 text-black;
   }
-  .receipt-facts dt {
-    @apply font-semibold;
+  .receipt-rows dd {
+    @apply shrink-0 whitespace-nowrap text-right text-black;
   }
-  .receipt-facts dd {
-    @apply text-right;
+  /* Long values (names, services) may wrap; amounts never do. */
+  .receipt-rows dd.receipt-wrap {
+    @apply whitespace-normal;
   }
-  .receipt-table {
-    @apply mt-4 w-full border-collapse text-xs;
+  /* Levy lines: proportional font (as in the design) so the long labels
+     fit an 80 mm roll beside their amount. */
+  .receipt-row-sm dt {
+    @apply font-sans text-[12px];
   }
-  .receipt-table thead th {
-    @apply border-y border-ink/40 py-2 text-left font-semibold;
+  .receipt-row-sm dd {
+    @apply text-[12px];
   }
-  .receipt-table tbody td {
-    @apply border-b border-line py-2 align-top;
+  .receipt-row-strong dt,
+  .receipt-row-strong dd {
+    @apply font-bold;
   }
-  .receipt-totals {
-    @apply mt-4 space-y-1 text-xs;
+
+  .receipt-items {
+    @apply w-full border-collapse;
   }
-  .receipt-totals > div {
-    @apply flex justify-between gap-4;
+  .receipt-items thead th {
+    @apply border-b border-black pb-1.5 font-bold uppercase text-black;
   }
-  .receipt-totals dt {
-    @apply text-muted;
+  .receipt-items tbody td {
+    @apply pt-2 align-top text-black;
   }
-  .receipt-totals dd {
-    @apply font-semibold;
+
+  .receipt-total-bar {
+    @apply -mx-2 my-3 flex items-center justify-between rounded-md bg-black px-3 py-2 text-lg font-extrabold uppercase text-white;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
-  .receipt-grand {
-    @apply mt-2 rounded-lg bg-surface px-3 py-2 text-sm font-bold;
+  .receipt--58mm .receipt-total-bar {
+    @apply -mx-1 text-sm;
   }
-  .receipt-grand dt,
-  .receipt-grand dd {
-    @apply text-ink;
+
+  .receipt-payment dt {
+    @apply font-bold;
+  }
+  .receipt-status-row {
+    @apply mt-1;
+  }
+  .receipt-status {
+    @apply inline-flex items-center gap-1.5;
+  }
+  .receipt-status > i {
+    @apply text-lg text-black;
+  }
+  .receipt-status-pill {
+    @apply rounded-full border-2 border-black px-3 py-0.5 text-[12px] font-bold;
+  }
+  .receipt-status--due .receipt-status-pill {
+    @apply border-dashed;
+  }
+  .receipt-status--muted .receipt-status-pill {
+    @apply border-black/50 text-black/70;
+  }
+
+  .receipt-qr {
+    @apply mt-1 flex flex-col items-center text-center;
+  }
+  .receipt-qr img {
+    @apply h-[150px] w-[150px];
+  }
+  .receipt--58mm .receipt-qr img {
+    @apply h-[120px] w-[120px];
+  }
+  .receipt-qr figcaption {
+    @apply mt-2 flex flex-col;
+  }
+  .receipt-qr-title {
+    @apply text-[13px] font-semibold text-black;
+  }
+  .receipt-qr-url {
+    @apply break-all font-mono text-[12px] text-black;
+  }
+
+  .receipt-footer {
+    @apply text-center;
   }
   .receipt-thanks {
-    @apply mt-2 text-center text-xs font-semibold uppercase tracking-wide;
+    @apply font-mono text-[13px] font-bold uppercase text-black;
   }
-  .receipt-qr {
-    @apply mx-auto mt-4 flex w-40 items-center justify-center;
-  }
-  .receipt-qr svg {
-    @apply h-40 w-40;
-  }
-  .receipt-brand {
-    @apply text-center text-xs font-semibold uppercase tracking-widest text-muted;
+  .receipt-powered {
+    @apply mt-1 text-[13px] italic text-black;
   }
 
   /* ---------------------------------------------------------- Marketing site (albabook.co.ke)
@@ -704,8 +784,23 @@
     background: #fff !important;
   }
   .receipt {
-    border: none !important;
-    box-shadow: none !important;
-    max-width: 100% !important;
+    -webkit-mask: none !important;
+    mask: none !important;
+    filter: none !important;
+    margin: 0 !important;
+    padding: 0 2mm !important;
+  }
+  .receipt-page {
+    max-width: none !important;
+    padding: 0 !important;
   }
 }
+
+/* Receipt paper: print at the configured roll width with no browser margins.
+   (Named pages let 58 mm receipts override the 80 mm default.) */
+@media print {
+  .receipt { page: receipt80; }
+  .receipt--58mm { page: receipt58; }
+}
+@page receipt80 { size: 80mm auto; margin: 0; }
+@page receipt58 { size: 58mm auto; margin: 0; }

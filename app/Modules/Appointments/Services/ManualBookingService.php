@@ -322,7 +322,10 @@ final class ManualBookingService
                 'policy_version' => $policyVersion,
                 'version' => 1,
                 'notes' => $customer['notes'],
-                'created_by_user_id' => $actorUserId,
+                // FK to users(id): only a tenant user is a user. API
+                // credentials, customers and the system are recorded on the
+                // status.created event (actor_type + actor_id) instead.
+                'created_by_user_id' => $actorType === 'tenant_user' ? $actorUserId : null,
             ]);
             } catch (\PDOException $e) {
                 // Parallel retry with the same key won the race (unique

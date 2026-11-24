@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Middleware;
 
+use App\Core\Config\Config;
 use App\Core\Http\HostGroup;
 use App\Core\Http\HttpException;
 use App\Core\Http\Request;
@@ -32,6 +33,9 @@ final class TrustedHostMiddleware implements MiddlewareInterface
         private readonly RequestContext $context,
         private readonly TenantRepository $tenants,
         private readonly TenantDomainResolver $domains,
+        // Null (unit tests) keeps resolution on; the container always
+        // injects the real config, where it defaults off.
+        private readonly ?Config $config = null,
     ) {}
 
     public function process(Request $request, callable $next): Response
@@ -50,7 +54,8 @@ final class TrustedHostMiddleware implements MiddlewareInterface
         // pending/failed/disabled domains are rejected the same as any
         // unknown host — the Host header is never trusted on its own.
         $customDomain = null;
-        if ($group === null && $host !== null) {
+        $customDomainsOn = $this->config === null || $this->config->bool('tenancy.custom_domains_enabled');
+        if ($group === null && $host !== null && $customDomainsOn) {
             $normalised = $this->domains->normalise($host);
             if ($normalised !== null && $this->domainResolves($normalised)) {
                 $group = HostGroup::Booking;

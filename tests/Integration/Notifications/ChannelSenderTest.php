@@ -90,6 +90,12 @@ final class ChannelSenderTest extends Phase2TestCase
             ),
             'status' => 'active',
         ]);
+        // Custom sender IDs are a premium feature, never granted by default.
+        $this->insert('tenant_feature_overrides', [
+            'tenant_id' => $tenantId,
+            'feature_key' => 'sms_custom_sender_id',
+            'is_enabled' => 1,
+        ]);
 
         $account = $this->sender()->resolveAccount($tenantId, 'sms');
 

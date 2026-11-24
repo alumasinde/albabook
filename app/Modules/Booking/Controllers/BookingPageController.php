@@ -18,6 +18,7 @@ use App\Shared\Http\ApiResponse;
 use App\Shared\Money\CurrencyFormatter;
 use App\Shared\Money\Money;
 use App\Shared\Security\RateLimiter;
+use App\Shared\Validation\CustomerContact;
 use App\Tenancy\TenantRepository;
 
 /**
@@ -310,12 +311,8 @@ final class BookingPageController
         if (preg_match('/^\d{2}:\d{2}$/', $time) !== 1) {
             $fields['time'] = 'Pick a time.';
         }
-        if ($customer['name'] === '') {
-            $fields['name'] = 'Tell us your name.';
-        }
-        if ($customer['phone'] === null && $customer['email'] === null) {
-            $fields['phone'] = 'Leave a phone number or an email so we can confirm.';
-        }
+        // Name, email format, phone (normalised to E.164) and lengths.
+        $fields += CustomerContact::validate($customer);
         if ($fields !== []) {
             return ApiResponse::error('VALIDATION', 'Check the highlighted fields.', 422, $fields);
         }

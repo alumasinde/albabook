@@ -6,6 +6,7 @@ namespace App\Modules\Notifications\Services;
 
 use App\Core\Config\Config;
 use App\Core\Database\Database;
+use App\Modules\Billing\Services\FeatureGate;
 
 /**
  * Decides whether an automatic customer notification may be queued:
@@ -27,6 +28,7 @@ final class NotificationPolicy
     public function __construct(
         private readonly Database $db,
         private readonly Config $config,
+        private readonly ?FeatureGate $features = null,
     ) {}
 
     public function allows(int $tenantId, string $channel, string $eventKey): bool
@@ -55,13 +57,7 @@ final class NotificationPolicy
             return true; // platform mailer; no tenant account needed
         }
 
-        // Platform-owned provider account (config/notifications.php) — the
-        // shared route ChannelSender falls back to, so the channel is
-        // available even without a tenant account.
-        if ($this->config->get('notifications.platform.' . $channel . '.provider', '') !== '') {
-            return true;
-        }
-
+        // The tenant's own provider account: they pay their provider.
         $stmt = $this->db->pdo()->prepare(
             "SELECT 1 FROM tenant_notification_accounts a
                JOIN notification_providers p ON p.id = a.provider_id
@@ -69,7 +65,19 @@ final class NotificationPolicy
               LIMIT 1",
         );
         $stmt->execute(['t' => $tenantId, 'c' => $channel]);
+        if ($stmt->fetchColumn() !== false) {
+            return true;
+        }
 
-        return $stmt->fetchColumn() !== false;
+        // Platform-owned fallback (config/notifications.php): the platform
+        // pays, so it is only available when the plan includes the channel
+        // ({channel}_messages enabled). Plans without it never queue rows
+        // that would send on the platform's account.
+        if ($this->config->get('notifications.platform.' . $channel . '.provider', '') === '') {
+            return false;
+        }
+        $features = $this->features ?? new FeatureGate($this->db);
+
+        return $features->underLimit($tenantId, $channel . '_messages', 0);
     }
 }

@@ -23,6 +23,13 @@ return [
 
     'migrations_path' => 'database/migrations',
 
+    // Least privilege (production): the web app connects as DB_USERNAME,
+    // which only needs SELECT/INSERT/UPDATE/DELETE. Schema changes run from
+    // the CLI (php bin/console migrate) as this separate schema-owner user.
+    // Empty = migrations use DB_USERNAME (local development).
+    'migration_username' => (string) env('DB_MIGRATE_USERNAME', ''),
+    'migration_password' => (string) env('DB_MIGRATE_PASSWORD', ''),
+
     // Booking-write transactions (decisions.md D-009).
     'transaction' => [
         'max_attempts' => 3,

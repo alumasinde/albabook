@@ -8,6 +8,7 @@ use App\Core\Http\Request;
 use App\Core\Http\RequestContext;
 use App\Core\Validation\ValidationException;
 use App\Core\Validation\Validator;
+use App\Modules\Billing\Services\FeatureGate;
 use App\Shared\Audit\AuditAction;
 use App\Shared\Audit\AuditLogger;
 use App\Tenancy\SlugPolicy;
@@ -55,6 +56,20 @@ final class TenantRegistrationTest extends Phase2TestCase
         $audit = $this->pdo->prepare('SELECT COUNT(*) FROM audit_logs WHERE action = :action AND tenant_id = :tenant_id');
         $audit->execute(['action' => AuditAction::TENANT_REGISTERED, 'tenant_id' => $tenant->tenantId]);
         self::assertSame(1, (int) $audit->fetchColumn(), 'registration is audited');
+
+        // A trial subscription is started when the trial plan exists, so the
+        // business never runs on default-permit feature rules.
+        $trialPlan = $this->pdo->query("SELECT id FROM plans WHERE code = 'trial' AND is_active = 1")->fetchColumn();
+        $subs = $this->pdo->prepare('SELECT status, plan_id FROM tenant_subscriptions WHERE tenant_id = :t');
+        $subs->execute(['t' => $tenant->tenantId]);
+        $rows = $subs->fetchAll();
+        if ($trialPlan !== false) {
+            self::assertCount(1, $rows);
+            self::assertSame('trialing', $rows[0]['status']);
+            self::assertSame((int) $trialPlan, (int) $rows[0]['plan_id']);
+        } else {
+            self::assertSame([], $rows);
+        }
     }
 
     public function testPreviouslyUsedAndReservedSlugsAreRejected(): void
@@ -110,6 +125,8 @@ final class TenantRegistrationTest extends Phase2TestCase
             new TenantProvisioningService($this->db, $this->tenants, $this->roles, $this->memberships, $this->uuids),
             $resolver,
             $audit,
+            new FeatureGate($this->db),
+            $this->uuids,
         );
     }
 

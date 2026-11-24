@@ -110,9 +110,15 @@ final class PasswordResetService
         }
 
         $now = $this->clock->now()->format('Y-m-d H:i:s');
-        $this->tokens->consume((int) $row['id'], $now);
+        // Hash first (slow), then claim the token: consume() succeeds for
+        // exactly one request, so a racing duplicate reset with the same
+        // token aborts here before it can change anything.
+        $hash = $this->hasher->hash($password);
+        if (!$this->tokens->consume((int) $row['id'], $now)) {
+            throw new InvalidTokenException();
+        }
         $this->tokens->invalidateForUser($userId);
-        $this->users->updatePasswordHash($userId, $this->hasher->hash($password));
+        $this->users->updatePasswordHash($userId, $hash);
         $this->sessions->revokeAllForUser($userId, $now);
         $this->rememberTokens->revokeAllForUser($userId, $now);
 

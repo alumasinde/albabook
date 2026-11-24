@@ -18,7 +18,14 @@ final class LocalRedirect
         if (!is_string($next) || $next === '' || $next[0] !== '/' || str_starts_with($next, '//')) {
             return $fallback;
         }
-        if (preg_match('/[\x00-\x1F\x7F]/', $next) === 1) {
+        // Browsers treat "\" like "/" in a Location header, so "/\evil.com"
+        // would become the protocol-relative "//evil.com" (open redirect).
+        if (str_contains($next, '\\') || preg_match('/[\x00-\x1F\x7F]/', $next) === 1) {
+            return $fallback;
+        }
+        // Belt and braces: whatever survives must parse as a bare path.
+        $parts = parse_url($next);
+        if ($parts === false || isset($parts['scheme']) || isset($parts['host']) || isset($parts['user'])) {
             return $fallback;
         }
 

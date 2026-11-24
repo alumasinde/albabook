@@ -1,144 +1,150 @@
 {#
-  Printable customer receipt (salon design): business header, item table,
-  tax/charge breakdown, tenders and a verification QR. All totals are
-  server-computed; the page is print-ready (controls hidden via no-print).
+  Thermal-style customer receipt (80 / 58 mm). Layout follows the AlbaBook
+  receipt design: business header → black heading bar → receipt facts →
+  items → inclusive levies → total bar → tenders (masked references) and the
+  payment status → verification QR → thank-you footer. Every optional part is
+  driven by ReceiptSettings; all amounts are server-computed.
 #}
 {% extends 'layouts/base.twig' %}
 
-{% block title %}{{ t('receipt.title') }} {{ receipt.reference }} · {{ app_name }}{% endblock %}
+{% block title %}{{ t('receipt.title') }} {{ r.reference }} · {{ business_name }}{% endblock %}
 
 {% block body_class %}min-h-full bg-surface text-ink antialiased{% endblock %}
 
 {% block body %}
-<main id="main" class="mx-auto w-full max-w-md px-4 py-8" tabindex="-1" data-page="receipt">
-  <div class="mb-4 flex items-center justify-between gap-3 no-print">
-    <a href="/appointments" class="btn btn-ghost btn-sm">
+<main id="main" class="receipt-page" tabindex="-1" data-page="receipt">
+  <div class="receipt-toolbar no-print">
+    <a href="{{ back_url }}" class="btn btn-ghost btn-sm">
       <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> {{ t('common.back') }}
     </a>
+    {% if is_preview %}<span class="badge badge-info">{{ t('receipt.preview_badge') }}</span>{% endif %}
     <button type="button" class="btn btn-primary btn-sm" data-print>
       <i class="fa-solid fa-print" aria-hidden="true"></i> {{ t('receipt.print') }}
     </button>
   </div>
 
-  <article class="receipt" aria-label="{{ t('receipt.title') }}">
+  <article class="receipt receipt--{{ settings.paper }}" aria-label="{{ t('receipt.title') }}">
+    {# ---------------------------------------------------------- Header #}
     <header class="receipt-header">
-      <div class="receipt-logo" aria-hidden="true"><i class="fa-solid fa-spa"></i></div>
-      <h1 class="receipt-business">{{ receipt.tenant_name }}</h1>
-      <p class="receipt-tagline">{{ t('receipt.tagline') }}</p>
-      {% if receipt.address_line1 or receipt.town %}
-        <p class="receipt-meta">
-          <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
-          {{ [receipt.address_line1, receipt.address_line2, receipt.town, receipt.county]|filter(v => v)|join(', ') }}
-        </p>
+      {% if settings.logo == 'initial' %}
+        <div class="receipt-logo receipt-logo--initial" aria-hidden="true">{{ logo_initial }}</div>
+      {% elseif settings.logo != 'none' %}
+        <div class="receipt-logo" aria-hidden="true"><i class="fa-solid fa-{{ settings.logo }}"></i></div>
       {% endif %}
-      <p class="receipt-meta">
-        {% if receipt.branch_phone %}<i class="fa-solid fa-phone" aria-hidden="true"></i> {{ receipt.branch_phone }}{% endif %}
-        {% if receipt.branch_phone and receipt.branch_email %} &nbsp;|&nbsp; {% endif %}
-        {% if receipt.branch_email %}<i class="fa-solid fa-envelope" aria-hidden="true"></i> {{ receipt.branch_email }}{% endif %}
-      </p>
-      <p class="receipt-meta text-muted">{{ receipt.branch_name }}</p>
-      {% if receipt.kra_pin %}<p class="receipt-meta">KRA PIN: {{ receipt.kra_pin }}</p>{% endif %}
+      <h1 class="receipt-business">{{ business_name|upper }}</h1>
+      {% if settings.tagline %}<p class="receipt-tagline">{{ settings.tagline|upper }}</p>{% endif %}
+      {% if settings.show_address and address %}
+        <p class="receipt-meta"><i class="fa-solid fa-location-dot" aria-hidden="true"></i> {{ address }}</p>
+      {% endif %}
+      {% if settings.show_phone and phone %}
+        <p class="receipt-meta"><i class="fa-solid fa-phone" aria-hidden="true"></i> {{ phone }}</p>
+      {% endif %}
+      {% if settings.show_email and r.branch_email|default('') %}
+        <p class="receipt-meta"><i class="fa-solid fa-envelope" aria-hidden="true"></i> {{ r.branch_email }}</p>
+      {% endif %}
+      {% if settings.show_kra_pin and r.kra_pin|default('') %}
+        <p class="receipt-meta">KRA PIN: {{ r.kra_pin }}</p>
+      {% endif %}
     </header>
 
-    <div class="receipt-rule"></div>
-    <h2 class="receipt-title">{{ t('receipt.heading') }}</h2>
-    <p class="receipt-sub">{{ footer_note|default(t('receipt.thank_you')) }}</p>
-    <div class="receipt-rule"></div>
+    <hr class="receipt-dash">
+    <h2 class="receipt-bar">{{ settings.heading|upper }}</h2>
 
-    <dl class="receipt-facts">
-      <div><dt>{{ t('receipt.no') }}</dt><dd>{{ receipt.reference }}</dd></div>
-      <div><dt>{{ t('receipt.date') }}</dt><dd>{{ receipt.start_at|date('d M \'y') }}</dd></div>
-      <div><dt>{{ t('receipt.time') }}</dt><dd>{{ receipt.start_at|date('h:i A') }}</dd></div>
-      <div><dt>{{ t('receipt.client') }}</dt><dd>{{ receipt.customer_name_snapshot|default(t('receipt.walk_in')) }}</dd></div>
-      <div><dt>{{ t('receipt.staff') }}</dt><dd>{{ receipt.staff_name|default('—') }}</dd></div>
-      <div><dt>{{ t('receipt.status') }}</dt><dd>{{ t('lookup.appointment_status.' ~ receipt.status) }}</dd></div>
+    {# ---------------------------------------------------------- Facts #}
+    <dl class="receipt-rows receipt-mono">
+      <div><dt>{{ t('receipt.no') }}:</dt><dd>{{ r.reference }}</dd></div>
+      <div><dt>{{ t('receipt.date') }}:</dt><dd>{{ date }} &nbsp;{{ t('receipt.time') }}: {{ time }}</dd></div>
+      {% if settings.show_customer %}
+        <div><dt>{{ t('receipt.customer') }}:</dt><dd class="receipt-wrap">{{ r.customer_name_snapshot|default(t('receipt.walk_in')) }}</dd></div>
+      {% endif %}
+      {% if service_summary %}
+        <div><dt>{{ t('receipt.service') }}:</dt><dd class="receipt-wrap">{{ service_summary }}</dd></div>
+      {% endif %}
+      {% if settings.show_staff and r.staff_name|default('') %}
+        <div><dt>{{ t('receipt.staff') }}:</dt><dd class="receipt-wrap">{{ r.staff_name }}</dd></div>
+      {% endif %}
     </dl>
 
-    <table class="receipt-table">
+    <hr class="receipt-dash">
+
+    {# ---------------------------------------------------------- Items #}
+    <table class="receipt-items receipt-mono">
       <thead>
         <tr>
-          <th scope="col">#</th>
-          <th scope="col">{{ t('receipt.col_item') }}</th>
+          <th scope="col" class="text-left">{{ t('receipt.col_description') }}</th>
           <th scope="col" class="text-center">{{ t('receipt.col_qty') }}</th>
-          <th scope="col" class="text-right">{{ t('receipt.col_price') }}</th>
           <th scope="col" class="text-right">{{ t('receipt.col_amount') }}</th>
         </tr>
       </thead>
       <tbody>
         {% for item in items %}
           <tr>
-            <td>{{ item.no }}</td>
             <td>{{ item.label }}</td>
             <td class="text-center">{{ item.qty }}</td>
-            <td class="text-right">{{ item.unit }}</td>
-            <td class="text-right">{{ item.amount }}</td>
+            <td class="text-right whitespace-nowrap">{{ item.amount }}</td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
 
-    <dl class="receipt-totals">
-      <div><dt>{{ t('receipt.subtotal') }}</dt><dd>{{ totals_label.subtotal }}</dd></div>
-      {% if totals.discount_minor > 0 %}
-        <div><dt>{{ t('receipt.discount') }}</dt><dd>−{{ totals_label.discount }}</dd></div>
-      {% endif %}
-      <div><dt>{{ t('receipt.payable') }}</dt><dd>{{ totals_label.payable }}</dd></div>
-      {% if totals.tax_minor > 0 %}
-        <div><dt>{{ t('receipt.vat', { rate: (tax_rate_bp / 100)|number_format(2) }) }}</dt><dd>{{ totals_label.tax }}</dd></div>
-      {% endif %}
-      {% if totals.service_charge_minor > 0 %}
-        <div><dt>{{ t('receipt.service_charge', { rate: (service_charge_bp / 100)|number_format(2) }) }}</dt><dd>{{ totals_label.service_charge }}</dd></div>
-      {% endif %}
-      {% if totals.tip_minor > 0 %}
-        <div><dt>{{ t('receipt.tips') }}</dt><dd>{{ totals_label.tips }}</dd></div>
-      {% endif %}
-      <div class="receipt-grand"><dt>{{ t('receipt.grand_total') }}</dt><dd>{{ totals_label.total }}</dd></div>
-      <div><dt>{{ t('receipt.paid') }}</dt><dd>{{ totals_label.paid }}</dd></div>
-      {% if totals.balance_minor > 0 %}
-        <div><dt>{{ t('receipt.balance_due') }}</dt><dd>{{ totals_label.balance }}</dd></div>
-      {% endif %}
+    <hr class="receipt-dash">
+
+    {# ---------------------------------------------------------- Totals #}
+    <dl class="receipt-rows receipt-mono">
+      <div><dt>{{ t('receipt.subtotal') }}:</dt><dd>{{ lines.subtotal }}</dd></div>
+      {% if lines.discount %}<div><dt>{{ t('receipt.discount') }}:</dt><dd>−{{ lines.discount }}</dd></div>{% endif %}
+      {% if lines.vat %}<div class="receipt-row-sm"><dt>{{ t('receipt.vat_inclusive', { rate: lines.vat_rate }) }}:</dt><dd>{{ lines.vat }}</dd></div>{% endif %}
+      {% if lines.service_charge %}<div class="receipt-row-sm"><dt>{{ t('receipt.service_charge_inclusive', { rate: lines.service_charge_rate }) }}:</dt><dd>{{ lines.service_charge }}</dd></div>{% endif %}
+      {% if lines.tips %}<div><dt>{{ t('receipt.tips') }}:</dt><dd>{{ lines.tips }}</dd></div>{% endif %}
     </dl>
 
-    <div class="receipt-rule"></div>
-    {% for tender in tenders %}
-      <dl class="receipt-facts">
-        <div><dt>{{ t('receipt.payment_method') }}</dt><dd class="capitalize">{{ tender.method }}</dd></div>
-        {% if tender.reference %}<div><dt>{{ t('receipt.txn_id') }}</dt><dd>{{ tender.reference }}</dd></div>{% endif %}
+    <div class="receipt-total-bar">
+      <span>{{ fully_paid ? t('receipt.total_paid') : t('receipt.total') }}:</span>
+      <span>{{ lines.total }}</span>
+    </div>
+    {% if not fully_paid %}
+      <dl class="receipt-rows receipt-mono">
+        <div><dt>{{ t('receipt.paid') }}:</dt><dd>{{ lines.paid }}</dd></div>
+        {% if lines.balance %}<div class="receipt-row-strong"><dt>{{ t('receipt.balance_due') }}:</dt><dd>{{ lines.balance }}</dd></div>{% endif %}
       </dl>
-    {% else %}
-      <p class="receipt-meta">{{ t('receipt.no_payments') }}</p>
-    {% endfor %}
-    <div class="receipt-rule"></div>
+    {% endif %}
 
-    <table class="receipt-table receipt-tax-table">
-      <thead>
-        <tr>
-          <th scope="col">{{ t('receipt.rate_col') }}</th>
-          <th scope="col" class="text-right">{{ t('receipt.taxable_col') }}</th>
-          <th scope="col" class="text-right">{{ t('receipt.vat_col') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in tax_rows %}
-          <tr>
-            <td>{{ row.rate|default(t('receipt.exempt')) }}</td>
-            <td class="text-right">{{ row.taxable }}</td>
-            <td class="text-right">{{ row.vat }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <p class="receipt-meta">{{ t('receipt.items_number') }}: {{ items_count }}</p>
-    <div class="receipt-rule"></div>
+    {# ---------------------------------------------------------- Payment #}
+    <dl class="receipt-rows receipt-mono receipt-payment">
+      {% for tender in tenders %}
+        <div><dt>{{ t('receipt.payment_method') }}:</dt><dd>{{ tender.method }}{% if tenders|length > 1 %} · {{ tender.amount }}{% endif %}</dd></div>
+        {% if tender.reference %}<div><dt>{{ tender.reference_label }}:</dt><dd class="receipt-wrap">{{ tender.reference }}</dd></div>{% endif %}
+      {% else %}
+        <div><dt>{{ t('receipt.payment_method') }}:</dt><dd>—</dd></div>
+      {% endfor %}
+      <div class="receipt-status-row">
+        <dt>{{ t('receipt.payment_status') }}:</dt>
+        <dd>
+          <span class="receipt-status receipt-status--{{ status.tone }}">
+            {% if status.tone == 'paid' %}<i class="fa-solid fa-circle-check" aria-hidden="true"></i>{% endif %}
+            <span class="receipt-status-pill">{{ status.label|upper }}</span>
+          </span>
+        </dd>
+      </div>
+    </dl>
 
-    <p class="receipt-thanks">{{ footer_note|default(t('receipt.thank_you')) }}</p>
+    {# ---------------------------------------------------------- Verify #}
+    {% if qr_svg_b64 %}
+      <hr class="receipt-dash">
+      <figure class="receipt-qr">
+        <img src="data:image/svg+xml;base64,{{ qr_svg_b64 }}" width="150" height="150" alt="{{ t('receipt.qr_alt') }}">
+        <figcaption>
+          <span class="receipt-qr-title">{{ t('receipt.scan_to_verify') }}</span>
+          <span class="receipt-qr-url">{{ verify_display }}</span>
+        </figcaption>
+      </figure>
+    {% endif %}
 
-    <figure class="receipt-qr">
-      <img src="data:image/svg+xml;base64,{{ qr_svg_b64 }}" width="160" height="160" alt="{{ t('receipt.qr_alt') }}">
-    </figure>
-
-    <div class="receipt-rule"></div>
-    <p class="receipt-brand">{{ receipt.tenant_name|upper }} · {{ t('common.powered_by') }}</p>
+    <hr class="receipt-dash">
+    <footer class="receipt-footer">
+      <p class="receipt-thanks">{{ footer_note ?: t('receipt.thanks_for_choosing', { name: business_name|upper }) }}</p>
+      {% if show_powered_by %}<p class="receipt-powered">{{ t('common.powered_by') }}</p>{% endif %}
+    </footer>
   </article>
 </main>
 {% endblock %}

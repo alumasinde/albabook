@@ -40,6 +40,15 @@ final class ConfigValidatorTest extends TestCase
         self::assertStringContainsString('DB_PASSWORD', $joined);
     }
 
+    public function testStagingAlsoRefusesDebug(): void
+    {
+        $errors = (new ConfigValidator())->validate(self::config([
+            'app' => ['env' => 'staging', 'debug' => true],
+        ]));
+
+        self::assertStringContainsString('APP_DEBUG must be false in staging and production', implode("\n", $errors));
+    }
+
     public function testHostsMustBeValidAndDistinct(): void
     {
         $errors = (new ConfigValidator())->validate(self::config(['app' => ['hosts' => [

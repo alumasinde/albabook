@@ -24,7 +24,23 @@
     <button type="button" class="tab-btn" data-settings-tab="theme">{{ t('settings.tab_theme') }}</button>
     <button type="button" class="tab-btn" data-settings-tab="notifications">{{ t('settings.tab_notifications') }}</button>
     <button type="button" class="tab-btn" data-settings-tab="payments">{{ t('settings.tab_payments') }}</button>
+    <button type="button" class="tab-btn" data-settings-tab="receipt">{{ t('settings.tab_receipt') }}</button>
   </nav>
+
+  <section data-settings-panel="receipt" hidden aria-labelledby="settings-receipt-h">
+    <div class="card max-w-3xl p-6">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 id="settings-receipt-h" class="text-lg font-semibold text-ink">{{ t('settings.receipt_heading') }}</h3>
+          <p class="mt-1 text-sm text-muted">{{ t('settings.receipt_subtitle') }}</p>
+        </div>
+        <a href="/settings/receipt/preview" target="_blank" rel="noopener" class="btn btn-secondary btn-md shrink-0" data-no-spa>
+          <i class="fa-solid fa-receipt" aria-hidden="true"></i> {{ t('settings.receipt_preview') }}
+        </a>
+      </div>
+      <form data-settings-receipt class="mt-5" novalidate></form>
+    </div>
+  </section>
 
   <section data-settings-panel="profile" aria-labelledby="settings-profile-h">
     <div class="card max-w-3xl p-6">

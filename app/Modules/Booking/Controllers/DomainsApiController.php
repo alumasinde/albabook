@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Booking\Controllers;
 
+use App\Core\Config\Config;
 use App\Core\Http\Request;
 use App\Core\Http\Response;
 use App\Core\Validation\ValidationException;
@@ -26,7 +27,23 @@ final class DomainsApiController
         private readonly TenantDomainsRepository $domains,
         private readonly TenantDomainResolver $resolver,
         private readonly FeatureGate $features,
+        private readonly Config $config,
     ) {}
+
+    /** Custom hosts can only be served once the edge supports them. */
+    private function platformEnabled(): bool
+    {
+        return $this->config->bool('tenancy.custom_domains_enabled');
+    }
+
+    private function comingSoon(): Response
+    {
+        return ApiResponse::error(
+            'FEATURE_NOT_AVAILABLE',
+            'Custom booking domains are coming soon. Your booking page works on its AlbaBook link meanwhile.',
+            403,
+        );
+    }
 
     /** @param array<string, string> $params */
     public function list(Request $request, array $params): Response
@@ -38,7 +55,11 @@ final class DomainsApiController
 
         return ApiResponse::ok([
             'domains' => array_map($this->shape(...), $this->domains->listForTenant($tenant->tenantId)),
-            'feature_enabled' => $this->features->enabled($tenant->tenantId, 'custom_booking_domain'),
+            // Plan entitlement AND platform availability (the edge must be
+            // able to serve custom hosts before anyone can add one).
+            'feature_enabled' => $this->platformEnabled()
+                && $this->features->enabled($tenant->tenantId, 'custom_booking_domain'),
+            'platform_available' => $this->platformEnabled(),
         ]);
     }
 
@@ -48,6 +69,9 @@ final class DomainsApiController
         [$tenant, $membership] = $this->context($request);
         if (!$membership->can('booking_page.manage')) {
             return ApiResponse::error('FORBIDDEN', 'You do not have permission to manage domains.', 403);
+        }
+        if (!$this->platformEnabled()) {
+            return $this->comingSoon();
         }
         if (!$this->features->enabled($tenant->tenantId, 'custom_booking_domain')) {
             return ApiResponse::error('FEATURE_NOT_AVAILABLE', 'Custom booking domains are not included in your plan.', 403);
@@ -59,6 +83,9 @@ final class DomainsApiController
                 'domain' => 'Invalid or reserved domain.',
             ]);
         }
+        // An unverified claim lapses after the TTL, so nobody can park a
+        // domain they do not control and block its real owner.
+        $this->domains->releaseStaleClaim($domain, $this->config->int('tenancy.domain_claim_ttl_hours', 72));
         if ($this->domains->findByDomain($domain) !== null) {
             return ApiResponse::error('VALIDATION_FAILED', 'That domain is already registered.', 422, [
                 'domain' => 'That domain is already registered.',
@@ -136,6 +163,9 @@ final class DomainsApiController
         [$tenant, $membership, $row] = $this->guarded($request, $params);
         if ($row instanceof Response) {
             return $row;
+        }
+        if (!$this->platformEnabled()) {
+            return $this->comingSoon();
         }
         if ($row['status'] !== 'verified') {
             return ApiResponse::error('INVALID_STATE', 'Only verified domains can be activated.', 409);

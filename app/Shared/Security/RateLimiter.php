@@ -44,6 +44,43 @@ final class RateLimiter
         );
     }
 
+    /**
+     * Read a bucket without counting this call — for limits that count only
+     * failures (check before the attempt, hit() after a failure).
+     */
+    public function peek(string $key, int $limit, int $windowSeconds): RateLimitResult
+    {
+        $limit = max(1, $limit);
+        $windowSeconds = max(1, $windowSeconds);
+        $now = $this->clock->now()->getTimestamp();
+        $windowStart = intdiv($now, $windowSeconds) * $windowSeconds;
+
+        $stmt = $this->db->pdo()->prepare('SELECT count FROM rate_limit_buckets WHERE bucket_key = :k AND window_start = :w');
+        $stmt->execute(['k' => $key, 'w' => gmdate('Y-m-d H:i:s', $windowStart)]);
+        $count = (int) $stmt->fetchColumn();
+
+        return new RateLimitResult(
+            allowed: $count < $limit,
+            remaining: max(0, $limit - $count),
+            retryAfterSeconds: max(0, $windowStart + $windowSeconds - $now),
+        );
+    }
+
+    /**
+     * Bucket identity for a client IP. IPv6 is grouped by /64 — one ISP
+     * customer is normally handed a whole /64, so per-address keys would let
+     * a single attacker rotate through billions of "different" clients.
+     */
+    public static function clientKey(string $ip): string
+    {
+        $packed = @inet_pton($ip);
+        if ($packed !== false && strlen($packed) === 16) {
+            $ip = (string) inet_ntop(substr($packed, 0, 8) . str_repeat("\0", 8)) . '/64';
+        }
+
+        return hash('sha256', $ip);
+    }
+
     /** Housekeeping; call from a scheduled job in later phases. */
     public function pruneOlderThan(int $seconds): void
     {

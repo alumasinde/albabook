@@ -191,7 +191,11 @@
       box.append(el('h4', 'text-sm font-semibold text-ink', 'Add to ticket'));
 
       const kind = el('select', 'input select mt-3');
-      [['service', 'Service'], ['product', 'Product'], ['discount', 'Discount'], ['tip', 'Tip']].forEach(([v, l]) => {
+      // Discounts need payments.discount (the server enforces it; this only
+      // hides an option the user cannot use).
+      [['service', 'Service'], ['product', 'Product'], ['discount', 'Discount'], ['tip', 'Tip']]
+        .filter(([v]) => v !== 'discount' || (t.can && t.can.discount))
+        .forEach(([v, l]) => {
         const o = el('option', '', l);
         o.value = v;
         kind.append(o);

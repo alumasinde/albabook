@@ -84,8 +84,11 @@ final class AppointmentRepository
             $params['f_to'] = $filters['to'];
         }
         if (($filters['q'] ?? '') !== '') {
-            $where[] = '(a.customer_name_snapshot LIKE :f_q OR a.customer_phone_snapshot LIKE :f_q OR a.reference = :f_q_exact)';
-            $params['f_q'] = '%' . $filters['q'] . '%';
+            // Distinct placeholders: native prepares (EMULATE_PREPARES off)
+            // reject a named parameter used twice (SQLSTATE HY093).
+            $where[] = '(a.customer_name_snapshot LIKE :f_q_name OR a.customer_phone_snapshot LIKE :f_q_phone OR a.reference = :f_q_exact)';
+            $params['f_q_name'] = '%' . $filters['q'] . '%';
+            $params['f_q_phone'] = '%' . $filters['q'] . '%';
             $params['f_q_exact'] = (string) $filters['q'];
         }
 

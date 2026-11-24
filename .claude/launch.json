@@ -1,13 +1,32 @@
 {
-  "version": "0.0.1",
-  "configurations": [
-    {
-      "name": "albabook-site",
-      "runtimeExecutable": "php",
-      "runtimeArgs": ["-S", "127.0.0.1:8010", "-t", "public", "server.php"],
-      "port": 8010,
-      "autoPort": false,
-      "url": "http://albabook.localhost:8010"
-    }
-  ]
+    "version": "0.0.1",
+    "configurations": [
+        {
+            "name": "albabook-site",
+            "runtimeExecutable": "php",
+            "runtimeArgs": [
+                "-S",
+                "127.0.0.1:8010",
+                "-t",
+                "public",
+                "server.php"
+            ],
+            "port": 8010,
+            "autoPort": false,
+            "url": "http://albabook.localhost:8010"
+        },
+        {
+            "name": "receipt-static",
+            "runtimeExecutable": "php",
+            "runtimeArgs": [
+                "-S",
+                "127.0.0.1:8031",
+                "-t",
+                "storage/temporary"
+            ],
+            "port": 8031,
+            "autoPort": false,
+            "url": "http://127.0.0.1:8031"
+        }
+    ]
 }

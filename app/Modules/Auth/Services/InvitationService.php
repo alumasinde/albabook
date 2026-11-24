@@ -310,10 +310,26 @@ final class InvitationService
             throw new ValidationException(['role_ids' => 'Choose roles from this business.']);
         }
 
-        if (in_array('owner', array_values(array_intersect_key($available, array_flip($requested))), true)
-            && !in_array('owner', $actor->roleSlugs, true)
-        ) {
+        $isOwner = in_array('owner', $actor->roleSlugs, true);
+        if (in_array('owner', array_values(array_intersect_key($available, array_flip($requested))), true) && !$isOwner) {
             throw new ValidationException(['role_ids' => 'Only the owner can grant the owner role.']);
+        }
+
+        if (!$isOwner) {
+            // Invitees join with access to every branch (invitations carry no
+            // branch scope), so a branch-limited member inviting anyone —
+            // e.g. a second address of their own — would escalate to all
+            // branches. Only members who already see every branch may invite.
+            if ($actor->branchIds !== null) {
+                throw new ValidationException(['email' => 'Only team members with access to every branch can send invitations.']);
+            }
+            // No vertical escalation: the requested roles may not carry any
+            // permission the inviter does not hold themselves.
+            $granted = $this->roles->permissionIdentifiersForRoles($tenantId, $requested);
+            $beyond = array_values(array_diff($granted, $actor->permissions));
+            if ($beyond !== []) {
+                throw new ValidationException(['role_ids' => 'You cannot grant a role with permissions you do not have yourself.']);
+            }
         }
 
         return $requested;

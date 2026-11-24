@@ -123,11 +123,14 @@ return static function (RouteRegistrar $r): void {
     $r->post('/api/appointments/{uuid}/payments/{payment_uuid}/refund', [TillApiController::class, 'refund'], $workspace, name: 'api.till.refund');
     $r->post('/api/appointments/{uuid}/checkout', [TillApiController::class, 'checkout'], $workspace, name: 'api.till.checkout');
     $r->get('/appointments/{uuid}/receipt', [ReceiptPageController::class, 'show'], [...$workspace, PermissionMiddleware::class], name: 'receipt', options: ['permission' => 'payments.view']);
+    // Sample receipt rendered with the business's saved receipt design.
+    $r->get('/settings/receipt/preview', [ReceiptPageController::class, 'preview'], [...$workspace, PermissionMiddleware::class], name: 'receipt.preview', options: ['permission' => 'settings.view']);
     $r->get('/api/products', [ProductsApiController::class, 'list'], $workspace, name: 'api.products.list');
     $r->post('/api/products', [ProductsApiController::class, 'create'], $workspace, name: 'api.products.create');
     $r->patch('/api/products/{uuid}', [ProductsApiController::class, 'update'], $workspace, name: 'api.products.update');
     $r->delete('/api/products/{uuid}', [ProductsApiController::class, 'destroy'], $workspace, name: 'api.products.destroy');
     $r->patch('/api/settings/payments/policy', [SettingsApiController::class, 'updatePaymentPolicy'], $workspace, name: 'api.settings.payment-policy');
+    $r->patch('/api/settings/receipt', [SettingsApiController::class, 'updateReceipt'], $workspace, name: 'api.settings.receipt');
     $r->get('/api/calendar/events', [AppointmentsApiController::class, 'events'], $workspace, name: 'api.calendar.events');
     // Static segment before the {uuid} variable route (FastRoute shadowing).
     $r->get('/api/services/meta', [ServicesApiController::class, 'meta'], $workspace, name: 'api.services.meta');

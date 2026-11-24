@@ -157,6 +157,48 @@ final class InvitationRoleScopeTest extends Phase2TestCase
         }
     }
 
+    public function testABranchLimitedMemberCannotInvite(): void
+    {
+        $ownerId = $this->createUser($this->uniqueEmail('owner'));
+        $tenant = $this->provision($ownerId);
+        // Invitees get every branch, so a branch-limited inviter would escalate.
+        $actor = new MembershipContext($tenant['tenant_user_id'], $ownerId, $tenant['tenant_id'], ['business_administrator'], ['users.manage', 'appointments.view'], [1]);
+
+        try {
+            $this->invitations->invite(
+                $this->tenantOf($ownerId, $tenant['tenant_id']),
+                $actor,
+                ['email' => $this->uniqueEmail('invitee'), 'role_ids' => [(string) $this->roleId($tenant['tenant_id'], 'staff')]],
+                $this->request(),
+            );
+            self::fail('Expected a branch-limited inviter to be refused.');
+        } catch (ValidationException $e) {
+            self::assertStringContainsString('every branch', $e->errors['email']);
+        }
+        self::assertCount(0, $this->mailer->messages);
+    }
+
+    public function testARoleWithPermissionsTheInviterLacksCannotBeGranted(): void
+    {
+        $ownerId = $this->createUser($this->uniqueEmail('owner'));
+        $tenant = $this->provision($ownerId);
+        // An inviter holding only a sliver of permissions tries to hand out the
+        // business administrator role (refunds, settings, team management…).
+        $actor = new MembershipContext($tenant['tenant_user_id'], $ownerId, $tenant['tenant_id'], ['receptionist'], ['users.manage', 'appointments.view'], null);
+
+        try {
+            $this->invitations->invite(
+                $this->tenantOf($ownerId, $tenant['tenant_id']),
+                $actor,
+                ['email' => $this->uniqueEmail('invitee'), 'role_ids' => [(string) $this->roleId($tenant['tenant_id'], 'business_administrator')]],
+                $this->request(),
+            );
+            self::fail('Expected vertical escalation to be refused.');
+        } catch (ValidationException $e) {
+            self::assertStringContainsString('permissions you do not have', $e->errors['role_ids']);
+        }
+    }
+
     public function testAnExistingUserMustAcceptWithTheInvitedEmail(): void
     {
         $ownerId = $this->createUser($this->uniqueEmail('owner'));

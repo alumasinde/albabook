@@ -110,6 +110,31 @@ final class RoleRepository
         return array_values(array_map('strval', $stmt->fetchAll(\PDO::FETCH_COLUMN)));
     }
 
+    /**
+     * Union of the tenant-scope permissions carried by these roles of this
+     * tenant — used to stop a member granting more than they hold.
+     * @param list<int> $roleIds
+     * @return list<string>
+     */
+    public function permissionIdentifiersForRoles(int $tenantId, array $roleIds): array
+    {
+        $roleIds = array_values(array_unique(array_map('intval', $roleIds)));
+        if ($roleIds === []) {
+            return [];
+        }
+        $placeholders = implode(',', array_fill(0, count($roleIds), '?'));
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT DISTINCT p.identifier
+               FROM roles r
+               INNER JOIN role_permissions rp ON rp.role_id = r.id
+               INNER JOIN permissions p ON p.id = rp.permission_id AND p.scope = 'tenant'
+              WHERE r.tenant_id = ? AND r.id IN ({$placeholders})",
+        );
+        $stmt->execute([$tenantId, ...$roleIds]);
+
+        return array_values(array_map('strval', $stmt->fetchAll(\PDO::FETCH_COLUMN)));
+    }
+
     /** Every tenant-scope permission identifier — used to build the synthetic
      * support-session membership (write scope gets all; read scope is
      * filtered to *.view at the call site).

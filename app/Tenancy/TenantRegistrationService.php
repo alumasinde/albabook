@@ -9,6 +9,8 @@ use App\Core\Database\Database;
 use App\Core\Http\Request;
 use App\Core\Validation\ValidationException;
 use App\Core\Validation\Validator;
+use App\Modules\Billing\Services\FeatureGate;
+use App\Shared\Support\UuidFactory;
 use App\Shared\Audit\AuditAction;
 use App\Shared\Audit\AuditEntry;
 use App\Shared\Audit\AuditLogger;
@@ -28,6 +30,8 @@ final class TenantRegistrationService
         private readonly TenantProvisioningService $provisioning,
         private readonly TenantResolver $resolver,
         private readonly AuditLogger $audit,
+        private readonly FeatureGate $features,
+        private readonly UuidFactory $uuids,
     ) {}
 
     /**
@@ -74,6 +78,11 @@ final class TenantRegistrationService
                 'currency' => $currency,
                 'default_locale' => 'en',
             ], $ownerUserId, 'pending');
+
+            // Every new business starts on the trial plan, so feature limits
+            // (bookings, SMS, premium features) come from an explicit plan
+            // rather than the bare defaults.
+            $this->features->startTrial($created['tenant_id'], $this->uuids->generate());
 
             $this->audit->record(new AuditEntry(
                 action: AuditAction::TENANT_REGISTERED,

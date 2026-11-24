@@ -17,6 +17,7 @@ use App\Modules\Services\Repositories\ServiceRepository;
 use App\Modules\Staff\Repositories\StaffRepository;
 use App\Shared\Http\ApiResponse;
 use App\Shared\Time\DateTimeService;
+use App\Shared\Validation\CustomerContact;
 use App\Tenancy\TenantRepository;
 
 /**
@@ -107,15 +108,16 @@ final class PrivateApiController
         if (preg_match('/^\d{2}:\d{2}$/', $time) !== 1) {
             $fields['time'] = 'Valid H:i required.';
         }
+        $c = is_array($body['customer'] ?? null) ? $body['customer'] : [];
+        $field = static fn(string $k): string => is_scalar($c[$k] ?? null) ? trim((string) $c[$k]) : '';
         $customer = [
-            'name' => trim((string) ($body['customer']['name'] ?? '')),
-            'phone' => trim((string) ($body['customer']['phone'] ?? '')) ?: null,
-            'email' => trim((string) ($body['customer']['email'] ?? '')) ?: null,
-            'notes' => trim((string) ($body['customer']['notes'] ?? '')) ?: null,
+            'name' => $field('name'),
+            'phone' => $field('phone') ?: null,
+            'email' => $field('email') ?: null,
+            'notes' => $field('notes') ?: null,
         ];
-        if ($customer['name'] === '') {
-            $fields['customer.name'] = 'Customer name is required.';
-        }
+        // Formats and lengths; integrations may book without any contact.
+        $fields += CustomerContact::validate($customer, 'customer.', false);
         if ($fields !== []) {
             return ApiResponse::error('VALIDATION_FAILED', 'Check the highlighted fields.', 422, $fields);
         }

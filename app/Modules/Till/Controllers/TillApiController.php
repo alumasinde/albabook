@@ -90,6 +90,9 @@ final class TillApiController
                 if (isset($line['error'])) {
                     throw new TransitionException('VALIDATION', 'Fix the highlighted fields.', 422, $line['error']);
                 }
+                if ($kind === 'discount') {
+                    $this->assertDiscountAllowed($membership, $tenant->tenantId, (int) $appointment['id'], (int) $line['unit_amount_minor']);
+                }
 
                 $line['line_no'] = $this->till->nextLineNo($tenant->tenantId, (int) $appointment['id']);
                 $line['added_by_user_id'] = $membership->actorUserId();
@@ -139,10 +142,16 @@ final class TillApiController
 
                 $unit = (int) $item['unit_amount_minor'];
                 $signed = $item['kind'] === 'discount' ? -1 : 1;
+                if ($item['kind'] === 'discount' && !$membership->can('payments.discount')) {
+                    throw new TransitionException('FORBIDDEN', 'Changing a discount needs manager approval.', 403);
+                }
                 $this->till->updateSaleItem($tenant->tenantId, (int) $item['id'], [
                     'quantity' => $quantity,
                     'total_minor' => $signed * $unit * $quantity,
                 ]);
+                // Raising a discount's quantity or lowering a service's can
+                // push discounts past the goods on the ticket.
+                $this->assertDiscountsWithinSubtotal($tenant->tenantId, (int) $appointment['id']);
 
                 $derived = $this->refreshTotals($tenant->tenantId, (int) $appointment['id']);
                 $appointment['payment_status'] = $derived['payment_status'];
@@ -182,6 +191,9 @@ final class TillApiController
                 }
 
                 $this->till->deleteSaleItem($tenant->tenantId, (int) $item['id']);
+                // Removing a service/product must not leave discounts larger
+                // than what remains (removing a discount always passes).
+                $this->assertDiscountsWithinSubtotal($tenant->tenantId, (int) $appointment['id']);
                 $derived = $this->refreshTotals($tenant->tenantId, (int) $appointment['id']);
                 $appointment['payment_status'] = $derived['payment_status'];
                 $appointment['total_amount_minor'] = $derived['total_minor'];
@@ -216,8 +228,8 @@ final class TillApiController
             $fields['method'] = 'Choose a payment method.';
         }
 
-        $amount = $body['amount_minor'] ?? null;
-        if (!is_numeric($amount) || (int) $amount <= 0) {
+        $amount = self::parseAmount($body['amount_minor'] ?? null);
+        if ($amount === null) {
             $fields['amount_minor'] = 'Enter an amount greater than zero.';
         }
 
@@ -332,9 +344,9 @@ final class TillApiController
         }
 
         $body = $request->body();
-        $amount = $body['amount_minor'] ?? null;
+        $amount = self::parseAmount($body['amount_minor'] ?? null);
         $reason = trim((string) ($body['reason'] ?? ''));
-        if (!is_numeric($amount) || (int) $amount <= 0) {
+        if ($amount === null) {
             return ApiResponse::error('VALIDATION', 'Enter a refund amount greater than zero.', 422, ['amount_minor' => 'Invalid amount.']);
         }
         if (mb_strlen($reason) > 255) {
@@ -538,6 +550,7 @@ final class TillApiController
             'can' => [
                 'record' => $membership->can('payments.record'),
                 'refund' => $membership->can('payments.refund'),
+                'discount' => $membership->can('payments.discount'),
                 'checkout' => $membership->can('appointments.update'),
             ],
         ];
@@ -590,9 +603,9 @@ final class TillApiController
         }
 
         // discount | tip — free-form amounts.
-        $amount = $body['amount_minor'] ?? null;
+        $amount = self::parseAmount($body['amount_minor'] ?? null);
         $label = trim((string) ($body['label'] ?? ''));
-        if (!is_numeric($amount) || (int) $amount <= 0) {
+        if ($amount === null) {
             return ['error' => ['amount_minor' => 'Enter an amount greater than zero.']];
         }
         if ($label === '' || mb_strlen($label) > 150) {
@@ -641,6 +654,60 @@ final class TillApiController
         }
 
         $this->till->outbox($tenantId, $this->uuids->generate(), 'payment.received', (int) $appointment['id'], $eventPayload);
+    }
+
+    /**
+     * A new discount needs payments.discount (recording payments alone is
+     * not enough — a till operator could otherwise zero a ticket after
+     * taking cash) and may not exceed what is left of the subtotal.
+     */
+    private function assertDiscountAllowed(MembershipContext $membership, int $tenantId, int $appointmentId, int $amountMinor): void
+    {
+        if (!$membership->can('payments.discount')) {
+            throw new TransitionException('FORBIDDEN', 'Discounts need manager approval.', 403);
+        }
+        $totals = $this->computeTotals($tenantId, $appointmentId);
+        $room = $totals['subtotal_minor'] - $totals['discount_minor'];
+        if ($amountMinor > $room) {
+            throw new TransitionException(
+                'DISCOUNT_EXCEEDS_TICKET',
+                'The discount is larger than the remaining ticket.',
+                422,
+                ['amount_minor' => 'The discount cannot exceed the remaining subtotal.'],
+            );
+        }
+    }
+
+    /**
+     * Strict money input: a positive whole number of minor units, at most
+     * 12 digits (≈ KES 10 billion). is_numeric() + (int) used to accept
+     * "1e20" (saturates to PHP_INT_MAX, then overflows totals → 500),
+     * "12.5" (silently truncated) and other non-integers.
+     */
+    private static function parseAmount(mixed $value): ?int
+    {
+        if (is_int($value)) {
+            return $value > 0 && $value <= 999_999_999_999 ? $value : null;
+        }
+        if (!is_string($value) || preg_match('/^[1-9][0-9]{0,11}$/', trim($value)) !== 1) {
+            return null;
+        }
+
+        return (int) trim($value);
+    }
+
+    /** Invariant after any line change: discounts never exceed the subtotal. */
+    private function assertDiscountsWithinSubtotal(int $tenantId, int $appointmentId): void
+    {
+        $totals = $this->computeTotals($tenantId, $appointmentId);
+        if ($totals['discount_minor'] > $totals['subtotal_minor']) {
+            throw new TransitionException(
+                'DISCOUNT_EXCEEDS_TICKET',
+                'That change would leave discounts larger than the ticket.',
+                422,
+                ['quantity' => 'Reduce or remove the discount first.'],
+            );
+        }
     }
 
     /** Branch-limited members can only touch tickets at their own branches.

@@ -88,6 +88,19 @@ final class SettingsRepository
     /** Merge keys into the preferences JSON blob. */
     public function updateJsonPreferences(int $tenantId, string $key, mixed $value): void
     {
+        if (is_array($value)) {
+            // Store as a JSON object, not a string. JSON_EXTRACT(:v, '$')
+            // parses the text on both MySQL 8 and MariaDB (CAST AS JSON is
+            // MySQL-only).
+            $this->db->pdo()->prepare(
+                "UPDATE tenant_settings
+                 SET preferences = JSON_SET(COALESCE(preferences, JSON_OBJECT()), :path, JSON_EXTRACT(:value, '$'))
+                 WHERE tenant_id = :t",
+            )->execute(['path' => '$.' . $key, 'value' => json_encode($value, JSON_THROW_ON_ERROR), 't' => $tenantId]);
+
+            return;
+        }
+
         $this->db->pdo()->prepare(
             "UPDATE tenant_settings
              SET preferences = JSON_SET(COALESCE(preferences, JSON_OBJECT()), :path, :value)

@@ -6,6 +6,7 @@ namespace App\Modules\System\Services;
 
 use App\Core\Database\Database;
 use App\Shared\Security\RateLimiter;
+use App\Tenancy\TenantDomainsRepository;
 
 /**
  * Periodic housekeeping run by cron/scheduler.php. Everything here is
@@ -60,5 +61,11 @@ final class CleanupService
     public function pruneRateLimits(): void
     {
         $this->limiter->pruneOlderThan(86400);
+    }
+
+    /** Lapsed unverified custom-domain claims (tenancy.domain_claim_ttl_hours). */
+    public function pruneStaleDomainClaims(int $ttlHours = 72): int
+    {
+        return (new TenantDomainsRepository($this->db))->pruneStaleClaims($ttlHours);
     }
 }

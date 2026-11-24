@@ -33,6 +33,8 @@ enum TenantPermission: string
     case PaymentsView = 'payments.view';
     case PaymentsRecord = 'payments.record';
     case PaymentsRefund = 'payments.refund';
+    /** Add discounts at the till (manager-level; recording payments alone is not enough). */
+    case PaymentsDiscount = 'payments.discount';
 
     case ServicesView = 'services.view';
     case ServicesManage = 'services.manage';

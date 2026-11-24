@@ -18,6 +18,7 @@ use App\Modules\Platform\Repositories\PlatformUserRepository;
 use App\Shared\Audit\AuditAction;
 use App\Shared\Audit\AuditEntry;
 use App\Shared\Audit\AuditLogger;
+use App\Shared\Security\LoginThrottle;
 use App\Shared\Security\PasswordHasher;
 use App\Shared\Security\RateLimiter;
 use App\Shared\Support\TrustedProxies;
@@ -56,14 +57,10 @@ final class PlatformAuthenticationService
             throw new HttpException(403, 'PLATFORM_NETWORK_DENIED', 'Sign-in is not allowed from this network.');
         }
 
-        $ipResult = $this->limiter->hit(
-            'platform:login:ip:' . hash('sha256', $ip),
-            $this->config->int('auth.login.ip_max_attempts', 50),
-            $this->config->int('auth.login.ip_window_minutes', 15) * 60,
-        );
-        if (!$ipResult->allowed) {
-            throw new TooManyAttemptsException($ipResult->retryAfterSeconds);
-        }
+        // Per-IP ceiling + hard per-account failure lock (any IP) — admin
+        // accounts are the most valuable target and previously had no
+        // per-account limit at all.
+        (new LoginThrottle($this->limiter, $this->config))->beforeAttempt('platform', $email, $ip);
 
         $user = $email === '' ? null : $this->users->findByEmail($email);
         if ($user === null) {
@@ -136,6 +133,7 @@ final class PlatformAuthenticationService
 
     private function auditFailed(?int $platformUserId, string $email, Request $request): void
     {
+        (new LoginThrottle($this->limiter, $this->config))->recordFailure('platform', $email);
         $this->audit->record(new AuditEntry(
             action: AuditAction::PLATFORM_LOGIN_FAILED,
             actorType: $platformUserId === null ? 'system' : 'platform_user',

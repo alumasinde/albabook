@@ -47,6 +47,7 @@
         loaded[name] = true;
         if (name === 'notifications') loadNotifications();
         if (name === 'payments') loadPayments();
+        if (name === 'receipt') loadReceipt();
       }
     }
     tabs.forEach((t) => t.addEventListener('click', () => activate(t.dataset.settingsTab)));
@@ -411,6 +412,90 @@
           })
           .finally(() => ui.setBusy(submit, false));
       });
+    }
+
+    /* -------------------------------------------------------------- receipt */
+    const receiptForm = root.querySelector('[data-settings-receipt]');
+
+    function loadReceipt() {
+      if (!receiptForm) return;
+      receiptForm.replaceChildren(ui.spinner('Loading receipt design…'));
+      api.get('/api/settings/payments')
+        .then((data) => renderReceipt(data.receipt))
+        .catch((error) => receiptForm.replaceChildren(ui.errorState(error.message, loadReceipt)));
+    }
+
+    function renderReceipt(receipt) {
+      const s = receipt.settings;
+      const entries = (obj) => Object.entries(obj).map(([value, label]) => ({ value, label }));
+
+      const logo = select(entries(receipt.logos), s.logo, (o) => o.label, (o) => o.value);
+      const paper = select(entries(receipt.paper_sizes), s.paper, (o) => o.label, (o) => o.value);
+      const tagline = input('text', s.tagline);
+      tagline.maxLength = 60;
+      tagline.placeholder = 'e.g. Look good • Feel great (leave empty to hide)';
+      const heading = input('text', s.heading);
+      heading.maxLength = 30;
+
+      const top = el('div', 'grid gap-4 sm:grid-cols-2');
+      top.append(
+        field('Logo', logo, 'logo'),
+        field('Paper width', paper, 'paper'),
+        field('Tagline', tagline, 'tagline'),
+        field('Receipt heading', heading, 'heading'),
+      );
+
+      const toggles = [
+        ['show_address', 'Branch address'],
+        ['show_phone', 'Branch phone'],
+        ['show_email', 'Branch email'],
+        ['show_kra_pin', 'KRA PIN'],
+        ['show_customer', 'Customer name'],
+        ['show_staff', 'Staff member'],
+        ['show_levies', 'VAT and service charge lines'],
+        ['show_qr', 'Verification QR code'],
+        ['mask_references', 'Mask payment references (e.g. RYH3••••D4)'],
+      ];
+      if (receipt.can_hide_powered_by) toggles.push(['show_powered_by', 'Show “Powered by AlbaBook”']);
+
+      const boxes = {};
+      const grid = el('div', 'grid gap-3 sm:grid-cols-2');
+      toggles.forEach(([key, text]) => {
+        const { label, box } = checkLabel('receipt-' + key, text, s[key]);
+        box.disabled = !canUpdate;
+        boxes[key] = box;
+        grid.append(label);
+      });
+      const toggleSection = el('fieldset', 'mt-6 border-t border-line pt-5');
+      const legend = el('legend', 'text-sm font-semibold text-ink', 'Print on the receipt');
+      toggleSection.append(legend, el('div', 'mt-3'), grid);
+
+      [logo, paper, tagline, heading].forEach((i) => { i.disabled = !canUpdate; });
+
+      const note = el('p', 'mt-4 text-xs text-muted', 'The thank-you message at the bottom uses the receipt note from Payments → Tax & checkout.');
+      const actions = el('div', 'mt-6 flex flex-wrap gap-3');
+      const submit = submitBtn('Save receipt design');
+      actions.append(submit);
+
+      receiptForm.replaceChildren(top, toggleSection, note, actions);
+      receiptForm.onsubmit = (event) => {
+        event.preventDefault();
+        ui.clearFieldErrors(receiptForm);
+        const payload = { logo: logo.value, paper: paper.value, tagline: tagline.value.trim(), heading: heading.value.trim() };
+        Object.entries(boxes).forEach(([key, box]) => { payload[key] = box.checked; });
+        if (!receipt.can_hide_powered_by) payload.show_powered_by = true;
+        ui.setBusy(submit, true, 'Saving…');
+        api.patch('/api/settings/receipt', payload)
+          .then((saved) => {
+            AlbaBook.toast('Receipt design saved. Open the preview to see it.');
+            renderReceipt(saved);
+          })
+          .catch((error) => {
+            if (error.fields) ui.showFieldErrors(receiptForm, error.fields);
+            AlbaBook.toast(error.message, 'danger');
+          })
+          .finally(() => ui.setBusy(submit, false));
+      };
     }
 
     /* -------------------------------------------------------- notifications */

@@ -6,6 +6,7 @@ namespace App\Middleware;
 
 use App\Core\Config\Config;
 use App\Core\Http\Cookie;
+use App\Core\Http\HostGroup;
 use App\Core\Http\HttpException;
 use App\Core\Http\Request;
 use App\Core\Http\RequestContext;
@@ -53,6 +54,16 @@ final class CsrfMiddleware implements MiddlewareInterface
             }
             if (!$this->originAllowed($request)) {
                 throw HttpException::csrfMismatch();
+            }
+            // Booking host: no sessions or ambient authority — writes are
+            // authorised by rate limits and capability tokens (manage links,
+            // holds). The embeddable widget runs in a cross-site iframe where
+            // browsers withhold SameSite=Lax cookies, so a cookie-bound token
+            // could never verify there. The Origin check above still rejects
+            // cross-site form posts (a framed page's Origin is the booking
+            // host itself, which is allowed).
+            if ($group === HostGroup::Booking) {
+                return $next($request);
             }
             $submitted = $request->input($this->config->string('security.csrf.field', '_csrf'));
             $submitted = is_string($submitted) ? $submitted : $request->header($this->config->string('security.csrf.header', 'X-CSRF-Token'));

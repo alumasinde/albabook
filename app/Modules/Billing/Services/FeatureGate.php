@@ -57,11 +57,23 @@ final class FeatureGate
     }
 
     /**
-     * The effective override or plan_feature row. NULL means "no rule
-     * applies" (never subscribed, feature not on the plan) → default-permit
-     * for legacy tenants. A tenant whose latest subscription is
-     * cancelled/expired gets an explicit deny — lapsed customers do not
-     * silently keep premium features. past_due keeps plan access (grace).
+     * Features that cost the platform money per use (messages sent through
+     * the platform-owned provider account). They are never granted by
+     * default: a plan or override must include them explicitly.
+     */
+    private const COST_BEARING = ['sms_messages', 'whatsapp_messages'];
+
+    /**
+     * The effective override or plan_feature row.
+     *
+     * Secure defaults (no override, nothing on the plan):
+     *   - boolean (premium) features are not entitled;
+     *   - cost-bearing metered features (SMS/WhatsApp) are not entitled;
+     *   - other limits (staff, branches, bookings) are uncapped.
+     * This holds both for a subscribed plan that omits the feature and for a
+     * tenant with no subscription at all. A tenant whose latest subscription
+     * is cancelled/expired is denied everything plan-based. past_due keeps
+     * plan access (grace). NULL is returned only for an unknown feature key.
      *
      * @return array{is_enabled: int, limit_value: ?int}|null
      */
@@ -79,27 +91,28 @@ final class FeatureGate
             return $row;
         }
 
+        $type = $this->db->pdo()->prepare('SELECT value_type FROM features WHERE code = :f');
+        $type->execute(['f' => $feature]);
+        $valueType = $type->fetchColumn();
+        if ($valueType === false) {
+            return null; // unknown feature key
+        }
+
         $stmt = $this->db->pdo()->prepare(
-            "SELECT s.status, pf.is_enabled, pf.limit_value, f.value_type
+            "SELECT s.status, pf.is_enabled, pf.limit_value
                FROM tenant_subscriptions s
-               JOIN features f ON f.code = :f
-               LEFT JOIN plan_features pf ON pf.plan_id = s.plan_id AND pf.feature_key = f.code
+               LEFT JOIN plan_features pf ON pf.plan_id = s.plan_id AND pf.feature_key = :f
               WHERE s.tenant_id = :t
               ORDER BY s.id DESC LIMIT 1",
         );
         $stmt->execute(['t' => $tenantId, 'f' => $feature]);
         $row = $stmt->fetch();
-        if ($row === false) {
-            // Unknown feature key or never subscribed → grandfathered.
-            return null;
-        }
-        if (!in_array((string) $row['status'], ['trialing', 'active', 'past_due'], true)) {
+        if ($row !== false && !in_array((string) $row['status'], ['trialing', 'active', 'past_due'], true)) {
             return ['is_enabled' => 0, 'limit_value' => null];
         }
-        if ($row['is_enabled'] === null) {
-            // Feature absent from the plan: booleans are not entitled,
-            // limit features are simply uncapped.
-            return $row['value_type'] === 'boolean'
+        if ($row === false || $row['is_enabled'] === null) {
+            // Never subscribed, or the plan omits the feature.
+            return $valueType === 'boolean' || in_array($feature, self::COST_BEARING, true)
                 ? ['is_enabled' => 0, 'limit_value' => null]
                 : ['is_enabled' => 1, 'limit_value' => null];
         }
@@ -143,6 +156,29 @@ final class FeatureGate
                          UTC_TIMESTAMP() + INTERVAL 1 MONTH)",
             )->execute(['uuid' => $uuid, 't' => $tenantId, 'p' => $planId]);
         });
+    }
+
+    /**
+     * Start a new business on the trial plan so it runs on explicit plan
+     * limits from day one (not on the bare secure defaults). No-op when no
+     * active plan with $planCode exists. Call inside the registration
+     * transaction.
+     */
+    public function startTrial(int $tenantId, string $uuid, string $planCode = 'trial', int $days = 14): void
+    {
+        $stmt = $this->db->pdo()->prepare('SELECT id FROM plans WHERE code = :c AND is_active = 1 LIMIT 1');
+        $stmt->execute(['c' => $planCode]);
+        $planId = $stmt->fetchColumn();
+        if ($planId === false) {
+            return;
+        }
+
+        $this->db->pdo()->prepare(
+            "INSERT INTO tenant_subscriptions
+                (uuid, tenant_id, plan_id, status, starts_at, current_period_start, current_period_end, trial_ends_at)
+             VALUES (:uuid, :t, :p, 'trialing', UTC_TIMESTAMP(), UTC_TIMESTAMP(),
+                     UTC_TIMESTAMP() + INTERVAL :d DAY, UTC_TIMESTAMP() + INTERVAL :d2 DAY)",
+        )->execute(['uuid' => $uuid, 't' => $tenantId, 'p' => (int) $planId, 'd' => $days, 'd2' => $days]);
     }
 
     /** End the live subscription immediately — the tenant loses plan features. */

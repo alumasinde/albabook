@@ -63,14 +63,24 @@ final class LoginController
         }
 
         $next = LocalRedirect::next($request, '/dashboard');
-        $target = $outcome->mfaPending
-            ? '/two-factor' . ($next === '/dashboard' ? '' : '?next=' . urlencode($next))
-            : $next;
+        $wantsRemember = in_array($request->input('remember'), ['1', 'on', 'yes'], true);
+        if ($outcome->mfaPending) {
+            // A remember-me token is a long-lived credential: never hand one
+            // out on the password alone. The choice travels to /two-factor
+            // and the token is issued only after a correct code.
+            $query = array_filter([
+                'next' => $next === '/dashboard' ? null : $next,
+                'remember' => $wantsRemember ? '1' : null,
+            ]);
+            $target = '/two-factor' . ($query === [] ? '' : '?' . http_build_query($query));
+        } else {
+            $target = $next;
+        }
 
         $response = Response::redirect($target)
             ->withCookie($this->cookies->userSession($request, $outcome->session->token, $outcome->session->expiresAt));
 
-        if (in_array($request->input('remember'), ['1', 'on', 'yes'], true)) {
+        if ($wantsRemember && !$outcome->mfaPending) {
             $issued = $this->remember->issue($outcome->userId);
             $response = $response->withCookie($this->cookies->remember($request, $issued->token, $issued->expiresAt));
         }

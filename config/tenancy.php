@@ -20,6 +20,17 @@ return [
         'widget', 'www',
     ], array_filter(array_map('trim', explode(',', (string) env('TENANCY_RESERVED_SLUGS', ''))))))),
 
+    // Tenant custom booking domains (plan.md §24). OFF until the edge can
+    // serve them: nginx must route unknown hosts to PHP and TLS certificates
+    // must be issued per domain (docs/deployment.md). While off, custom
+    // hosts never resolve and the dashboard cannot add or activate domains.
+    // Raw env value: Config::bool() parses "true"/"false"/"1"/"0" correctly.
+    'custom_domains_enabled' => env('CUSTOM_DOMAINS_ENABLED', false),
+
+    // An unverified domain claim lapses after this many hours, so one tenant
+    // cannot park a domain another business actually owns.
+    'domain_claim_ttl_hours' => 72,
+
     // Old slugs keep redirecting and stay unclaimable (multi-tenancy.md §4).
     'history_redirect_months' => 12,
 

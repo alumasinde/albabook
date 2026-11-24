@@ -1,0 +1,39 @@
+{% extends 'layouts/marketing.twig' %}
+
+{% block title %}{{ t('receipt.verify_title') }} · {{ app_name }}{% endblock %}
+{% block robots %}noindex, nofollow{% endblock %}
+
+{% block content %}
+<div data-page="marketing">
+<section class="mk-section bg-surface">
+  <div class="mx-auto max-w-lg px-4 sm:px-6">
+    <div class="card p-6 sm:p-8">
+      {% if receipt %}
+        <div class="flex items-center gap-3">
+          <span class="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-success-soft text-xl text-success-strong" aria-hidden="true"><i class="fa-solid fa-circle-check"></i></span>
+          <div>
+            <h1 class="text-xl font-semibold text-ink">{{ t('receipt.verify_genuine') }}</h1>
+            <p class="text-sm text-muted">{{ t('receipt.verify_genuine_body') }}</p>
+          </div>
+        </div>
+        <dl class="mt-6 divide-y divide-line rounded-xl border border-line text-sm">
+          <div class="flex justify-between gap-4 px-4 py-3"><dt class="text-muted">{{ t('receipt.verify_business') }}</dt><dd class="text-right font-medium text-ink">{{ receipt.business }}<br><span class="font-normal text-muted">{{ receipt.branch }}</span></dd></div>
+          <div class="flex justify-between gap-4 px-4 py-3"><dt class="text-muted">{{ t('receipt.no') }}</dt><dd class="font-mono font-medium text-ink">{{ receipt.reference }}</dd></div>
+          <div class="flex justify-between gap-4 px-4 py-3"><dt class="text-muted">{{ t('receipt.date') }}</dt><dd class="text-ink">{{ receipt.date }}</dd></div>
+          <div class="flex justify-between gap-4 px-4 py-3"><dt class="text-muted">{{ t('receipt.verify_amount') }}</dt><dd class="font-semibold text-ink">{{ receipt.amount }}</dd></div>
+          <div class="flex justify-between gap-4 px-4 py-3"><dt class="text-muted">{{ t('receipt.verify_status') }}</dt><dd><span class="badge {{ receipt.paid ? 'badge-success' : 'badge-warning' }}">{{ receipt.status }}</span></dd></div>
+        </dl>
+      {% else %}
+        <div class="flex items-center gap-3">
+          <span class="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-danger-soft text-xl text-danger-strong" aria-hidden="true"><i class="fa-solid fa-circle-xmark"></i></span>
+          <div>
+            <h1 class="text-xl font-semibold text-ink">{{ rate_limited ? 'Too many checks' : t('receipt.verify_invalid') }}</h1>
+            <p class="text-sm text-muted">{{ rate_limited ? 'Please wait a few minutes and try again.' : t('receipt.verify_invalid_body') }}</p>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+</div>
+{% endblock %}

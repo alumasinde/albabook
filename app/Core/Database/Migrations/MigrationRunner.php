@@ -65,8 +65,10 @@ final class MigrationRunner
     public function status(): array
     {
         $pdo = $this->db->pdo();
-        $this->ensureTable($pdo);
-        $applied = $this->appliedVersions($pdo);
+        // Read-only: /health calls this as the DML-only runtime user, and
+        // MySQL checks the CREATE privilege even for CREATE TABLE IF NOT
+        // EXISTS. No table yet simply means every migration is pending.
+        $applied = $this->tableExists($pdo) ? $this->appliedVersions($pdo) : [];
         $files = $this->files();
         $result = [];
 
@@ -198,6 +200,16 @@ final class MigrationRunner
         }
 
         return $result;
+    }
+
+    private function tableExists(PDO $pdo): bool
+    {
+        $stmt = $pdo->query(
+            "SELECT 1 FROM information_schema.tables
+              WHERE table_schema = DATABASE() AND table_name = 'schema_migrations' LIMIT 1",
+        );
+
+        return $stmt !== false && $stmt->fetchColumn() !== false;
     }
 
     private function ensureTable(PDO $pdo): void

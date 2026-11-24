@@ -22,16 +22,20 @@ return [
     ],
 
     'login' => [
-        // Soft delay per account after repeated failures; no hard lockout.
-        'email_failures_before_delay' => 5,
-        'email_delay_step_ms' => 250,
-        'email_delay_max_ms' => 2000,
-        'email_window_minutes' => 15,
-        // Hard ceiling per IP across all accounts.
+        // Hard per-account lock: this many FAILED attempts in the window,
+        // from any IP, locks the account until the window ends (even the
+        // right password is refused). Stops distributed guessing; answers
+        // 429 immediately instead of sleeping (LoginThrottle).
+        'account_max_failures' => 10,
+        'account_window_minutes' => 15,
+        // Hard ceiling per IP (IPv6 grouped by /64) across all accounts.
         'ip_max_attempts' => 50,
         'ip_window_minutes' => 15,
         // Per-bucket ceilings for token-issuing endpoints.
         'reset_max_per_hour' => 5,
+        // Sign-up: per IP (account farming) and per target email (bombing).
+        'register_max_per_ip_per_hour' => 5,
+        'register_max_per_email_per_hour' => 3,
         'verification_resend_max_per_hour' => 5,
     ],
 

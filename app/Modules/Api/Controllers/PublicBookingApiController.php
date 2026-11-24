@@ -18,6 +18,7 @@ use App\Modules\Booking\Services\BookingHoldService;
 use App\Shared\Http\ApiResponse;
 use App\Shared\Security\RateLimiter;
 use App\Shared\Time\DateTimeService;
+use App\Shared\Validation\CustomerContact;
 use App\Tenancy\TenantRepository;
 
 /**
@@ -259,19 +260,19 @@ final class PublicBookingApiController
         $branchTz = (string) ($branch['timezone'] ?: $tenant['timezone']);
 
         $body = $request->body();
+        // `customer` must be an object; any other shape falls back to the
+        // flat fields (a string here used to fatal on offset access).
+        $c = is_array($body['customer'] ?? null) ? $body['customer'] : [];
+        $field = static fn(string $k): string => is_scalar($c[$k] ?? null) ? (string) $c[$k]
+            : (is_scalar($body[$k] ?? null) ? (string) $body[$k] : '');
         $customer = [
-            'name' => trim((string) ($body['customer']['name'] ?? $body['name'] ?? '')),
-            'phone' => trim((string) ($body['customer']['phone'] ?? $body['phone'] ?? '')) ?: null,
-            'email' => trim((string) ($body['customer']['email'] ?? $body['email'] ?? '')) ?: null,
-            'notes' => trim((string) ($body['customer']['notes'] ?? $body['notes'] ?? '')) ?: null,
+            'name' => trim($field('name')),
+            'phone' => trim($field('phone')) ?: null,
+            'email' => trim($field('email')) ?: null,
+            'notes' => trim($field('notes')) ?: null,
         ];
-        $fields = [];
-        if ($customer['name'] === '') {
-            $fields['customer.name'] = 'Customer name is required.';
-        }
-        if ($customer['phone'] === null && $customer['email'] === null) {
-            $fields['customer.phone'] = 'A phone number or email is required.';
-        }
+        // Name, email format, phone (normalised to E.164) and lengths.
+        $fields = CustomerContact::validate($customer, 'customer.');
         if ($fields !== []) {
             return ApiResponse::error('VALIDATION_FAILED', 'Check the highlighted fields.', 422, $fields);
         }
@@ -314,6 +315,14 @@ final class PublicBookingApiController
             if ($staffId === null) {
                 return ApiResponse::error('SLOT_UNAVAILABLE', 'That time is no longer available.', 409, ['time' => 'Pick another time.']);
             }
+        } elseif ($holdToken === '' && !$this->availability->slotAvailableForStaff(
+            (int) $tenant['id'], $branch, $service, $staffId, $date, $time, $branchTz,
+        )) {
+            // A named staff member without a hold must still be a real slot
+            // on the published grid: minimum notice, slot interval, working
+            // hours and breaks — the same rule the booking page applies.
+            // (A hold was validated when it was taken.)
+            return ApiResponse::error('SLOT_UNAVAILABLE', 'That time is not available.', 409, ['time' => 'Pick one of the available times.']);
         }
 
         try {

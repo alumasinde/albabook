@@ -19,6 +19,7 @@ use App\Modules\Auth\Repositories\UserRepository;
 use App\Shared\Audit\AuditAction;
 use App\Shared\Audit\AuditEntry;
 use App\Shared\Audit\AuditLogger;
+use App\Shared\Security\LoginThrottle;
 use App\Shared\Security\PasswordHasher;
 use App\Shared\Security\RateLimiter;
 use App\Shared\Time\Clock;
@@ -49,16 +50,10 @@ final class AuthenticationService
         $email = strtolower(trim($email));
         $ip = $request->clientIp() ?: 'unknown';
 
-        $ipResult = $this->limiter->hit(
-            'login:ip:' . hash('sha256', $ip),
-            $this->config->int('auth.login.ip_max_attempts', 50),
-            $this->config->int('auth.login.ip_window_minutes', 15) * 60,
-        );
-        if (!$ipResult->allowed) {
-            throw new TooManyAttemptsException($ipResult->retryAfterSeconds);
-        }
-
-        $this->delayAfterFailures($email);
+        // Per-IP ceiling + hard per-account failure lock (any IP). Answers
+        // 429 at once — never sleeps, so it cannot be used to tie up workers.
+        $throttle = new LoginThrottle($this->limiter, $this->config);
+        $throttle->beforeAttempt('tenant', $email, $ip);
 
         $userAgent = (string) $request->header('user-agent', '');
         $user = $email === '' ? null : $this->users->findByEmail($email);
@@ -148,29 +143,6 @@ final class AuthenticationService
         ));
     }
 
-    private function delayAfterFailures(string $email): void
-    {
-        if ($email === '') {
-            return;
-        }
-
-        $threshold = $this->config->int('auth.login.email_failures_before_delay', 5);
-        $failures = $this->attempts->recentFailuresForEmail(
-            $email,
-            $this->config->int('auth.login.email_window_minutes', 15),
-        );
-        if ($failures < $threshold) {
-            return;
-        }
-
-        $step = $this->config->int('auth.login.email_delay_step_ms', 250);
-        $ceiling = $this->config->int('auth.login.email_delay_max_ms', 2000);
-        $delayMs = min($ceiling, $step * ($failures - $threshold + 1));
-        if ($delayMs > 0) {
-            usleep($delayMs * 1000);
-        }
-    }
-
     private function recordFailure(
         string $email,
         string $ip,
@@ -178,6 +150,7 @@ final class AuthenticationService
         ?int $userId,
         Request $request,
     ): void {
+        (new LoginThrottle($this->limiter, $this->config))->recordFailure('tenant', $email);
         $this->attempts->record($email, $ip, false, $userAgent);
         $this->audit->record(new AuditEntry(
             action: AuditAction::LOGIN_FAILED,

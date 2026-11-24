@@ -34,7 +34,7 @@ final class RoleTemplateSeeder
                 'calendar.manage_blocks',
                 'customers.view', 'customers.create', 'customers.update', 'customers.delete',
                 'customers.view_notes', 'customers.export',
-                'payments.view', 'payments.record', 'payments.refund',
+                'payments.view', 'payments.record', 'payments.refund', 'payments.discount',
                 'services.view', 'services.manage',
                 'staff.view', 'staff.manage',
                 'branches.view', 'branches.manage',

@@ -10,6 +10,7 @@ use App\Modules\Auth\Context\MembershipContext;
 use App\Modules\Billing\Services\FeatureGate;
 use App\Modules\Notifications\Services\ChannelSender;
 use App\Modules\Settings\Repositories\SettingsRepository;
+use App\Modules\Till\Support\ReceiptSettings;
 use App\Shared\Http\ApiResponse;
 use App\Shared\Security\Encrypter;
 use App\Shared\Support\UuidFactory;
@@ -352,6 +353,7 @@ final class SettingsApiController
             'checkout_full_payment_required' => $this->settings->preferences($tenant->tenantId)['checkout_full_payment_required'],
             'service_charge_bp' => (int) ($this->settings->jsonPreferences($tenant->tenantId)['service_charge_bp'] ?? 0),
             'receipt_footer_note' => (string) ($this->settings->jsonPreferences($tenant->tenantId)['receipt_footer_note'] ?? ''),
+            'receipt' => $this->receiptPayload($tenant->tenantId),
             'tax_rate_bp' => (int) $this->settings->profile($tenant->tenantId)['tax_rate_bp'],
             'visit_early_minutes' => (int) ($this->settings->jsonPreferences($tenant->tenantId)['visit_early_minutes'] ?? 60),
             'visit_late_minutes' => (int) ($this->settings->jsonPreferences($tenant->tenantId)['visit_late_minutes'] ?? 240),
@@ -437,6 +439,42 @@ final class SettingsApiController
             'visit_late_minutes' => (int) ($prefs['visit_late_minutes'] ?? 240),
             'no_show_grace_minutes' => (int) ($prefs['no_show_grace_minutes'] ?? 15),
         ]);
+    }
+
+    /** Receipt design (logo, wording, which details print, masking, QR).
+     * @param array<string, string> $params
+     */
+    public function updateReceipt(Request $request, array $params): Response
+    {
+        [$tenant, $membership] = $this->context($request);
+        if (!$membership->can('settings.update')) {
+            return ApiResponse::error('FORBIDDEN', 'You do not have permission to update settings.', 403);
+        }
+
+        [$receipt, $fields] = ReceiptSettings::normalise($request->body());
+        if ($fields !== []) {
+            return ApiResponse::error('VALIDATION', 'Fix the highlighted fields.', 422, $fields);
+        }
+        // Hiding "Powered by AlbaBook" is the white_label plan feature.
+        if (!$receipt['show_powered_by'] && !$this->features->enabled($tenant->tenantId, 'white_label')) {
+            $receipt['show_powered_by'] = true;
+        }
+        $this->settings->updateJsonPreferences($tenant->tenantId, 'receipt', $receipt);
+
+        return ApiResponse::ok($this->receiptPayload($tenant->tenantId));
+    }
+
+    /** @return array<string, mixed> */
+    private function receiptPayload(int $tenantId): array
+    {
+        $raw = $this->settings->jsonPreferences($tenantId)['receipt'] ?? [];
+
+        return [
+            'settings' => ReceiptSettings::fromStored(is_array($raw) ? $raw : []),
+            'logos' => ReceiptSettings::LOGOS,
+            'paper_sizes' => ReceiptSettings::PAPER,
+            'can_hide_powered_by' => $this->features->enabled($tenantId, 'white_label'),
+        ];
     }
 
     /** Add an M-Pesa till/paybill account.

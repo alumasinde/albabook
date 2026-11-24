@@ -10,6 +10,7 @@
 /public/assets/fonts/
 /public/assets/webfonts/
 /public/assets/vendor/
+/public/assets/manifest.json
 
 # Runtime storage (directories are kept with .gitkeep)
 /storage/logs/*
@@ -31,3 +32,10 @@ Thumbs.db
 
 
 tls/
+# Secrets and customer data must never be committed: TLS keys/certs (any
+# location), database dumps written by docker/backup.sh.
+*.pem
+*.key
+*.p12
+backups/
+*.sql.gz

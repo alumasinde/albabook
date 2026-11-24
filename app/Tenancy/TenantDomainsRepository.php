@@ -54,6 +54,32 @@ final class TenantDomainsRepository
         return $stmt->fetch() ?: null;
     }
 
+    /**
+     * Drop an unverified claim older than $ttlHours so the real owner can
+     * register the domain. Verified/active/disabled rows are never touched.
+     */
+    public function releaseStaleClaim(string $normalisedDomain, int $ttlHours): void
+    {
+        $this->db->pdo()->prepare(
+            "DELETE FROM tenant_domains
+              WHERE domain = :d AND status = 'pending_verification'
+                AND created_at < UTC_TIMESTAMP() - INTERVAL :h HOUR",
+        )->execute(['d' => $normalisedDomain, 'h' => max(1, $ttlHours)]);
+    }
+
+    /** Housekeeping: remove every lapsed unverified claim. Returns rows removed. */
+    public function pruneStaleClaims(int $ttlHours): int
+    {
+        $stmt = $this->db->pdo()->prepare(
+            "DELETE FROM tenant_domains
+              WHERE status = 'pending_verification'
+                AND created_at < UTC_TIMESTAMP() - INTERVAL :h HOUR",
+        );
+        $stmt->execute(['h' => max(1, $ttlHours)]);
+
+        return $stmt->rowCount();
+    }
+
     /** @return int Row id. */
     public function insert(int $tenantId, string $domain, string $tokenHash): int
     {

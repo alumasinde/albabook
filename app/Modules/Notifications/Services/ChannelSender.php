@@ -9,6 +9,7 @@ use App\Core\Database\Database;
 use App\Modules\Billing\Services\FeatureGate;
 use App\Shared\Http\HttpClient;
 use App\Shared\Security\Encrypter;
+use App\Shared\Validation\PhoneNumber;
 
 /**
  * Delivers sms/whatsapp queue rows through the provider account resolved
@@ -38,6 +39,19 @@ final class ChannelSender
         $account = $this->resolveAccount($tenantId, $channel);
         if ($account === null) {
             throw new \RuntimeException("No active {$channel} provider account for this business.");
+        }
+
+        // Anti-pumping: anyone can type any number into a public booking
+        // form, so the platform-paid account only sends to the configured
+        // destination prefixes (default: Kenya). A tenant's own account is
+        // their own cost and is not restricted.
+        // Booking snapshots keep the customer's raw input (0712…, 254712…);
+        // providers and the prefix check need E.164.
+        $recipient = PhoneNumber::normalise($recipient) ?? $recipient;
+        if ($account['source'] === 'platform' && !$this->recipientAllowed($channel, $recipient)) {
+            throw new RecipientNotAllowedException(
+                "Recipient is outside the platform {$channel} destinations; connect your own provider account to message it.",
+            );
         }
 
         $this->dispatch($account['provider_code'], $account['credentials'], $account['sender_id'], $recipient, $text);
@@ -83,6 +97,24 @@ final class ChannelSender
         }
 
         return $this->platformAccount($channel);
+    }
+
+    /** E.164 recipient whose prefix is in notifications.platform.{channel}.allowed_prefixes. */
+    private function recipientAllowed(string $channel, string $recipient): bool
+    {
+        $number = PhoneNumber::normalise($recipient);
+        if ($number === null) {
+            return false;
+        }
+        $prefixes = $this->config->get("notifications.platform.{$channel}.allowed_prefixes", ['+254']);
+        $prefixes = is_array($prefixes) ? $prefixes : [];
+        foreach ($prefixes as $prefix) {
+            if (is_string($prefix) && $prefix !== '' && str_starts_with($number, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Whether the platform-owned fallback is configured for a channel. */

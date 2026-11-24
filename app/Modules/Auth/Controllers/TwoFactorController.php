@@ -11,6 +11,7 @@ use App\Modules\Auth\Dto\ResolvedSession;
 use App\Modules\Auth\Mfa\MfaSubject;
 use App\Modules\Auth\Repositories\UserRepository;
 use App\Modules\Auth\Services\MfaService;
+use App\Modules\Auth\Services\RememberService;
 use App\Modules\Auth\Services\SessionService;
 use App\Shared\Http\LocalRedirect;
 use App\Shared\Security\AuthCookieFactory;
@@ -29,6 +30,7 @@ final class TwoFactorController
         private readonly AuthCookieFactory $cookies,
         private readonly DateTimeService $dates,
         private readonly UserRepository $users,
+        private readonly RememberService $remember,
     ) {}
 
     /** @param array<string, string> $params */
@@ -48,6 +50,7 @@ final class TwoFactorController
         return $this->view->response('auth/two-factor.twig', [
             'error' => null,
             'next' => LocalRedirect::next($request, '/dashboard'),
+            'remember' => $this->wantsRemember($request),
         ]);
     }
 
@@ -88,6 +91,7 @@ final class TwoFactorController
             return $this->view->response('auth/two-factor.twig', [
                 'error' => 'That code is not correct. Try again or use a recovery code.',
                 'next' => LocalRedirect::next($request, '/dashboard'),
+                'remember' => $this->wantsRemember($request),
             ], 422);
         }
 
@@ -95,8 +99,22 @@ final class TwoFactorController
         $this->sessions->markMfaVerified($session->sessionId);
         $issued = $this->sessions->rotate($session);
 
-        return Response::redirect(LocalRedirect::next($request, '/dashboard'))
+        $response = Response::redirect(LocalRedirect::next($request, '/dashboard'))
             ->withCookie($this->cookies->userSession($request, $issued->token, $issued->expiresAt));
+
+        // Remember-me is issued only now, after both factors (LoginController
+        // defers it while MFA is pending).
+        if ($this->wantsRemember($request)) {
+            $token = $this->remember->issue($session->userId);
+            $response = $response->withCookie($this->cookies->remember($request, $token->token, $token->expiresAt));
+        }
+
+        return $response;
+    }
+
+    private function wantsRemember(Request $request): bool
+    {
+        return in_array($request->input('remember', $request->query('remember')), ['1', 'on', 'yes'], true);
     }
 
     private function session(Request $request): ?ResolvedSession

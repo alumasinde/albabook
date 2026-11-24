@@ -340,6 +340,63 @@ final class TillRepository
         return $value === false || $value === null ? 0 : max(0, (int) $value);
     }
 
+    /**
+     * Raw receipt design settings (tenant_settings.preferences.receipt) —
+     * normalised by ReceiptSettings::fromStored().
+     * @return array<string, mixed>
+     */
+    public function receiptSettingsRaw(int $tenantId): array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT JSON_EXTRACT(COALESCE(preferences, JSON_OBJECT()), '$.receipt')
+             FROM tenant_settings WHERE tenant_id = ?",
+        );
+        $stmt->execute([$tenantId]);
+        $value = $stmt->fetchColumn();
+        $decoded = is_string($value) ? json_decode($value, true) : null;
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * Header data for a sample receipt (settings preview): the business and
+     * its first branch, shaped like receiptContext().
+     * @return array<string, mixed>|null
+     */
+    public function previewHeader(int $tenantId): ?array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT t.name AS tenant_name, t.kra_pin, t.tax_rate_bp, t.slug AS tenant_slug,
+                    COALESCE(b.timezone, t.timezone) AS timezone,
+                    b.name AS branch_name, b.address_line1, b.address_line2,
+                    b.town, b.county, b.phone AS branch_phone, b.email AS branch_email
+               FROM tenants t
+               LEFT JOIN branches b ON b.tenant_id = t.id
+              WHERE t.id = ?
+              ORDER BY b.id
+              LIMIT 1',
+        );
+        $stmt->execute([$tenantId]);
+        $row = $stmt->fetch();
+
+        return is_array($row) ? $row : null;
+    }
+
+    /**
+     * Appointments carrying a receipt number, across tenants (references are
+     * unique per tenant only) — the verify page disambiguates by signature.
+     * @return list<array<string, mixed>>
+     */
+    public function appointmentsByReference(string $reference): array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT id, tenant_id FROM appointments WHERE reference = ? LIMIT 5',
+        );
+        $stmt->execute([$reference]);
+
+        return array_values($stmt->fetchAll());
+    }
+
     /** Receipt footer note (tenant_settings.preferences.receipt_footer_note). */
     public function receiptFooterNote(int $tenantId): string
     {
@@ -501,9 +558,11 @@ final class TillRepository
     public function receiptContext(int $tenantId, int $appointmentId): ?array
     {
         $stmt = $this->db->pdo()->prepare(
-            'SELECT a.reference, a.start_at, a.end_at, a.currency, a.status,
+            'SELECT a.id, a.uuid, a.tenant_id, a.reference, a.start_at, a.end_at, a.currency, a.status,
+                    a.payment_status,
                     a.customer_name_snapshot, a.customer_phone_snapshot,
                     a.customer_email_snapshot,
+                    COALESCE(b.timezone, t.timezone) AS timezone,
                     b.name AS branch_name, b.address_line1, b.address_line2,
                     b.town, b.county, b.phone AS branch_phone, b.email AS branch_email,
                     s.display_name AS staff_name,

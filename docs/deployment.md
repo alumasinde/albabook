@@ -27,8 +27,14 @@ APP_HOST_ADMIN=admin.albabook.co.ke
 APP_HOST_MARKETING=albabook.co.ke
 
 DB_DATABASE=albabook
-DB_USERNAME=albabook
+# Runtime user (web + workers): SELECT/INSERT/UPDATE/DELETE only, created by
+# docker/mysql/prod-init.sh on first boot.
+DB_USERNAME=albabook_app
 DB_PASSWORD=<strong>
+# Schema owner: used only by `php bin/console migrate` (CLI). Must differ
+# from DB_USERNAME. Quotes/backslashes are refused in names and passwords.
+DB_MIGRATE_USERNAME=albabook_owner
+DB_MIGRATE_PASSWORD=<strong, different>
 DB_ROOT_PASSWORD=<strong>
 
 # REQUIRED when nginx sits behind a load balancer / CDN / ingress.
@@ -91,3 +97,29 @@ entry — the script deliberately does not ship data anywhere itself.
 
 Never set `TRUSTED_PROXIES` to a range that includes arbitrary clients — a
 forged `X-Forwarded-For` would then spoof any IP for rate limits and audit.
+
+## Custom booking domains (off by default)
+
+`CUSTOM_DOMAINS_ENABLED=false` keeps tenant custom domains switched off: custom
+hosts never resolve, and the dashboard cannot add or activate domains. Turn it
+on only once **both** of these exist:
+
+1. **Routing** — `docker/nginx/prod.conf`'s `default_server` returns 400 for
+   any unknown host, so a custom domain never reaches PHP. Add a TLS server
+   that forwards unknown hosts to `index.php` (the app still rejects any host
+   that is not an active, verified `tenant_domains` row).
+2. **Certificates** — each custom domain needs its own certificate (for
+   example on-demand ACME issuance at the edge, gated on the domain being
+   active). Nothing in the app issues certificates; `tls_status` only records
+   state.
+
+Unverified claims lapse after `tenancy.domain_claim_ttl_hours` (72 h) and are
+pruned by the scheduler, so a business cannot park a domain it does not own.
+
+## Messaging cost controls
+
+The platform-owned SMS/WhatsApp account (`SMS_PROVIDER`, `WHATSAPP_PROVIDER`)
+is only used for plans that include `sms_messages` / `whatsapp_messages`, is
+capped by those monthly limits, and only messages the prefixes in
+`SMS_ALLOWED_PREFIXES` / `WHATSAPP_ALLOWED_PREFIXES` (default `+254`). Re-run
+the plan seeder after deploying so every plan lists every feature explicitly.

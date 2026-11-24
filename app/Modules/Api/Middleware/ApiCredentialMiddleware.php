@@ -9,6 +9,9 @@ use App\Core\Http\Request;
 use App\Core\Http\Response;
 use App\Core\Middleware\MiddlewareInterface;
 use App\Modules\Api\Repositories\ApiCredentialRepository;
+use App\Modules\Billing\Services\FeatureGate;
+use App\Tenancy\TenantAccessChecker;
+use App\Tenancy\TenantRepository;
 
 /**
  * Private API authentication (decisions.md D-008): every /v1/* route carries
@@ -23,7 +26,12 @@ use App\Modules\Api\Repositories\ApiCredentialRepository;
  */
 final class ApiCredentialMiddleware implements MiddlewareInterface
 {
-    public function __construct(private readonly ApiCredentialRepository $credentials) {}
+    public function __construct(
+        private readonly ApiCredentialRepository $credentials,
+        private readonly TenantRepository $tenants,
+        private readonly TenantAccessChecker $access,
+        private readonly FeatureGate $features,
+    ) {}
 
     public function process(Request $request, callable $next): Response
     {
@@ -55,6 +63,26 @@ final class ApiCredentialMiddleware implements MiddlewareInterface
         $required = is_array($options) ? ($options['scope'] ?? null) : null;
         if (is_string($required) && $required !== '' && !in_array($required, $scopes, true) && !in_array('*', $scopes, true)) {
             throw new HttpException(403, 'FORBIDDEN', 'This API credential does not have that scope.');
+        }
+
+        // The key's tenant must still be entitled to use it: the plan must
+        // include API access, and the account status must allow the
+        // operation (reads need dashboard.view, writes booking.create —
+        // the same tenant_status_policies matrix the dashboard honours).
+        // Suspended, archived or downgraded businesses lose API access
+        // immediately, without anyone revoking keys.
+        $tenantId = (int) $credential['tenant_id'];
+        $tenant = $this->tenants->findById($tenantId);
+        if ($tenant === null) {
+            throw new HttpException(401, 'UNAUTHENTICATED', 'Invalid or expired API credential.');
+        }
+        if (!$this->features->enabled($tenantId, 'api_access')) {
+            throw new HttpException(403, 'FEATURE_NOT_AVAILABLE', 'API access is not included in this business’s plan.');
+        }
+        $operation = $request->isMethodSafe() ? 'dashboard.view' : 'booking.create';
+        $allowed = $this->access->allowedOperations((string) $tenant['status']);
+        if (!in_array('*', $allowed, true) && !in_array($operation, $allowed, true)) {
+            throw new HttpException(403, 'TENANT_INACTIVE', 'This business account cannot use the API in its current status.');
         }
 
         $this->credentials->touchLastUsed((int) $credential['id']);

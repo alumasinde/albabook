@@ -31,6 +31,7 @@ $done = $housekeeping->expireHolds()
     + $housekeeping->expireVerificationCodes()
     + $housekeeping->recoverStuckNotifications();
 $housekeeping->pruneRateLimits();
+$housekeeping->pruneStaleDomainClaims($container->get(\App\Core\Config\Config::class)->int('tenancy.domain_claim_ttl_hours', 72));
 
 $done += $container->get(ReminderService::class)->dispatchBatch(50)
     + $container->get(NotificationDispatcher::class)->dispatchBatch(50)

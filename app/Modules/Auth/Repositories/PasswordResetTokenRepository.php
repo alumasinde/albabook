@@ -31,10 +31,17 @@ final class PasswordResetTokenRepository
         return $stmt->fetch() ?: null;
     }
 
-    public function consume(int $id, string $at): void
+    /**
+     * Single-use guard: true only for the one caller that actually flips the
+     * token from unused to used. A concurrent second reset with the same
+     * token gets false and must abort.
+     */
+    public function consume(int $id, string $at): bool
     {
-        $this->db->pdo()->prepare('UPDATE password_reset_tokens SET used_at = :at WHERE id = :id AND used_at IS NULL')
-            ->execute(['at' => $at, 'id' => $id]);
+        $stmt = $this->db->pdo()->prepare('UPDATE password_reset_tokens SET used_at = :at WHERE id = :id AND used_at IS NULL');
+        $stmt->execute(['at' => $at, 'id' => $id]);
+
+        return $stmt->rowCount() === 1;
     }
 
     public function invalidateForUser(int $userId): void
