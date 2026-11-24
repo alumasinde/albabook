@@ -82,6 +82,9 @@ final class TrustedHostMiddleware implements MiddlewareInterface
         return $next(
             $request
                 ->withAttribute('host', $host)
+                // Port from the same (trusted) Host value — cross-host links
+                // keep it, so local dev on :8010 links to app.…:8010.
+                ->withAttribute('port', self::portOf($rawHost))
                 ->withAttribute('host_group', $group)
                 ->withAttribute('scheme', $scheme)
                 ->withAttribute('client_ip', $clientIp),
@@ -109,6 +112,17 @@ final class TrustedHostMiddleware implements MiddlewareInterface
         $host = rtrim($host, '.');
 
         return preg_match('/^[a-z0-9.-]{1,253}$/', $host) === 1 ? $host : null;
+    }
+
+    /** Explicit port in a Host value ("albabook.localhost:8010" → 8010), else null. */
+    public static function portOf(string $host): ?int
+    {
+        if (preg_match('/:(\d{1,5})$/', trim($host), $m) !== 1) {
+            return null;
+        }
+        $port = (int) $m[1];
+
+        return $port >= 1 && $port <= 65535 ? $port : null;
     }
 
     private function firstValue(string $header): string

@@ -16,6 +16,7 @@ use App\Modules\Auth\Context\CurrentMembership;
 use App\Modules\Platform\Context\PlatformAuthContext;
 use App\Modules\Platform\Services\SupportSessionService;
 use App\Modules\Platform\Support\SupportEntryToken;
+use App\Modules\System\Repositories\PlatformStateRepository;
 use App\Modules\System\Services\HealthCheck;
 use App\Shared\I18n\Translator;
 use App\Shared\Logging\LoggerFactory;
@@ -160,8 +161,11 @@ return static function (Container $c, Config $config, string $basePath): void {
         $c->get(Database::class),
         $c->get(MigrationRunner::class),
         $c->get(MaintenanceMode::class),
+        $c->get(PlatformStateRepository::class),
         $c->get(LoggerInterface::class),
         $basePath,
+        $config->int('ops.scheduler_max_lag_seconds', 600),
+        $config->int('ops.backup_max_age_seconds', 93600),
     ), shared: false);
 
     $c->set(ExceptionHandler::class, static fn(Container $c): ExceptionHandler => new ExceptionHandler(

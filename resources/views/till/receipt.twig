@@ -143,6 +143,7 @@
     <hr class="receipt-dash">
     <footer class="receipt-footer">
       <p class="receipt-thanks">{{ footer_note ?: t('receipt.thanks_for_choosing', { name: business_name|upper }) }}</p>
+      <p class="receipt-meta">{{ t('receipt.not_a_tax_invoice') }}</p>
       {% if show_powered_by %}<p class="receipt-powered">{{ t('common.powered_by') }}</p>{% endif %}
     </footer>
   </article>

@@ -22,6 +22,14 @@ final class AppUrl
         $host = $this->config->string('app.hosts.' . $group->value);
         $scheme = $request !== null ? ($request->isSecure() ? 'https' : 'http') : 'https';
 
+        // All hosts are served by the same front end, so a non-standard port
+        // on the current request (local dev, e.g. :8010) applies to the
+        // target host too. Standard ports are omitted.
+        $port = $request?->port();
+        if ($port !== null && !($scheme === 'http' && $port === 80) && !($scheme === 'https' && $port === 443)) {
+            $host .= ':' . $port;
+        }
+
         return $scheme . '://' . $host . '/' . ltrim($path, '/');
     }
 

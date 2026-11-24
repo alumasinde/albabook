@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Appointments\Controllers;
 
+use App\Core\Http\HostGroup;
 use App\Core\Http\Request;
 use App\Core\Http\Response;
 use App\Modules\Appointments\Repositories\AppointmentRepository;
@@ -12,6 +13,7 @@ use App\Modules\Appointments\Services\ManualBookingService;
 use App\Modules\Appointments\Services\TransitionException;
 use App\Modules\Auth\Context\MembershipContext;
 use App\Shared\Http\ApiResponse;
+use App\Shared\Http\AppUrl;
 use App\Shared\Money\CurrencyFormatter;
 use App\Shared\Money\Money;
 use App\Shared\Time\DateTimeService;
@@ -261,11 +263,9 @@ final class AppointmentsApiController
         $token = bin2hex(random_bytes(24));
         $this->appointments->setManageToken($tenant->tenantId, (int) $row['id'], hash('sha256', $token));
 
-        $bookHost = $this->config->string('app.hosts.book');
-        $scheme = str_ends_with($bookHost, '.localhost') ? 'http' : 'https';
-
         return ApiResponse::ok([
-            'url' => $scheme . '://' . $bookHost . '/' . $tenant->slug . '/manage/' . $token,
+            // Scheme and any non-standard port follow the current request.
+            'url' => (new AppUrl($this->config))->to(HostGroup::Booking, '/' . $tenant->slug . '/manage/' . $token, $request),
             'reference' => (string) $row['reference'],
         ]);
     }

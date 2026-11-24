@@ -9,6 +9,7 @@ declare(strict_types=1);
  */
 
 use App\Core\Queue\Worker;
+use App\Modules\System\Repositories\PlatformStateRepository;
 use App\Modules\System\Services\CleanupService;
 
 $app = (require __DIR__ . '/../bootstrap/app.php')();
@@ -29,4 +30,5 @@ exit(Worker::run(
     },
     maxSeconds: 10,
     idleSleepSeconds: 0,
+    onPulse: static fn() => $app->container()->get(PlatformStateRepository::class)->touch('worker.cleanup.last_run_at'),
 ));

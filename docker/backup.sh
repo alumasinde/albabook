@@ -48,6 +48,15 @@ gzip -t "$tmp"
 mv "$tmp" "$out"
 echo "$(date -u +%FT%TZ) wrote $out ($(du -h "$out" | cut -f1))"
 
+# Record the success timestamp where /health can see it: ./backups lives on
+# the host while the app runs in a container, so the marker goes into the
+# database itself. Best-effort — a marker failure never fails the backup.
+docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" exec -T db \
+    mysql -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" -e \
+    "INSERT INTO platform_state (name, value) VALUES ('backup.last_ok_at', UTC_TIMESTAMP(6))
+     ON DUPLICATE KEY UPDATE value = VALUES(value)" 2>/dev/null \
+    || echo "$(date -u +%FT%TZ) WARN: platform_state backup marker not written" >&2
+
 find "$BACKUP_DIR" -name 'albabook-*.sql.gz' -mtime "+${RETENTION_DAYS}" -delete
 
 # Offsite copy is intentionally not handled here — sync BACKUP_DIR with your

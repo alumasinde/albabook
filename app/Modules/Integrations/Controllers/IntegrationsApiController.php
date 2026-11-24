@@ -32,16 +32,21 @@ final class IntegrationsApiController
         'reports:read',
     ];
 
-    /** Domain events a webhook can subscribe to. */
+    /** Domain events a webhook can subscribe to — the set actually emitted
+     *  into outbox_events (AppointmentEventService, TillRepository,
+     *  TenantLifecycleService). A stored "*" still matches everything. */
     private const EVENT_TYPES = [
         'appointment.created',
         'appointment.confirmed',
-        'appointment.cancelled',
+        'appointment.checked_in',
+        'appointment.in_service',
         'appointment.completed',
+        'appointment.cancelled',
+        'appointment.no_show',
+        'appointment.expired',
+        'appointment.rescheduled',
         'payment.received',
-        'payment.refunded',
-        'customer.created',
-        'booking.received',
+        'tenant.status_changed',
     ];
 
     public function __construct(

@@ -23,9 +23,32 @@ final class HealthEndpointTest extends DatabaseTestCase
 
             self::assertSame(200, $response->status(), $prefix);
             self::assertSame(['database' => 'ok', 'migrations' => 'ok', 'storage' => 'ok'], $body['checks']);
+            self::assertArrayHasKey('scheduler', $body['signals'], $prefix);
+            self::assertArrayHasKey('backups', $body['signals'], $prefix);
             // Authenticated hosts add 'private' via CacheControlMiddleware.
             self::assertStringContainsString('no-store', (string) $response->header('Cache-Control'));
         }
+    }
+
+    public function testSignalsReportFreshnessWithoutGatingStatus(): void
+    {
+        $this->pdo->exec(
+            "INSERT INTO platform_state (name, value) VALUES
+                ('scheduler.last_run_at', UTC_TIMESTAMP(6)),
+                ('backup.last_ok_at', '2020-01-01 00:00:00'),
+                ('worker.notifications.last_run_at', UTC_TIMESTAMP(6))
+             ON DUPLICATE KEY UPDATE value = VALUES(value)",
+        );
+
+        $app = (require dirname(__DIR__, 2) . '/bootstrap/app.php')([Database::class => $this->db]);
+        $response = $app->handle(Request::create('GET', 'http://app.albabook.test/health'));
+        $signals = json_decode($response->body(), true)['signals'];
+
+        // A stale signal informs monitoring but must not drain the node.
+        self::assertSame(200, $response->status());
+        self::assertSame('fresh', $signals['scheduler']);
+        self::assertSame('stale', $signals['backups']);
+        self::assertSame(['notifications' => 'fresh'], $signals['workers']);
     }
 
     public function testDegradedWhenAMigrationIsPending(): void

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Api\Controllers;
 
 use App\Core\Config\Config;
+use App\Core\Http\HostGroup;
 use App\Core\Http\Request;
 use App\Core\Http\Response;
 use App\Modules\Appointments\Repositories\AppointmentRepository;
@@ -16,6 +17,7 @@ use App\Modules\Booking\Repositories\BookingPageRepository;
 use App\Modules\Booking\Services\AvailabilityService;
 use App\Modules\Booking\Services\BookingHoldService;
 use App\Shared\Http\ApiResponse;
+use App\Shared\Http\AppUrl;
 use App\Shared\Security\RateLimiter;
 use App\Shared\Time\DateTimeService;
 use App\Shared\Validation\CustomerContact;
@@ -357,7 +359,7 @@ final class PublicBookingApiController
             'end_at' => $result['end_at'],
             'existing' => $result['existing'],
             'manage_token' => $result['manage_token'],
-            'manage_url' => $result['manage_token'] !== null ? $this->manageUrl($tenant, $result['manage_token']) : null,
+            'manage_url' => $result['manage_token'] !== null ? $this->manageUrl($tenant, $result['manage_token'], $request) : null,
         ], $result['existing'] ? 200 : 201);
     }
 
@@ -387,7 +389,7 @@ final class PublicBookingApiController
             if ($appointment !== null && $this->contactMatches($appointment, $contact)) {
                 $token = bin2hex(random_bytes(24));
                 $this->appointments->setManageToken((int) $tenant['id'], (int) $appointment['id'], hash('sha256', $token));
-                $this->queueManageLink($appointment, $contact, $this->manageUrl($tenant, $token));
+                $this->queueManageLink($appointment, $contact, $this->manageUrl($tenant, $token, $request));
             }
         }
 
@@ -754,12 +756,14 @@ final class PublicBookingApiController
     }
 
     /** @param array<string, mixed> $tenant */
-    private function manageUrl(array $tenant, string $token): string
+    private function manageUrl(array $tenant, string $token, Request $request): string
     {
-        $bookHost = $this->config->string('app.hosts.book');
-        $scheme = str_ends_with($bookHost, '.localhost') ? 'http' : 'https';
-
-        return $scheme . '://' . $bookHost . '/' . (string) $tenant['slug'] . '/manage/' . $token;
+        // Scheme and any non-standard port follow the current request.
+        return (new AppUrl($this->config))->to(
+            HostGroup::Booking,
+            '/' . (string) $tenant['slug'] . '/manage/' . $token,
+            $request,
+        );
     }
 
     /**

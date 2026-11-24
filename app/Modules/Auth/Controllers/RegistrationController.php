@@ -54,7 +54,7 @@ final class RegistrationController
             $window,
         );
         if (!$byIp->allowed || ($byEmail !== null && !$byEmail->allowed)) {
-            $retry = max($byIp->retryAfterSeconds, $byEmail?->retryAfterSeconds ?? 0);
+            $retry = max($byIp->retryAfterSeconds, $byEmail === null ? 0 : $byEmail->retryAfterSeconds);
 
             return $this->view->response('auth/register.twig', [
                 'old' => array_diff_key($request->body(), ['password' => 1, 'password_confirmation' => 1]),

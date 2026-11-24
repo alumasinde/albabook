@@ -11,6 +11,11 @@ return [
     'charset' => 'utf8mb4',
     'collation' => 'utf8mb4_unicode_ci',
 
+    // Seconds to wait for the TCP connection. A refused connect fails fast,
+    // but a dropped/firewalled one would otherwise block a request for
+    // default_socket_timeout (60s).
+    'connect_timeout' => (int) env('DB_CONNECT_TIMEOUT', 5),
+
     // Applied on every connection (booking-engine.md §3, plan.md §13).
     'sql_mode' => implode(',', [
         'ONLY_FULL_GROUP_BY',

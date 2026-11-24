@@ -129,6 +129,9 @@ final class Database
             PDO::ATTR_EMULATE_PREPARES => false,
             PDO::ATTR_STRINGIFY_FETCHES => false,
             PDO::MYSQL_ATTR_FOUND_ROWS => true,
+            // Connect timeout: without this a silently-dropping server hangs
+            // every request for default_socket_timeout (60s) before erroring.
+            PDO::ATTR_TIMEOUT => (int) ($this->config['connect_timeout'] ?? 5),
         ]);
 
         $collation = (string) ($this->config['collation'] ?? 'utf8mb4_unicode_ci');

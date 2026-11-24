@@ -54,7 +54,7 @@ final class ReceiptVerifier
         }
         $out = '';
         foreach (str_split($bits, 5) as $chunk) {
-            $out .= self::ALPHABET[bindec($chunk)];
+            $out .= self::ALPHABET[(int) bindec($chunk)];
         }
 
         return $out;

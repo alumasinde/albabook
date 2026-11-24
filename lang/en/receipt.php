@@ -27,6 +27,7 @@ return [
     'payment_method' => 'Payment method',
     'payment_status' => 'Payment status',
     'scan_to_verify' => 'Scan to verify receipt',
+    'not_a_tax_invoice' => 'Not a tax invoice — ask us for your eTIMS receipt.',
     'thanks_for_choosing' => 'Thank you for choosing :name',
     'print' => 'Print',
     'qr_alt' => 'QR code to verify this receipt',

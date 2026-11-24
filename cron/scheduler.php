@@ -19,6 +19,7 @@ use App\Modules\Integrations\Services\OutboxDispatcher;
 use App\Modules\Integrations\Services\WebhookSender;
 use App\Modules\Notifications\Services\NotificationDispatcher;
 use App\Modules\Notifications\Services\ReminderService;
+use App\Modules\System\Repositories\PlatformStateRepository;
 use App\Modules\System\Services\CleanupService;
 
 $app = (require __DIR__ . '/../bootstrap/app.php')();
@@ -39,6 +40,10 @@ $done += $container->get(ReminderService::class)->dispatchBatch(50)
     + $container->get(WebhookSender::class)->dispatchBatch(20);
 
 $container->get(AuditDailyCommand::class)->run(['--apply'], $quiet);
+
+// Heartbeat consumed by /health ("signals.scheduler"). Written last so a run
+// that dies mid-pass reports stale rather than looking alive.
+$container->get(PlatformStateRepository::class)->touch(PlatformStateRepository::SCHEDULER_LAST_RUN);
 
 fwrite(STDOUT, "scheduler: {$done} job(s) processed.\n");
 exit(0);

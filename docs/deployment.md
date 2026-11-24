@@ -81,6 +81,34 @@ verifies the gzip, and prunes files older than `RETENTION_DAYS` (default 14):
 Sync `./backups/` off-site (rsync/rclone/object storage) from a second cron
 entry — the script deliberately does not ship data anywhere itself.
 
+On success the script also writes `backup.last_ok_at` into `platform_state`
+(best-effort), which `/health` reports under `signals.backups`.
+
+## Health and ops signals
+
+`GET /health` (every host) returns `200 {"status":"ok"}` when the node can
+serve traffic — database reachable, all migrations applied, storage
+writable — and `503` otherwise, so a load balancer can act on the status
+code alone. `degraded` is reported during maintenance mode.
+
+The `signals` section reports freshness of work done *outside* web
+requests:
+
+- `signals.scheduler` — last `cron/scheduler.php` run. `stale` after
+  `OPS_SCHEDULER_MAX_LAG_SECONDS` (default 600 = 10 minutes).
+- `signals.workers` — one entry per supervised `workers/*.php` process
+  (`notifications`, `outbox`, `reminders`, `webhooks`, `cleanup`), absent
+  entirely when none has ever run. Same staleness window as `scheduler`;
+  alert when a worker you supervise is stale or missing.
+- `signals.backups` — last successful `docker/backup.sh` marker. `stale`
+  after `OPS_BACKUP_MAX_AGE_SECONDS` (default 93600 = 26 hours). `unknown`
+  until the first run records one.
+
+Signals never change the HTTP status: a sleeping cron or a missed backup
+does not mean the node cannot serve traffic, so they must not make a load
+balancer drain it. Alert on them from external monitoring instead (e.g. a
+cron check that fails when `signals.scheduler != "fresh"`).
+
 ## Trusted proxies and TLS termination
 
 `TrustedHostMiddleware` honours `X-Forwarded-Host`, `X-Forwarded-Proto` and

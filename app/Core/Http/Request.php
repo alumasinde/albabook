@@ -209,6 +209,14 @@ final class Request
         return is_string($host) ? $host : null;
     }
 
+    /** Explicit port the request arrived on (set by TrustedHostMiddleware), if any. */
+    public function port(): ?int
+    {
+        $port = $this->attributes['port'] ?? null;
+
+        return is_int($port) ? $port : null;
+    }
+
     public function hostGroup(): ?HostGroup
     {
         $group = $this->attributes['host_group'] ?? null;
