@@ -186,8 +186,9 @@ final class AppointmentRepository
     }
 
     /** Visit-window policy for time-gated transitions (check-in, service
-     * start, completion, no-show). Stored in tenant_settings.preferences.
-     * @return array{early_minutes: int, late_minutes: int, no_show_grace_minutes: int}
+     * start, completion, no-show) plus the tenant's lifecycle shape.
+     * Stored in tenant_settings.preferences.
+     * @return array{early_minutes: int, late_minutes: int, no_show_grace_minutes: int, require_check_in: bool, window_mode: string}
      */
     public function visitWindowPrefs(int $tenantId): array
     {
@@ -205,6 +206,12 @@ final class AppointmentRepository
             'early_minutes' => $clamp($prefs['visit_early_minutes'] ?? null, 60, 1440),
             'late_minutes' => $clamp($prefs['visit_late_minutes'] ?? null, 240, 2880),
             'no_show_grace_minutes' => $clamp($prefs['no_show_grace_minutes'] ?? null, 15, 480),
+            // Clinics/queues keep check-in mandatory so wait time is real;
+            // salons can opt into a one-click confirmed → in_service start.
+            'require_check_in' => !isset($prefs['require_check_in']) || (bool) $prefs['require_check_in'],
+            // 'strict' blocks out-of-window transitions; 'warn' allows them
+            // after an explicit confirmation (force), recorded on the event.
+            'window_mode' => ($prefs['visit_window_mode'] ?? 'strict') === 'warn' ? 'warn' : 'strict',
         ];
     }
 
@@ -268,6 +275,18 @@ final class AppointmentRepository
     {
         $sets = ['status = :status', 'version = version + 1'];
         $params = ['status' => $status, 't' => $tenantId, 'id' => $id, 'v' => $expectedVersion];
+        // First-arrival timestamps power wait-time/duration/punctuality
+        // reports without replaying appointment_events. COALESCE keeps the
+        // first stamp if a status is ever re-reached.
+        static $tsColumn = [
+            'confirmed' => 'confirmed_at', 'checked_in' => 'checked_in_at',
+            'in_service' => 'in_service_at', 'completed' => 'completed_at',
+            'no_show' => 'no_show_at', 'rejected' => 'rejected_at',
+            'expired' => 'expired_at',
+        ];
+        if (isset($tsColumn[$status])) {
+            $sets[] = "{$tsColumn[$status]} = COALESCE({$tsColumn[$status]}, UTC_TIMESTAMP(6))";
+        }
         if ($status === 'cancelled') {
             $sets[] = 'cancelled_at = UTC_TIMESTAMP(6)';
             $sets[] = 'cancelled_by = :cancelled_by';
@@ -421,10 +440,10 @@ final class AppointmentRepository
             "SELECT
                 (SELECT COUNT(*) FROM appointment_items ai
                   JOIN appointments a ON a.tenant_id = ai.tenant_id AND a.id = ai.appointment_id
+                  JOIN appointment_statuses ast ON ast.code = a.status AND ast.blocks_time
                   WHERE ai.tenant_id = :t AND ai.staff_id = :s
                     AND ai.occupied_start_at < :to AND ai.occupied_end_at > :from
-                    AND (:ex_a = 0 OR a.id <> :ex_b)
-                    AND a.status IN ('pending', 'confirmed', 'checked_in', 'in_service'))
+                    AND (:ex_a = 0 OR a.id <> :ex_b))
               + (SELECT COUNT(*) FROM booking_hold_items hi
                   JOIN booking_holds h ON h.tenant_id = hi.tenant_id AND h.id = hi.hold_id
                   WHERE hi.tenant_id = :t2 AND hi.staff_id = :s2
@@ -523,11 +542,11 @@ final class AppointmentRepository
     public function customerOverlaps(int $tenantId, int $customerId, string $fromUtc, string $toUtc, ?int $excludeAppointmentId = null): int
     {
         $stmt = $this->db->pdo()->prepare(
-            "SELECT COUNT(*) FROM appointments
-              WHERE tenant_id = :t AND customer_id = :c
-                AND status IN ('pending', 'confirmed', 'checked_in', 'in_service')
-                AND (:ex_a = 0 OR id <> :ex_b)
-                AND start_at < :to AND end_at > :from",
+            "SELECT COUNT(*) FROM appointments a
+              JOIN appointment_statuses ast ON ast.code = a.status AND ast.blocks_time
+              WHERE a.tenant_id = :t AND a.customer_id = :c
+                AND (:ex_a = 0 OR a.id <> :ex_b)
+                AND a.start_at < :to AND a.end_at > :from",
         );
         $stmt->execute([
             't' => $tenantId, 'c' => $customerId, 'to' => $toUtc, 'from' => $fromUtc,
@@ -862,9 +881,9 @@ final class AppointmentRepository
                    (SELECT COALESCE(SUM(ar.quantity), 0) FROM appointment_resources ar
                       JOIN appointment_items ai ON ai.tenant_id = ar.tenant_id AND ai.id = ar.appointment_item_id
                       JOIN appointments a ON a.tenant_id = ar.tenant_id AND a.id = ai.appointment_id
+                      JOIN appointment_statuses ast ON ast.code = a.status AND ast.blocks_time
                      WHERE ar.tenant_id = :t1 AND ar.resource_id = r.id
-                       AND ar.occupied_start_at < :to1 AND ar.occupied_end_at > :from1
-                       AND a.status IN ('pending', 'confirmed', 'checked_in', 'in_service'))
+                       AND ar.occupied_start_at < :to1 AND ar.occupied_end_at > :from1)
                  + (SELECT COUNT(*) FROM booking_hold_resources hr
                       JOIN booking_holds h ON h.tenant_id = hr.tenant_id AND h.id = hr.hold_id
                      WHERE hr.tenant_id = :t2 AND hr.resource_id = r.id

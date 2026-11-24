@@ -55,4 +55,10 @@ return [
     'visit_late_hint' => 'How long after the appointment ends staff can still check in or start service, e.g. 240',
     'no_show_grace_label' => 'No-show grace (min)',
     'no_show_grace_hint' => 'Minutes after the start time before a no-show can be marked, e.g. 15',
+    'visit_window_mode_label' => 'Out-of-window actions',
+    'visit_window_mode_strict' => 'Block them',
+    'visit_window_mode_warn' => 'Warn, then allow',
+    'visit_window_mode_hint' => 'What happens when staff check in, start or complete outside the window above',
+    'require_check_in_label' => 'Require check-in before service',
+    'require_check_in_hint' => 'On: customers must be checked in before service starts (tracks waiting time). Off: staff can start service straight from Confirmed.',
 ];

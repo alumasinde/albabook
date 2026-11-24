@@ -166,10 +166,10 @@ final class DashboardRepository
                       ORDER BY ai.item_position LIMIT 1) AS service_name,
                     b.timezone AS branch_timezone
                FROM appointments a
+               JOIN appointment_statuses ast ON ast.code = a.status AND ast.blocks_time
           LEFT JOIN staff s ON s.tenant_id = a.tenant_id AND s.id = a.staff_id
                JOIN branches b ON b.tenant_id = a.tenant_id AND b.id = a.branch_id
-              WHERE a.tenant_id = :t AND a.start_at >= :f AND a.start_at < :to
-                AND a.status IN ('pending', 'confirmed', 'checked_in', 'in_service'){$scope}
+              WHERE a.tenant_id = :t AND a.start_at >= :f AND a.start_at < :to{$scope}
            ORDER BY a.start_at
               LIMIT " . max(1, $limit),
         );

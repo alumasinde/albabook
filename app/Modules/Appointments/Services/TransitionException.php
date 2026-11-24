@@ -9,7 +9,7 @@ namespace App\Modules\Appointments\Services;
  */
 final class TransitionException extends \RuntimeException
 {
-    /** @param array<string, string|list<string>> $fields */
+    /** @param array<string, string|bool|list<string>> $fields */
     public function __construct(
         public readonly string $apiCode,
         string $message,

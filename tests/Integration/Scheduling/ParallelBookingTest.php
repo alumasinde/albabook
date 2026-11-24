@@ -183,6 +183,7 @@ final class ParallelBookingTest extends Phase2TestCase
                     $this->db,
                     new \App\Core\Config\Config([]),
                 ),
+                new \App\Modules\Notifications\Repositories\NotificationRepository($this->db, $this->uuids),
             ),
             new \App\Modules\Billing\Services\FeatureGate($this->db),
             new \App\Modules\Till\Repositories\TillRepository($this->db),

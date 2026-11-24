@@ -19,7 +19,7 @@ final class ApiResponse
     }
 
     /**
-     * @param array<string, string|list<string>>|null $fields field-level validation errors
+     * @param array<string, string|bool|list<string>>|null $fields field-level validation errors and confirmable flags
      */
     public static function error(string $code, string $message, int $status = 400, ?array $fields = null): Response
     {

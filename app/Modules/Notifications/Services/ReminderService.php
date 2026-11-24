@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Notifications\Services;
 
 use App\Core\Database\Database;
-use App\Shared\Support\UuidFactory;
+use App\Modules\Notifications\Repositories\NotificationRepository;
 
 /**
  * Processes due scheduled_notifications rows into notification_queue
@@ -17,8 +17,8 @@ final class ReminderService
 {
     public function __construct(
         private readonly Database $db,
-        private readonly UuidFactory $uuids,
         private readonly NotificationPolicy $policy,
+        private readonly NotificationRepository $queue,
     ) {}
 
     /** Process up to $limit due reminders; returns the number claimed. */
@@ -90,17 +90,7 @@ final class ReminderService
                 || !$this->policy->allows((int) $row['tenant_id'], $channel, (string) $row['kind'])) {
                 continue;
             }
-            $this->db->pdo()->prepare(
-                "INSERT INTO notification_queue (uuid, tenant_id, appointment_id, channel, recipient, payload, status)
-                 VALUES (:u, :t, :a, :c, :r, :p, 'pending')",
-            )->execute([
-                'u' => $this->uuids->generate(),
-                't' => (int) $row['tenant_id'],
-                'a' => (int) $row['appointment_id'],
-                'c' => $channel,
-                'r' => (string) $recipient,
-                'p' => $payload,
-            ]);
+            $this->queue->enqueue((int) $row['tenant_id'], (int) $row['appointment_id'], $channel, (string) $recipient, $payload);
             $queued++;
         }
 

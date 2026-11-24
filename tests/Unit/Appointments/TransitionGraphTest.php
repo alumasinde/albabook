@@ -42,6 +42,16 @@ final class TransitionGraphTest extends TestCase
         self::assertNotContains('in_service', AppointmentTransitionService::allowed('confirmed'));
     }
 
+    public function testSalonPolicyUnlocksDirectStartOnly(): void
+    {
+        // require_check_in = false is the only documented unlock — it adds
+        // confirmed → in_service for salons and nothing else, anywhere.
+        self::assertNotContains('in_service', AppointmentTransitionService::allowed('confirmed'));
+        self::assertContains('in_service', AppointmentTransitionService::allowed('confirmed', ['require_check_in' => false]));
+        self::assertNotContains('in_service', AppointmentTransitionService::allowed('confirmed', ['require_check_in' => true]));
+        self::assertNotContains('in_service', AppointmentTransitionService::allowed('pending', ['require_check_in' => false]));
+    }
+
     public function testEveryTransitionRequiresAPermission(): void
     {
         $targets = [];

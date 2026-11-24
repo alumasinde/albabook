@@ -27,7 +27,9 @@ use App\Core\Database\Database;
  */
 final class IntegrityCheckCommand implements Command
 {
-    private const BLOCKING = "'pending','confirmed','checked_in','in_service'";
+    // appointment_statuses.blocks_time is the documented source of truth —
+    // the check stays correct if a new blocking status is ever added.
+    private const BLOCKING = "SELECT code FROM appointment_statuses WHERE blocks_time = 1";
 
     public function __construct(private readonly Database $db) {}
 

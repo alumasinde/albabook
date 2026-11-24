@@ -358,6 +358,9 @@ final class SettingsApiController
             'visit_early_minutes' => (int) ($this->settings->jsonPreferences($tenant->tenantId)['visit_early_minutes'] ?? 60),
             'visit_late_minutes' => (int) ($this->settings->jsonPreferences($tenant->tenantId)['visit_late_minutes'] ?? 240),
             'no_show_grace_minutes' => (int) ($this->settings->jsonPreferences($tenant->tenantId)['no_show_grace_minutes'] ?? 15),
+            'require_check_in' => !isset($this->settings->jsonPreferences($tenant->tenantId)['require_check_in'])
+                || (bool) $this->settings->jsonPreferences($tenant->tenantId)['require_check_in'],
+            'visit_window_mode' => ($this->settings->jsonPreferences($tenant->tenantId)['visit_window_mode'] ?? 'strict') === 'warn' ? 'warn' : 'strict',
             'recent_payments' => $membership->can('payments.view')
                 ? $this->settings->recentPayments($tenant->tenantId)
                 : [],
@@ -405,6 +408,10 @@ final class SettingsApiController
         $visitEarly = $window($body, 'visit_early_minutes', 1440, $fields);
         $visitLate = $window($body, 'visit_late_minutes', 2880, $fields);
         $noShowGrace = $window($body, 'no_show_grace_minutes', 480, $fields);
+        $windowMode = (string) ($body['visit_window_mode'] ?? '');
+        if ($windowMode !== '' && !in_array($windowMode, ['strict', 'warn'], true)) {
+            $fields['visit_window_mode'] = 'Choose strict or warn.';
+        }
         if ($fields !== []) {
             return ApiResponse::error('VALIDATION', 'Fix the highlighted fields.', 422, $fields);
         }
@@ -424,6 +431,12 @@ final class SettingsApiController
         if ($noShowGrace !== null) {
             $this->settings->updateJsonPreferences($tenant->tenantId, 'no_show_grace_minutes', $noShowGrace);
         }
+        if (array_key_exists('require_check_in', $body)) {
+            $this->settings->updateJsonPreferences($tenant->tenantId, 'require_check_in', !empty($body['require_check_in']) ? 1 : 0);
+        }
+        if ($windowMode !== '') {
+            $this->settings->updateJsonPreferences($tenant->tenantId, 'visit_window_mode', $windowMode);
+        }
         if ($tax !== null) {
             $this->settings->updateProfile($tenant->tenantId, ['tax_rate_bp' => (int) $tax]);
         }
@@ -438,6 +451,8 @@ final class SettingsApiController
             'visit_early_minutes' => (int) ($prefs['visit_early_minutes'] ?? 60),
             'visit_late_minutes' => (int) ($prefs['visit_late_minutes'] ?? 240),
             'no_show_grace_minutes' => (int) ($prefs['no_show_grace_minutes'] ?? 15),
+            'require_check_in' => !isset($prefs['require_check_in']) || (bool) $prefs['require_check_in'],
+            'visit_window_mode' => ($prefs['visit_window_mode'] ?? 'strict') === 'warn' ? 'warn' : 'strict',
         ]);
     }
 

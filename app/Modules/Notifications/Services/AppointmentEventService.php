@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Notifications\Services;
 
 use App\Core\Database\Database;
+use App\Modules\Notifications\Repositories\NotificationRepository;
 use App\Shared\Support\UuidFactory;
 
 /**
@@ -39,6 +40,7 @@ final class AppointmentEventService
         private readonly Database $db,
         private readonly UuidFactory $uuids,
         private readonly NotificationPolicy $policy,
+        private readonly NotificationRepository $queue,
     ) {}
 
     /**
@@ -89,17 +91,7 @@ final class AppointmentEventService
             if ($recipient === '' || !$this->policy->allows((int) $appointment['tenant_id'], $channel, $event)) {
                 continue;
             }
-            $this->db->pdo()->prepare(
-                "INSERT INTO notification_queue (uuid, tenant_id, appointment_id, channel, recipient, payload, status)
-                 VALUES (:u, :t, :a, :c, :r, :p, 'pending')",
-            )->execute([
-                'u' => $this->uuids->generate(),
-                't' => (int) $appointment['tenant_id'],
-                'a' => (int) $appointment['id'],
-                'c' => $channel,
-                'r' => $recipient,
-                'p' => $payload,
-            ]);
+            $this->queue->enqueue((int) $appointment['tenant_id'], (int) $appointment['id'], $channel, $recipient, $payload);
         }
     }
 

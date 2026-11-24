@@ -676,6 +676,8 @@
     const visitEarlyInput = root.querySelector('[data-visit-early]');
     const visitLateInput = root.querySelector('[data-visit-late]');
     const noShowGraceInput = root.querySelector('[data-no-show-grace]');
+    const visitWindowModeInput = root.querySelector('[data-visit-window-mode]');
+    const requireCheckInInput = root.querySelector('[data-require-check-in]');
     const policySave = root.querySelector('[data-policy-save]');
 
     function loadPayments() {
@@ -693,6 +695,8 @@
           if (visitEarlyInput) visitEarlyInput.value = Number(data.visit_early_minutes ?? 60);
           if (visitLateInput) visitLateInput.value = Number(data.visit_late_minutes ?? 240);
           if (noShowGraceInput) noShowGraceInput.value = Number(data.no_show_grace_minutes ?? 15);
+          if (visitWindowModeInput) visitWindowModeInput.value = data.visit_window_mode === 'warn' ? 'warn' : 'strict';
+          if (requireCheckInInput) requireCheckInInput.checked = data.require_check_in !== false;
           renderPayAccounts();
           renderLedger();
         })
@@ -709,6 +713,8 @@
           visit_early_minutes: visitEarlyInput ? Math.round(Number(visitEarlyInput.value || 60)) : undefined,
           visit_late_minutes: visitLateInput ? Math.round(Number(visitLateInput.value || 240)) : undefined,
           no_show_grace_minutes: noShowGraceInput ? Math.round(Number(noShowGraceInput.value || 15)) : undefined,
+          visit_window_mode: visitWindowModeInput ? visitWindowModeInput.value : undefined,
+          require_check_in: requireCheckInInput ? (requireCheckInInput.checked ? 1 : 0) : undefined,
         })
           .then(() => AlbaBook.toast('Tax, charge and checkout settings saved.'))
           .catch((error) => AlbaBook.toast(error.message, 'danger'));

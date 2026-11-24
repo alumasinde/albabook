@@ -5,16 +5,37 @@ declare(strict_types=1);
 namespace App\Modules\Notifications\Repositories;
 
 use App\Core\Database\Database;
+use App\Shared\Support\UuidFactory;
 
 /**
- * Tenant-scoped reads for the notifications center: the outbound queue,
- * delivery logs and channel reference data.
+ * Tenant-scoped reads for the notifications center plus the single enqueue
+ * path shared by the event/reminder services and the public API, so the
+ * queue INSERT lives in exactly one place.
  */
 final class NotificationRepository
 {
     private const PER_PAGE = 20;
 
-    public function __construct(private readonly Database $db) {}
+    public function __construct(
+        private readonly Database $db,
+        private readonly UuidFactory $uuids,
+    ) {}
+
+    /** Queue one outbound notification for delivery; callers build the payload. */
+    public function enqueue(int $tenantId, int $appointmentId, string $channel, string $recipient, string $payload): void
+    {
+        $this->db->pdo()->prepare(
+            "INSERT INTO notification_queue (uuid, tenant_id, appointment_id, channel, recipient, payload, status)
+             VALUES (:u, :t, :a, :c, :r, :p, 'pending')",
+        )->execute([
+            'u' => $this->uuids->generate(),
+            't' => $tenantId,
+            'a' => $appointmentId,
+            'c' => $channel,
+            'r' => $recipient,
+            'p' => $payload,
+        ]);
+    }
 
     /** Queue + log rows, newest first, with optional filters.
      * @param array{q?: string, channel?: string, status?: string, page?: int} $filters

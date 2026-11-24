@@ -14,6 +14,7 @@ use App\Modules\Booking\Repositories\BookingPageRepository;
 use App\Modules\Booking\Services\AvailabilityService;
 use App\Modules\Booking\Services\BookingHoldService;
 use App\Modules\Notifications\Services\AppointmentEventService;
+use App\Modules\Notifications\Repositories\NotificationRepository;
 use App\Modules\Notifications\Services\NotificationPolicy;
 use App\Modules\Till\Repositories\TillRepository;
 use App\Shared\Time\DateTimeService;
@@ -103,7 +104,8 @@ final class BookingHoldTest extends Phase2TestCase
             new BookingPageRepository($this->db),
             new DateTimeService($this->clock),
             $this->uuids,
-            new AppointmentEventService($this->db, $this->uuids, new NotificationPolicy($this->db, new Config([]))),
+            new AppointmentEventService($this->db, $this->uuids, new NotificationPolicy($this->db, new Config([])),
+                new NotificationRepository($this->db, $this->uuids)),
             new FeatureGate($this->db),
             new TillRepository($this->db),
             new AvailabilityService(new BookingPageRepository($this->db), new DateTimeService($this->clock)),

@@ -116,6 +116,10 @@
             }
             return;
           }
+          if (state && state.requires_confirmation && state.reason) {
+            btn.title = state.reason;
+            actions.append(el('p', '-mt-1 mb-1 text-xs text-warning-strong', state.reason));
+          }
           btn.addEventListener('click', () => appointmentDrawer._transition(d, to, btn, body, onChange));
           actions.append(btn);
         });
@@ -171,7 +175,7 @@
       }
     },
 
-    async _transition(d, to, btn, body, onChange) {
+    async _transition(d, to, btn, body, onChange, force) {
       const spec = TRANSITIONS[to];
       if (to === 'cancelled' || to === 'no_show') {
         const yes = await ui.confirm({
@@ -184,14 +188,26 @@
       }
       ui.setBusy(btn, true, 'Working…');
       AlbaBook.api
-        .post('/api/appointments/' + encodeURIComponent(d.uuid) + '/transition', { to, version: d.version })
+        .post('/api/appointments/' + encodeURIComponent(d.uuid) + '/transition', { to, version: d.version, force: !!force })
         .then(() => {
           AlbaBook.toast('Appointment updated.', 'success');
           ui.drawer.close();
           if (onChange) onChange();
           else AlbaBook.pages.mount(document);
         })
-        .catch((error) => {
+        .catch(async (error) => {
+          // Soft guardrail: warn-mode tenants get a confirmable warning;
+          // confirming retries the same transition with force.
+          if (error.code === 'TIMING_WARNING') {
+            ui.setBusy(btn, false);
+            const yes = await ui.confirm({
+              title: spec.label,
+              message: error.message || 'This is outside the appointment window. Proceed anyway?',
+              confirmLabel: 'Proceed anyway',
+            });
+            if (yes) appointmentDrawer._transition(d, to, btn, body, onChange, true);
+            return;
+          }
           ui.setBusy(btn, false);
           AlbaBook.toast(error.message || 'Update failed.', 'danger');
           if (error.code === 'STALE_APPOINTMENT') appointmentDrawer.open(d.uuid, onChange);

@@ -353,9 +353,9 @@ final class BookingPageRepository
             "SELECT ai.staff_id, ai.occupied_start_at, ai.occupied_end_at
              FROM appointment_items ai
              JOIN appointments a ON a.tenant_id = ai.tenant_id AND a.id = ai.appointment_id
+             JOIN appointment_statuses ast ON ast.code = a.status AND ast.blocks_time
              WHERE ai.tenant_id = :t AND ai.staff_id IN ({$in})
                AND ai.occupied_start_at < :to AND ai.occupied_end_at > :from
-               AND a.status IN ('pending', 'confirmed', 'checked_in', 'in_service')
              UNION ALL
              SELECT hi.staff_id, hi.occupied_start_at, hi.occupied_end_at
              FROM booking_hold_items hi
@@ -425,9 +425,9 @@ final class BookingPageRepository
                  (SELECT COALESCE(SUM(ar.quantity), 0) FROM appointment_resources ar
                       JOIN appointment_items ai ON ai.tenant_id = ar.tenant_id AND ai.id = ar.appointment_item_id
                       JOIN appointments a ON a.tenant_id = ai.tenant_id AND a.id = ai.appointment_id
+                      JOIN appointment_statuses ast ON ast.code = a.status AND ast.blocks_time
                      WHERE ar.tenant_id = :t1 AND ar.resource_id = r.id
-                       AND ar.occupied_start_at < :to1 AND ar.occupied_end_at > :from1
-                       AND a.status IN ('pending', 'confirmed', 'checked_in', 'in_service'))
+                       AND ar.occupied_start_at < :to1 AND ar.occupied_end_at > :from1)
                  + (SELECT COUNT(*) FROM booking_hold_resources hr
                       JOIN booking_holds h ON h.tenant_id = hr.tenant_id AND h.id = hr.hold_id
                      WHERE hr.tenant_id = :t2 AND hr.resource_id = r.id

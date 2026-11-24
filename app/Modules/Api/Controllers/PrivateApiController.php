@@ -179,7 +179,7 @@ final class PrivateApiController
         $date = (string) ($body['date'] ?? '');
         $time = (string) ($body['time'] ?? '');
         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) !== 1 || preg_match('/^\d{2}:\d{2}$/', $time) !== 1) {
-            return ApiResponse::error('VALIDATION_FAILED', 'date (Y-m-d) and time (H:i) are required.', 422);
+            return ApiResponse::error('VALIDATION_FAILED', 'Provide date as Y-m-d and time as H:i.', 422);
         }
         $staffId = null;
         if (isset($body['staff']) && (string) $body['staff'] !== '') {
@@ -296,6 +296,7 @@ final class PrivateApiController
                 (int) $request->attribute('api_credential_id'),
                 'api_credential',
                 $reason,
+                !empty($request->body()['force']),
             );
         } catch (TransitionException $e) {
             return ApiResponse::error($e->apiCode, $e->getMessage(), $e->status, $e->fields ?: null);

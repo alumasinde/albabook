@@ -7,6 +7,7 @@ namespace App\Console\Commands;
 use App\Console\Command;
 use App\Console\Output;
 use App\Core\Database\Database;
+use App\Modules\Appointments\Repositories\AppointmentRepository;
 use App\Modules\Notifications\Services\AppointmentEventService;
 use App\Shared\Time\DateTimeService;
 
@@ -28,6 +29,7 @@ final class AuditDailyCommand implements Command
 {
     public function __construct(
         private readonly Database $db,
+        private readonly AppointmentRepository $appointments,
         private readonly DateTimeService $dates,
         private readonly AppointmentEventService $events,
     ) {}
@@ -69,7 +71,7 @@ final class AuditDailyCommand implements Command
             $stmt = $this->db->pdo()->prepare(
                 "SELECT id, uuid, status, version FROM appointments
                  WHERE tenant_id = :t AND end_at < :boundary
-                   AND status IN ('pending','confirmed','checked_in','in_service')
+                   AND status IN (SELECT code FROM appointment_statuses WHERE NOT is_terminal)
                  ORDER BY end_at",
             );
             $stmt->execute(['t' => $tenantId, 'boundary' => $boundaryDb]);
@@ -107,7 +109,9 @@ final class AuditDailyCommand implements Command
                 // side effects (customer notice, appointment.* outbox event,
                 // reminder cancellation) land together or not at all.
                 $applied = $this->db->transaction(function () use ($tenantId, $row, $to): bool {
-                    $newVersion = $this->appointmentsRepoUpdate($tenantId, (int) $row['id'], $to, (int) $row['version']);
+                    // updateStatus stamps {status}_at on top of the version
+                    // check, so audit transitions report like manual ones.
+                    $newVersion = $this->appointments->updateStatus($tenantId, (int) $row['id'], $to, (int) $row['version']);
                     if ($newVersion === null) {
                         return false; // raced with a staff action — next run picks it up
                     }
@@ -138,16 +142,5 @@ final class AuditDailyCommand implements Command
             : "Found {$totalStale} stale appointment(s)" . ($apply ? ", transitioned {$totalApplied}." : ' — re-run with --apply to transition pending→expired and confirmed→no_show.'));
 
         return 0;
-    }
-
-    private function appointmentsRepoUpdate(int $tenantId, int $id, string $status, int $expectedVersion): ?int
-    {
-        $stmt = $this->db->pdo()->prepare(
-            'UPDATE appointments SET status = :s, version = version + 1
-             WHERE tenant_id = :t AND id = :id AND version = :v',
-        );
-        $stmt->execute(['s' => $status, 't' => $tenantId, 'id' => $id, 'v' => $expectedVersion]);
-
-        return $stmt->rowCount() === 1 ? $expectedVersion + 1 : null;
     }
 }

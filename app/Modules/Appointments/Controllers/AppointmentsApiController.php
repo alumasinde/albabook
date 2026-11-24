@@ -95,22 +95,24 @@ final class AppointmentsApiController
         $events = $this->appointments->eventsFor($tenant->tenantId, (int) $row['id']);
         $resourceNames = $this->appointments->resourceNamesForAppointment($tenant->tenantId, (int) $row['id']);
 
+        $prefs = $this->appointments->visitWindowPrefs($tenant->tenantId);
+        $warnMode = $prefs['window_mode'] === 'warn';
         $allowed = array_values(array_filter(
-            $this->transitions->allowed((string) $row['status']),
+            $this->transitions->allowed((string) $row['status'], $prefs),
             fn(string $to) => ($perm = $this->transitions->permissionFor($to)) === null || $membership->can($perm),
         ));
 
         // Visit transitions are time-gated — tell the UI which actions are
         // outside their window so buttons disable with a reason instead of
-        // failing on submit.
-        $prefs = $this->appointments->visitWindowPrefs($tenant->tenantId);
+        // failing on submit. In warn mode they instead flag a confirmation.
         $transitionStates = [];
         foreach ($allowed as $to) {
             $issue = $this->transitions->timingError($to, (string) $row['start_at'], (string) $row['end_at'], $prefs);
             $transitionStates[$to] = [
-                'ok' => $issue === null,
+                'ok' => $issue === null || $warnMode,
                 'code' => $issue[0] ?? null,
                 'reason' => $issue[1] ?? null,
+                'requires_confirmation' => $warnMode && $issue !== null,
             ];
         }
 
@@ -142,6 +144,7 @@ final class AppointmentsApiController
             'notes' => $row['notes'] ?? null,
             'allowed_transitions' => $allowed,
             'transition_states' => $transitionStates,
+            'window_mode' => $prefs['window_mode'],
             'can_reschedule' => $membership->can('appointments.reschedule')
                 && in_array((string) $row['status'], ['pending', 'confirmed'], true),
             'can_manage_link' => $membership->can('appointments.view'),
@@ -174,7 +177,10 @@ final class AppointmentsApiController
         }
 
         try {
-            $row = $this->transitions->transition($tenant->tenantId, $uuid, $to, $version, $membership->actorUserId());
+            $row = $this->transitions->transition(
+                $tenant->tenantId, $uuid, $to, $version, $membership->actorUserId(),
+                force: !empty($body['force']),
+            );
         } catch (TransitionException $e) {
             return ApiResponse::error($e->apiCode, $e->getMessage(), $e->status, $e->fields ?: null);
         }

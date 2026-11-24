@@ -161,6 +161,23 @@
             <p class="mt-1 text-xs text-muted">{{ t('settings.no_show_grace_hint') }}</p>
           </div>
         </div>
+        <div class="mt-4 grid gap-4 sm:grid-cols-2">
+          <div>
+            <label for="visit-window-mode" class="field-label">{{ t('settings.visit_window_mode_label') }}</label>
+            <select id="visit-window-mode" class="input mt-1" data-visit-window-mode {% if not membership.can('settings.update') %}disabled{% endif %}>
+              <option value="strict">{{ t('settings.visit_window_mode_strict') }}</option>
+              <option value="warn">{{ t('settings.visit_window_mode_warn') }}</option>
+            </select>
+            <p class="mt-1 text-xs text-muted">{{ t('settings.visit_window_mode_hint') }}</p>
+          </div>
+          <div class="flex items-start gap-3 pt-6">
+            <input id="require-check-in" type="checkbox" class="mt-1 h-4 w-4" data-require-check-in {% if not membership.can('settings.update') %}disabled{% endif %}>
+            <div>
+              <label for="require-check-in" class="field-label">{{ t('settings.require_check_in_label') }}</label>
+              <p class="mt-1 text-xs text-muted">{{ t('settings.require_check_in_hint') }}</p>
+            </div>
+          </div>
+        </div>
       </div>
       {% if membership.can('settings.update') %}
       <button type="button" class="btn btn-primary btn-md mt-5" data-policy-save>

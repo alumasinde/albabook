@@ -16,6 +16,7 @@ use App\Modules\Booking\Repositories\BookingHoldRepository;
 use App\Modules\Booking\Repositories\BookingPageRepository;
 use App\Modules\Booking\Services\AvailabilityService;
 use App\Modules\Booking\Services\BookingHoldService;
+use App\Modules\Notifications\Repositories\NotificationRepository;
 use App\Shared\Http\ApiResponse;
 use App\Shared\Http\AppUrl;
 use App\Shared\Security\RateLimiter;
@@ -49,8 +50,7 @@ final class PublicBookingApiController
         private readonly DateTimeService $dates,
         private readonly RateLimiter $limiter,
         private readonly Config $config,
-        private readonly \App\Core\Database\Database $db,
-        private readonly \App\Shared\Support\UuidFactory $uuids,
+        private readonly NotificationRepository $notifications,
     ) {}
 
     /** @param array<string, string> $params */
@@ -136,13 +136,13 @@ final class PublicBookingApiController
             return ApiResponse::error('VALIDATION_FAILED', 'Pick a valid date range.', 422, ['from' => 'Valid Y-m-d range required.']);
         }
         $maxRange = $this->config->int('booking.availability_max_range_days', 62);
-        if ((strtotime($to) - strtotime($from)) / 86400 > $maxRange) {
+        $cursor = new \DateTimeImmutable($from, new \DateTimeZone('UTC'));
+        $last = new \DateTimeImmutable($to, new \DateTimeZone('UTC'));
+        if ((int) $cursor->diff($last)->format('%a') > $maxRange) {
             return ApiResponse::error('VALIDATION_FAILED', "Range may not exceed {$maxRange} days.", 422, ['to' => 'Range too large.']);
         }
 
         $days = [];
-        $cursor = new \DateTimeImmutable($from, new \DateTimeZone('UTC'));
-        $last = new \DateTimeImmutable($to, new \DateTimeZone('UTC'));
         while ($cursor <= $last) {
             $date = $cursor->format('Y-m-d');
             $days[] = [
@@ -742,17 +742,7 @@ final class PublicBookingApiController
             'manage_url' => $manageUrl,
         ], JSON_THROW_ON_ERROR);
 
-        $this->db->pdo()->prepare(
-            "INSERT INTO notification_queue (uuid, tenant_id, appointment_id, channel, recipient, payload, status)
-             VALUES (:u, :t, :a, :c, :r, :p, 'pending')",
-        )->execute([
-            'u' => $this->uuids->generate(),
-            't' => $tenantId,
-            'a' => (int) $appointment['id'],
-            'c' => $channel,
-            'r' => $recipient,
-            'p' => $payload,
-        ]);
+        $this->notifications->enqueue($tenantId, (int) $appointment['id'], $channel, $recipient, $payload);
     }
 
     /** @param array<string, mixed> $tenant */
