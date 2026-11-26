@@ -39,6 +39,12 @@ return [
         'verification_resend_max_per_hour' => 5,
     ],
 
+    'invite' => [
+        // Outbound-mail guard: per actor and per business, per hour.
+        'actor_max_per_hour' => 20,
+        'tenant_max_per_hour' => 60,
+    ],
+
     'mfa' => [
         'issuer' => env('APP_NAME', 'AlbaBook'),
         'digits' => 6,

@@ -91,6 +91,21 @@ final class ApiCredentialRepository
         return $stmt->rowCount() > 0;
     }
 
+    /**
+     * Kill every live credential minted by one user — used on password change
+     * and reset so a stolen key cannot outlive the password it was issued under.
+     */
+    public function revokeAllForUser(int $userId): int
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'UPDATE api_credentials SET revoked_at = UTC_TIMESTAMP()
+             WHERE created_by_user_id = :u AND revoked_at IS NULL',
+        );
+        $stmt->execute(['u' => $userId]);
+
+        return $stmt->rowCount();
+    }
+
     /** Cheap last-used stamp — only written once per minute per credential. */
     public function touchLastUsed(int $credentialId): void
     {

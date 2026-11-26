@@ -47,7 +47,14 @@ final class LoginFailureAuditTest extends Phase2TestCase
             $this->hasher,
             new RateLimiter($this->db, $this->clock),
             new SessionService($this->config, $this->clock, new SessionRepository($this->db), $cookies),
-            new RememberService($this->config, $this->clock, new RememberTokenRepository($this->db), $cookies),
+            new RememberService(
+                $this->config,
+                $this->clock,
+                new RememberTokenRepository($this->db),
+                $cookies,
+                new SessionRepository($this->db),
+                $audit,
+            ),
             $audit,
         );
     }

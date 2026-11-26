@@ -23,6 +23,9 @@ return [
         'lifetime_days' => 30,
         'cookie_secure' => '__Host-albabook_remember',
         'cookie_insecure' => 'albabook_remember',
+        // A spent token replayed inside this window is treated as a
+        // parallel-request race; beyond it, as theft (revoke everything).
+        'reuse_grace_seconds' => 60,
     ],
 
     // Signed entry token for audited support sessions on the tenant host.

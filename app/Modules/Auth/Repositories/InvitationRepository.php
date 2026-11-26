@@ -131,11 +131,20 @@ final class InvitationRepository
         )->execute(['at' => $at, 'tenant_id' => $tenantId, 'email' => $email]);
     }
 
-    public function accept(int $id, string $at): void
+    /**
+     * Claim an invitation atomically: exactly one concurrent acceptance can
+     * flip accepted_at from NULL, so a double submit cannot create two
+     * memberships from one link.
+     */
+    public function accept(int $id, string $at): bool
     {
-        $this->db->pdo()->prepare(
-            'UPDATE tenant_invitations SET accepted_at = COALESCE(accepted_at, :at) WHERE id = :id',
-        )->execute(['at' => $at, 'id' => $id]);
+        $stmt = $this->db->pdo()->prepare(
+            'UPDATE tenant_invitations SET accepted_at = :at
+             WHERE id = :id AND accepted_at IS NULL AND revoked_at IS NULL',
+        );
+        $stmt->execute(['at' => $at, 'id' => $id]);
+
+        return $stmt->rowCount() === 1;
     }
 
     public function revoke(int $id, string $at): void

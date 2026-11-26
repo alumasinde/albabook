@@ -7,6 +7,7 @@ namespace App\Modules\Auth\Services;
 use App\Core\Config\Config;
 use App\Core\Http\Request;
 use App\Core\Validation\ValidationException;
+use App\Modules\Api\Services\ApiCredentialRevoker;
 use App\Modules\Auth\Exceptions\InvalidTokenException;
 use App\Modules\Auth\Repositories\PasswordResetTokenRepository;
 use App\Modules\Auth\Repositories\RememberTokenRepository;
@@ -41,6 +42,7 @@ final class PasswordResetService
         private readonly RateLimiter $limiter,
         private readonly AuthMailer $mailer,
         private readonly AuditLogger $audit,
+        private readonly ApiCredentialRevoker $apiCredentials,
     ) {}
 
     public function genericMessage(): string
@@ -121,6 +123,7 @@ final class PasswordResetService
         $this->users->updatePasswordHash($userId, $hash);
         $this->sessions->revokeAllForUser($userId, $now);
         $this->rememberTokens->revokeAllForUser($userId, $now);
+        $this->apiCredentials->revokeForUser($userId, $request);
 
         $this->audit->record(new AuditEntry(
             action: AuditAction::PASSWORD_RESET,

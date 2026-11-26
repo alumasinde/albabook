@@ -45,21 +45,21 @@ final class SessionCookieNames
      */
     public function csrfBinding(Request $request): string
     {
-        $userToken = $request->cookie($this->user($request));
-        if ($userToken !== null && $userToken !== '') {
-            return 'app|' . hash('sha256', $userToken);
-        }
-
-        $platformToken = $request->cookie($this->platform($request));
-        if ($platformToken !== null && $platformToken !== '') {
-            return 'admin|' . hash('sha256', $platformToken);
-        }
-
+        // Each host group binds to its own session cookie: a tenant session
+        // must never lend its CSRF binding to the admin app or vice versa.
         if ($request->hostGroup() === HostGroup::Admin) {
-            return 'admin|';
+            $platformToken = $request->cookie($this->platform($request));
+
+            return $platformToken !== null && $platformToken !== ''
+                ? 'admin|' . hash('sha256', $platformToken)
+                : 'admin|';
         }
 
-        return 'app|';
+        $userToken = $request->cookie($this->user($request));
+
+        return $userToken !== null && $userToken !== ''
+            ? 'app|' . hash('sha256', $userToken)
+            : 'app|';
     }
 
     private function name(string $secureKey, string $insecureKey, Request $request): string

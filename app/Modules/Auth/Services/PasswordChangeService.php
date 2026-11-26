@@ -6,6 +6,7 @@ namespace App\Modules\Auth\Services;
 
 use App\Core\Http\Request;
 use App\Core\Validation\ValidationException;
+use App\Modules\Api\Services\ApiCredentialRevoker;
 use App\Modules\Auth\Exceptions\InvalidCredentialsException;
 use App\Modules\Auth\Repositories\RememberTokenRepository;
 use App\Modules\Auth\Repositories\SessionRepository;
@@ -33,6 +34,7 @@ final class PasswordChangeService
         private readonly PasswordPolicy $policy,
         private readonly AuthMailer $mailer,
         private readonly AuditLogger $audit,
+        private readonly ApiCredentialRevoker $apiCredentials,
     ) {}
 
     /**
@@ -73,6 +75,7 @@ final class PasswordChangeService
         $this->users->updatePasswordHash($userId, $this->hasher->hash($newPassword));
         $this->sessions->revokeAllForUser($userId, $now, $currentSessionId);
         $this->rememberTokens->revokeAllForUser($userId, $now);
+        $this->apiCredentials->revokeForUser($userId, $request);
 
         $this->audit->record(new AuditEntry(
             action: AuditAction::PASSWORD_CHANGED,

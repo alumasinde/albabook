@@ -22,6 +22,7 @@ final class AuditAction
     public const MFA_DISABLED = 'auth.mfa_disabled';
     public const MFA_RECOVERY_USED = 'auth.mfa_recovery_used';
     public const SESSION_REVOKED = 'auth.session_revoked';
+    public const REMEMBER_TOKEN_REUSED = 'auth.remember_token_reused';
 
     public const TENANT_REGISTERED = 'tenant.registered';
     public const TENANT_SLUG_RENAMED = 'tenant.slug_renamed';
@@ -38,6 +39,11 @@ final class AuditAction
 
     public const SUPPORT_STARTED = 'support.started';
     public const SUPPORT_ENDED = 'support.ended';
+
+    public const API_CREDENTIAL_CREATED = 'integration.api_credential_created';
+    public const API_CREDENTIAL_ROTATED = 'integration.api_credential_rotated';
+    public const API_CREDENTIAL_REVOKED = 'integration.api_credential_revoked';
+    public const API_CREDENTIALS_REVOKED = 'integration.api_credentials_revoked';
 
     public const PLAN_ASSIGNED = 'platform.plan_assigned';
     public const PLAN_CREATED = 'platform.plan_created';

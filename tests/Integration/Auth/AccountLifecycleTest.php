@@ -8,6 +8,8 @@ use App\Core\Http\Request;
 use App\Core\Http\RequestContext;
 use App\Core\Validation\ValidationException;
 use App\Core\Validation\Validator;
+use App\Modules\Api\Repositories\ApiCredentialRepository;
+use App\Modules\Api\Services\ApiCredentialRevoker;
 use App\Modules\Auth\Exceptions\InvalidTokenException;
 use App\Modules\Auth\Repositories\PasswordResetTokenRepository;
 use App\Modules\Auth\Repositories\RememberTokenRepository;
@@ -84,6 +86,7 @@ final class AccountLifecycleTest extends Phase2TestCase
             $limiter,
             $mailer,
             $audit,
+            new ApiCredentialRevoker(new ApiCredentialRepository($this->db), $audit),
         );
     }
 

@@ -8,7 +8,11 @@ use App\Core\Http\Request;
 use App\Core\Http\Response;
 use App\Modules\Api\Repositories\ApiCredentialRepository;
 use App\Modules\Auth\Context\MembershipContext;
+use App\Modules\Auth\Services\StepUpService;
 use App\Modules\Integrations\Repositories\IntegrationRepository;
+use App\Shared\Audit\AuditAction;
+use App\Shared\Audit\AuditEntry;
+use App\Shared\Audit\AuditLogger;
 use App\Shared\Http\ApiResponse;
 use App\Shared\Security\Encrypter;
 use App\Shared\Support\UuidFactory;
@@ -17,8 +21,11 @@ use App\Tenancy\TenantContext;
 /**
  * Private JSON API for webhook integrations (session-authenticated,
  * D-008). Reads require integrations.view; mutations require
- * integrations.manage. Signing secrets are generated server-side,
- * stored encrypted and returned exactly once on creation.
+ * integrations.manage. Credential mutations (audited) and endpoint
+ * changes that issue a secret, re-point or delete a webhook also
+ * require a step-up (fresh MFA or the current password). Signing
+ * secrets are generated server-side, stored encrypted and returned
+ * exactly once on creation.
  */
 final class IntegrationsApiController
 {
@@ -54,6 +61,8 @@ final class IntegrationsApiController
         private readonly ApiCredentialRepository $credentials,
         private readonly UuidFactory $uuids,
         private readonly Encrypter $encrypter,
+        private readonly StepUpService $stepUp,
+        private readonly AuditLogger $audit,
     ) {}
 
     /** @param array<string, string> $params */
@@ -85,6 +94,10 @@ final class IntegrationsApiController
         [$tenant, $membership] = $this->context($request);
         if (!$membership->can('integrations.manage')) {
             return ApiResponse::error('FORBIDDEN', 'You do not have permission to manage integrations.', 403);
+        }
+        $guard = $this->stepUpGuard($request, $membership);
+        if ($guard !== null) {
+            return $guard;
         }
 
         $body = $request->body();
@@ -129,12 +142,21 @@ final class IntegrationsApiController
             return ApiResponse::error('FORBIDDEN', 'You do not have permission to manage integrations.', 403);
         }
 
+        $body = $request->body();
+        // Re-pointing an endpoint (URL or events) is step-up territory;
+        // pause/resume is a reversible toggle and stays frictionless.
+        if (array_key_exists('url', $body) || array_key_exists('event_types', $body)) {
+            $guard = $this->stepUpGuard($request, $membership);
+            if ($guard !== null) {
+                return $guard;
+            }
+        }
+
         $endpoint = $this->integrations->findEndpoint($tenant->tenantId, (string) $params['uuid']);
         if ($endpoint === null) {
             return ApiResponse::error('NOT_FOUND', 'Endpoint not found.', 404);
         }
 
-        $body = $request->body();
         $data = [];
         $fields = [];
 
@@ -173,6 +195,11 @@ final class IntegrationsApiController
         [$tenant, $membership] = $this->context($request);
         if (!$membership->can('integrations.manage')) {
             return ApiResponse::error('FORBIDDEN', 'You do not have permission to manage integrations.', 403);
+        }
+
+        $guard = $this->stepUpGuard($request, $membership);
+        if ($guard !== null) {
+            return $guard;
         }
 
         $endpoint = $this->integrations->findEndpoint($tenant->tenantId, (string) $params['uuid']);
@@ -231,6 +258,10 @@ final class IntegrationsApiController
         if (!$membership->can('integrations.manage')) {
             return ApiResponse::error('FORBIDDEN', 'You do not have permission to manage integrations.', 403);
         }
+        $guard = $this->stepUpGuard($request, $membership);
+        if ($guard !== null) {
+            return $guard;
+        }
 
         $body = $request->body();
         [$scopes, $scopeError] = $this->validScopes($body['scopes'] ?? null);
@@ -251,8 +282,9 @@ final class IntegrationsApiController
         }
 
         [$token, $publicId, $secretHash] = self::mintToken();
+        $uuid = $this->uuids->generate();
         $this->credentials->insert([
-            'uuid' => $this->uuids->generate(),
+            'uuid' => $uuid,
             'tenant_id' => $tenant->tenantId,
             'public_id' => $publicId,
             'secret_hash' => $secretHash,
@@ -260,6 +292,17 @@ final class IntegrationsApiController
             'expires_at' => $expiresAt !== null ? $expiresAt . ' 00:00:00' : null,
             'created_by_user_id' => $membership->actorUserId(),
         ]);
+
+        $this->audit->record(new AuditEntry(
+            action: AuditAction::API_CREDENTIAL_CREATED,
+            tenantId: $tenant->tenantId,
+            actorType: 'tenant_user',
+            actorId: $membership->actorUserId(),
+            targetType: 'api_credential',
+            targetId: $uuid,
+            after: ['public_id' => $publicId, 'scopes' => $scopes, 'expires_at' => $expiresAt],
+            request: $request,
+        ));
 
         return ApiResponse::ok([
             'token' => $token, // shown once — never returned again
@@ -282,6 +325,11 @@ final class IntegrationsApiController
             return ApiResponse::error('FORBIDDEN', 'You do not have permission to manage integrations.', 403);
         }
 
+        $guard = $this->stepUpGuard($request, $membership);
+        if ($guard !== null) {
+            return $guard;
+        }
+
         $credential = $this->credentials->findByUuid($tenant->tenantId, (string) $params['uuid']);
         if ($credential === null) {
             return ApiResponse::error('NOT_FOUND', 'Credential not found.', 404);
@@ -289,6 +337,17 @@ final class IntegrationsApiController
 
         [$token, $publicId, $secretHash] = self::mintToken();
         $this->credentials->updateSecret($tenant->tenantId, (int) $credential['id'], $publicId, $secretHash);
+
+        $this->audit->record(new AuditEntry(
+            action: AuditAction::API_CREDENTIAL_ROTATED,
+            tenantId: $tenant->tenantId,
+            actorType: 'tenant_user',
+            actorId: $membership->actorUserId(),
+            targetType: 'api_credential',
+            targetId: (string) $credential['uuid'],
+            after: ['public_id' => $publicId],
+            request: $request,
+        ));
 
         return ApiResponse::ok([
             'token' => $token, // shown once — never returned again
@@ -307,12 +366,27 @@ final class IntegrationsApiController
             return ApiResponse::error('FORBIDDEN', 'You do not have permission to manage integrations.', 403);
         }
 
+        $guard = $this->stepUpGuard($request, $membership);
+        if ($guard !== null) {
+            return $guard;
+        }
+
         $credential = $this->credentials->findByUuid($tenant->tenantId, (string) $params['uuid']);
         if ($credential === null) {
             return ApiResponse::error('NOT_FOUND', 'Credential not found.', 404);
         }
 
-        $this->credentials->revoke($tenant->tenantId, (string) $credential['uuid']);
+        if ($this->credentials->revoke($tenant->tenantId, (string) $credential['uuid'])) {
+            $this->audit->record(new AuditEntry(
+                action: AuditAction::API_CREDENTIAL_REVOKED,
+                tenantId: $tenant->tenantId,
+                actorType: 'tenant_user',
+                actorId: $membership->actorUserId(),
+                targetType: 'api_credential',
+                targetId: (string) $credential['uuid'],
+                request: $request,
+            ));
+        }
 
         return ApiResponse::ok(['saved' => true]);
     }
@@ -336,6 +410,21 @@ final class IntegrationsApiController
     private function context(Request $request): array
     {
         return [$request->attribute('tenant'), $request->attribute('membership')];
+    }
+
+    /** Credential mutations need a step-up; the UI answers this with a password prompt. */
+    private function stepUpGuard(Request $request, MembershipContext $membership): ?Response
+    {
+        $actorId = $membership->actorUserId();
+        if ($actorId === null) {
+            return ApiResponse::error('FORBIDDEN', 'Credential changes require a signed-in account member.', 403);
+        }
+        $error = $this->stepUp->confirm($request, $actorId);
+        if ($error === null) {
+            return null;
+        }
+
+        return ApiResponse::error('STEP_UP_REQUIRED', $error, 403, ['current_password' => $error]);
     }
 
     /** @param array<string, mixed> $row

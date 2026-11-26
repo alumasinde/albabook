@@ -111,7 +111,7 @@ final class MfaService
             action: $subject === MfaSubject::PlatformUser
                 ? AuditAction::PLATFORM_MFA_ENROLLED
                 : AuditAction::MFA_ENROLLED,
-            actorType: $subject === MfaSubject::PlatformUser ? 'platform_user' : 'user',
+            actorType: $subject === MfaSubject::PlatformUser ? 'platform_user' : 'tenant_user',
             actorId: $ownerId,
             targetType: $subject === MfaSubject::PlatformUser ? 'platform_user' : 'user',
             targetId: (string) $ownerId,
@@ -149,7 +149,7 @@ final class MfaService
         if ($consumed) {
             $this->audit->record(new AuditEntry(
                 action: AuditAction::MFA_RECOVERY_USED,
-                actorType: $subject === MfaSubject::PlatformUser ? 'platform_user' : 'user',
+                actorType: $subject === MfaSubject::PlatformUser ? 'platform_user' : 'tenant_user',
                 actorId: $ownerId,
                 targetType: 'recovery_code',
                 targetId: null,
@@ -177,7 +177,7 @@ final class MfaService
 
         $this->audit->record(new AuditEntry(
             action: AuditAction::MFA_DISABLED,
-            actorType: $subject === MfaSubject::PlatformUser ? 'platform_user' : 'user',
+            actorType: $subject === MfaSubject::PlatformUser ? 'platform_user' : 'tenant_user',
             actorId: $ownerId,
             targetType: $subject === MfaSubject::PlatformUser ? 'platform_user' : 'user',
             targetId: (string) $ownerId,

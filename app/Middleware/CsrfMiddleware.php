@@ -49,10 +49,14 @@ final class CsrfMiddleware implements MiddlewareInterface
             // The support entry exchange arrives as a cross-host POST from the
             // admin console. Its credential is a single-use, short-lived code,
             // so a forged request can only waste the attacker's own code.
-            if ($request->path() === '/support/enter') {
+            if (
+                $request->method() === 'POST'
+                && $request->hostGroup() === HostGroup::Tenant
+                && $request->path() === '/support/enter'
+            ) {
                 return $next($request);
             }
-            if (!$this->originAllowed($request)) {
+            if (!$this->originAllowed($request) || $this->crossSiteNavigation($request)) {
                 throw HttpException::csrfMismatch();
             }
             // Booking host: no sessions or ambient authority — writes are
@@ -101,15 +105,29 @@ final class CsrfMiddleware implements MiddlewareInterface
             : $this->config->string('security.csrf.cookie_insecure', 'albabook_csrf');
     }
 
-    /** A present Origin must be this exact host; an absent Origin falls back to the token check. */
+    /**
+     * A present Origin must match the request's scheme and host; an absent
+     * Origin falls back to the token check.
+     */
     private function originAllowed(Request $request): bool
     {
         $origin = $request->header('origin');
         if ($origin === null || $origin === '') {
             return true;
         }
-        $host = parse_url($origin, PHP_URL_HOST);
+        $parts = parse_url($origin);
+        if (!is_array($parts) || !isset($parts['host'])) {
+            return false;
+        }
+        $scheme = $request->isSecure() ? 'https' : 'http';
 
-        return is_string($host) && strtolower($host) === $request->host();
+        return strtolower((string) $parts['host']) === $request->host()
+            && strtolower((string) ($parts['scheme'] ?? '')) === $scheme;
+    }
+
+    /** Browsers stamp Sec-Fetch-Site; a cross-site request is never our own UI. */
+    private function crossSiteNavigation(Request $request): bool
+    {
+        return strtolower((string) $request->header('sec-fetch-site')) === 'cross-site';
     }
 }

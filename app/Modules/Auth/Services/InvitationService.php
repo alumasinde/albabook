@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\Auth\Services;
 
-use App\Modules\Auth\Context\MembershipContext;
 use App\Core\Config\Config;
 use App\Core\Database\Database;
 use App\Core\Http\Request;
 use App\Core\Validation\ValidationException;
 use App\Core\Validation\Validator;
 use App\Modules\Auth\Context\AuthenticatedUser;
+use App\Modules\Auth\Context\MembershipContext;
 use App\Modules\Auth\Exceptions\InvalidTokenException;
 use App\Modules\Auth\Repositories\InvitationRepository;
 use App\Modules\Auth\Repositories\UserRepository;
@@ -19,6 +19,7 @@ use App\Shared\Audit\AuditEntry;
 use App\Shared\Audit\AuditLogger;
 use App\Shared\Security\PasswordHasher;
 use App\Shared\Security\PasswordPolicy;
+use App\Shared\Security\RateLimiter;
 use App\Shared\Security\SecureToken;
 use App\Shared\Support\UuidFactory;
 use App\Shared\Time\Clock;
@@ -50,6 +51,7 @@ final class InvitationService
         private readonly AuthMailer $mailer,
         private readonly UuidFactory $uuids,
         private readonly AuditLogger $audit,
+        private readonly RateLimiter $limiter,
     ) {}
 
     /**
@@ -62,6 +64,21 @@ final class InvitationService
             'email' => ['required', 'string', 'email'],
         ]);
         $email = strtolower((string) $data['email']);
+
+        // Unverified accounts cannot make an email prove someone else's
+        // address (auth.md §5); an invitation is a trust assertion.
+        $inviter = $this->users->findById($actor->userId);
+        if ($inviter === null || $inviter['email_verified_at'] === null) {
+            throw new ValidationException([
+                'email' => 'Verify your own email address before inviting team members.',
+            ]);
+        }
+
+        if (!$this->withinInviteLimit($tenant->tenantId, $actor->userId)) {
+            throw new ValidationException([
+                'email' => 'Too many invitations sent. Try again later.',
+            ]);
+        }
 
         $roleIds = $this->requestedRoleIds($tenant->tenantId, $input, $actor);
 
@@ -147,6 +164,12 @@ final class InvitationService
         );
 
         $userId = $this->db->transaction(function () use ($data, $email, $invitation, $tenantId, $roleIds, $now): int {
+            // Claim the link first: a racing second submit rolls back here
+            // before it can create an account or membership.
+            if (!$this->invitations->accept((int) $invitation['id'], $now)) {
+                throw new InvalidTokenException('This invitation is invalid, expired or already used.');
+            }
+
             $userId = $this->users->create([
                 'first_name' => (string) $data['first_name'],
                 'middle_name' => $data['middle_name'] === null ? null : (string) $data['middle_name'],
@@ -165,7 +188,6 @@ final class InvitationService
                 (int) $invitation['invited_by_user_id'],
             );
             $this->assignRoles($tenantId, $tenantUserId, $roleIds);
-            $this->invitations->accept((int) $invitation['id'], $now);
 
             return $userId;
         });
@@ -208,6 +230,10 @@ final class InvitationService
         $now = $this->clock->now()->format('Y-m-d H:i:s');
 
         $this->db->transaction(function () use ($user, $invitation, $tenantId, $roleIds, $now): void {
+            if (!$this->invitations->accept((int) $invitation['id'], $now)) {
+                throw new InvalidTokenException('This invitation is invalid, expired or already used.');
+            }
+
             $membership = $this->memberships->find($user->id, $tenantId);
             if ($membership === null) {
                 $tenantUserId = $this->memberships->create(
@@ -227,7 +253,6 @@ final class InvitationService
             }
 
             $this->assignRoles($tenantId, $tenantUserId, $roleIds);
-            $this->invitations->accept((int) $invitation['id'], $now);
         });
 
         $this->audit->record(new AuditEntry(
@@ -341,6 +366,20 @@ final class InvitationService
         foreach ($roleIds as $roleId) {
             $this->roles->assignRole($tenantId, $tenantUserId, $roleId);
         }
+    }
+
+    /** Per actor and per tenant hourly ceilings, so invitations cannot be used for mail bombing. */
+    private function withinInviteLimit(int $tenantId, int $userId): bool
+    {
+        return $this->limiter->hit(
+            'invite:user:' . $userId,
+            $this->config->int('auth.invite.actor_max_per_hour', 20),
+            3600,
+        )->allowed && $this->limiter->hit(
+            'invite:tenant:' . $tenantId,
+            $this->config->int('auth.invite.tenant_max_per_hour', 60),
+            3600,
+        )->allowed;
     }
 
     private function actorName(int $userId): string

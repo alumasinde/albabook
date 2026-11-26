@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Integration\Auth;
 
-use App\Modules\Auth\Context\MembershipContext;
 use App\Core\Http\Request;
 use App\Core\Http\RequestContext;
 use App\Core\Validation\ValidationException;
 use App\Core\Validation\Validator;
 use App\Modules\Auth\Context\AuthenticatedUser;
+use App\Modules\Auth\Context\MembershipContext;
 use App\Modules\Auth\Exceptions\InvalidTokenException;
 use App\Modules\Auth\Repositories\InvitationRepository;
 use App\Modules\Auth\Services\AuthMailer;
@@ -19,6 +19,7 @@ use App\Shared\Audit\AuditLogger;
 use App\Shared\Http\AppUrl;
 use App\Shared\Security\PasswordHasher;
 use App\Shared\Security\PasswordPolicy;
+use App\Shared\Security\RateLimiter;
 use App\Tenancy\TenantContext;
 use App\Tenancy\TenantResolver;
 use Tests\Integration\Support\Phase2TestCase;
@@ -57,6 +58,7 @@ final class InvitationRoleScopeTest extends Phase2TestCase
             new AuthMailer($this->mailer, new AppUrl($this->config), $this->config),
             $this->uuids,
             $audit,
+            new RateLimiter($this->db, $this->clock),
         );
     }
 
@@ -115,6 +117,26 @@ final class InvitationRoleScopeTest extends Phase2TestCase
         $audit = $this->pdo->prepare('SELECT COUNT(*) FROM audit_logs WHERE action = :action AND tenant_id = :tenant_id');
         $audit->execute(['action' => AuditAction::INVITATION_ACCEPTED, 'tenant_id' => $tenant['tenant_id']]);
         self::assertSame(1, (int) $audit->fetchColumn());
+    }
+
+    public function testAnUnverifiedMemberCannotInvite(): void
+    {
+        $ownerId = $this->createUser($this->uniqueEmail('owner'), verified: false);
+        $tenant = $this->provision($ownerId);
+
+        try {
+            $this->invitations->invite(
+                $this->tenantOf($ownerId, $tenant['tenant_id']),
+                $this->actor($ownerId, $tenant['tenant_id'], $tenant['tenant_user_id'], ['owner']),
+                ['email' => $this->uniqueEmail('invitee'), 'role_ids' => [(string) $this->roleId($tenant['tenant_id'], 'staff')]],
+                $this->request(),
+            );
+            self::fail('An unverified member must not be able to invite.');
+        } catch (ValidationException $e) {
+            self::assertStringContainsString('Verify your own email', $e->errors['email']);
+        }
+
+        self::assertCount(0, $this->mailer->messages);
     }
 
     public function testAnotherTenantsRoleCannotBeGranted(): void
