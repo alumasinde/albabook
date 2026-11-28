@@ -9,6 +9,7 @@ use App\Core\Http\Request;
 use App\Core\Http\Response;
 use App\Modules\Auth\Context\MembershipContext;
 use App\Modules\Booking\Repositories\BookingEditorRepository;
+use App\Modules\Tenants\Services\SetupReadiness;
 use App\Shared\Http\ApiResponse;
 use App\Shared\Support\HostMap;
 use App\Shared\Support\UuidFactory;
@@ -32,6 +33,7 @@ final class BookingEditorApiController
         private readonly Database $db,
         private readonly UuidFactory $uuids,
         private readonly HostMap $hosts,
+        private readonly SetupReadiness $readiness,
     ) {}
 
     /** Current settings, sections, FAQs, publish history + the live URL.
@@ -82,6 +84,12 @@ final class BookingEditorApiController
         $seoDesc = $this->shortText($body, 'seo_description', 160, $fields);
         $ogTitle = $this->shortText($body, 'og_title', 70, $fields);
         $ogDesc = $this->shortText($body, 'og_description', 160, $fields);
+
+        // Go-live gate (update.md 2.4): never switch on a page that cannot
+        // take a booking. Switching off is always allowed.
+        if (!empty($body['is_enabled']) && ($blockers = $this->readiness->blockers($tenant->tenantId)) !== []) {
+            return $this->notReady($blockers);
+        }
 
         $data = [
             'is_enabled' => !empty($body['is_enabled']) ? 1 : 0,
@@ -243,6 +251,9 @@ final class BookingEditorApiController
         if (!$membership->can('booking_page.publish')) {
             return ApiResponse::error('FORBIDDEN', 'You do not have permission to publish the booking page.', 403);
         }
+        if (($blockers = $this->readiness->blockers($tenant->tenantId)) !== []) {
+            return $this->notReady($blockers);
+        }
 
         $settings = $this->editor->settings($tenant->tenantId);
         $snapshot = json_encode([
@@ -266,6 +277,17 @@ final class BookingEditorApiController
     }
 
     /* ------------------------------------------------------------------ */
+
+    /** @param list<string> $blockers */
+    private function notReady(array $blockers): Response
+    {
+        return ApiResponse::error(
+            'NOT_READY',
+            'Your booking page cannot go live yet: ' . implode('; ', $blockers) . '.',
+            422,
+            ['missing' => $blockers],
+        );
+    }
 
     /** Absolute public booking URL; keeps the dev-server port when present. */
     private function bookingUrl(Request $request, string $slug): string

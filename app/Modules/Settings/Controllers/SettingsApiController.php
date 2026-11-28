@@ -9,6 +9,10 @@ use App\Core\Http\Response;
 use App\Modules\Auth\Context\MembershipContext;
 use App\Modules\Billing\Services\FeatureGate;
 use App\Modules\Notifications\Services\ChannelSender;
+use App\Modules\Notifications\Services\WhatsAppSettings;
+use App\Modules\Tax\Etims\EtimsException;
+use App\Modules\Tax\Etims\EtimsService;
+use App\Modules\Payments\Mpesa\MpesaCredentials;
 use App\Modules\Settings\Repositories\SettingsRepository;
 use App\Modules\Till\Support\ReceiptSettings;
 use App\Shared\Http\ApiResponse;
@@ -31,6 +35,8 @@ final class SettingsApiController
         private readonly Encrypter $encrypter,
         private readonly FeatureGate $features,
         private readonly ChannelSender $sender,
+        private readonly WhatsAppSettings $whatsapp,
+        private readonly EtimsService $etimsService,
     ) {}
 
     /** Workspace profile + display preferences + dropdown metadata.
@@ -206,7 +212,123 @@ final class SettingsApiController
                 'sms' => $this->sender->platformConfigured('sms'),
                 'whatsapp' => $this->sender->platformConfigured('whatsapp'),
             ],
+            'whatsapp' => $this->whatsapp->describe($tenant->tenantId),
+            'business_alerts' => $this->businessAlerts($tenant->tenantId),
         ]);
+    }
+
+    /** @return array{phone: string} */
+    private function businessAlerts(int $tenantId): array
+    {
+        $raw = $this->settings->jsonPreferences($tenantId)['business_alerts'] ?? [];
+
+        return ['phone' => is_array($raw) ? (string) ($raw['phone'] ?? '') : ''];
+    }
+
+    /** Alert phone for new-booking / cancellation SMS to the business.
+     * @param array<string, string> $params
+     */
+    public function updateBusinessAlerts(Request $request, array $params): Response
+    {
+        [$tenant, $membership] = $this->context($request);
+        if (!$membership->can('settings.update')) {
+            return ApiResponse::error('FORBIDDEN', 'You do not have permission to update settings.', 403);
+        }
+        $raw = trim((string) ($request->body()['phone'] ?? ''));
+        $phone = '';
+        if ($raw !== '') {
+            $phone = \App\Shared\Validation\PhoneNumber::normalise($raw) ?? '';
+            if ($phone === '') {
+                return ApiResponse::error('VALIDATION', 'Fix the highlighted fields.', 422, ['phone' => 'Enter a valid phone number, e.g. 0712 345 678.']);
+            }
+        }
+        $this->settings->updateJsonPreferences($tenant->tenantId, 'business_alerts', ['phone' => $phone]);
+
+        return ApiResponse::ok($this->businessAlerts($tenant->tenantId));
+    }
+
+    /** KRA eTIMS setup (never returns the communication key).
+     * @param array<string, string> $params
+     */
+    public function etims(Request $request, array $params): Response
+    {
+        [$tenant, $membership] = $this->context($request);
+        if (!$membership->can('settings.view')) {
+            return ApiResponse::error('FORBIDDEN', 'You do not have permission to view settings.', 403);
+        }
+
+        return ApiResponse::ok($this->etimsService->describe($tenant->tenantId));
+    }
+
+    /** @param array<string, string> $params */
+    public function updateEtims(Request $request, array $params): Response
+    {
+        [$tenant, $membership] = $this->context($request);
+        if (!$membership->can('settings.update')) {
+            return ApiResponse::error('FORBIDDEN', 'You do not have permission to update settings.', 403);
+        }
+        $errors = $this->etimsService->saveSettings($tenant->tenantId, $request->body());
+        if ($errors !== []) {
+            return ApiResponse::error('VALIDATION', 'Fix the highlighted fields.', 422, $errors);
+        }
+
+        return ApiResponse::ok($this->etimsService->describe($tenant->tenantId));
+    }
+
+    /** Device initialization with KRA (obtains the communication key).
+     * @param array<string, string> $params
+     */
+    public function initializeEtims(Request $request, array $params): Response
+    {
+        [$tenant, $membership] = $this->context($request);
+        if (!$membership->can('settings.update')) {
+            return ApiResponse::error('FORBIDDEN', 'You do not have permission to update settings.', 403);
+        }
+        try {
+            $this->etimsService->initializeDevice($tenant->tenantId);
+        } catch (EtimsException $e) {
+            return ApiResponse::error('ETIMS_INIT_FAILED', $e->getMessage(), 502);
+        }
+
+        return ApiResponse::ok($this->etimsService->describe($tenant->tenantId));
+    }
+
+    /** WhatsApp sender (platform vs own number) and customer usage mode.
+     * @param array<string, string> $params
+     */
+    public function updateWhatsApp(Request $request, array $params): Response
+    {
+        [$tenant, $membership] = $this->context($request);
+        if (!$membership->can('settings.update')) {
+            return ApiResponse::error('FORBIDDEN', 'You do not have permission to update settings.', 403);
+        }
+        $errors = $this->whatsapp->update($tenant->tenantId, $request->body());
+        if ($errors !== []) {
+            return ApiResponse::error('VALIDATION', 'Fix the highlighted fields.', 422, $errors);
+        }
+
+        return ApiResponse::ok($this->whatsapp->describe($tenant->tenantId));
+    }
+
+    /** Own-number template mappings (event → approved template name + variables).
+     * @param array<string, string> $params
+     */
+    public function saveWhatsAppTemplates(Request $request, array $params): Response
+    {
+        [$tenant, $membership] = $this->context($request);
+        if (!$membership->can('settings.update')) {
+            return ApiResponse::error('FORBIDDEN', 'You do not have permission to update settings.', 403);
+        }
+        $templates = $request->body()['templates'] ?? null;
+        if (!is_array($templates)) {
+            return ApiResponse::error('VALIDATION', 'Send a templates list.', 422, ['templates' => 'Required.']);
+        }
+        $errors = $this->whatsapp->saveTemplates($tenant->tenantId, array_values($templates));
+        if ($errors !== []) {
+            return ApiResponse::error('VALIDATION', 'Fix the highlighted templates.', 422, $errors);
+        }
+
+        return ApiResponse::ok($this->whatsapp->describe($tenant->tenantId));
     }
 
     /** Toggle a channel×event preference.
@@ -383,6 +505,14 @@ final class SettingsApiController
         $charge = $body['service_charge_bp'] ?? 0;
         if (!is_numeric($charge) || (int) $charge < 0 || (int) $charge > 5000) {
             $fields['service_charge_bp'] = 'Service charge must be between 0% and 50%.';
+        } elseif ((int) $charge > 0 && $this->etimsService->config($tenant->tenantId)->enabled) {
+            // eTIMS invoices cannot carry a non-tax levy (see EtimsService).
+            $fields['service_charge_bp'] = 'Turn eTIMS off before adding a service charge — eTIMS invoices cannot carry one.';
+        }
+        $taxCheck = $body['tax_rate_bp'] ?? null;
+        if ($taxCheck !== null && is_numeric($taxCheck) && $this->etimsService->config($tenant->tenantId)->enabled
+            && !in_array((int) $taxCheck, [0, 800, 1600], true)) {
+            $fields['tax_rate_bp'] = 'With eTIMS on, VAT must be 16%, 8% or 0%.';
         }
         $tax = $body['tax_rate_bp'] ?? null;
         if ($tax !== null && (!is_numeric($tax) || (int) $tax < 0 || (int) $tax > 10000)) {
@@ -537,10 +667,28 @@ final class SettingsApiController
             }
         }
 
-        $credentials = trim((string) ($body['credentials'] ?? ''));
-        if ($credentials === '') {
-            $fields['credentials'] = 'Paste the Daraja consumer key/secret JSON.';
+        // Structured Daraja credentials (needed for STK push). The legacy
+        // free-form JSON field is still accepted if it parses.
+        $text = static fn(string $k, int $max): string => mb_substr(trim((string) ($body[$k] ?? '')), 0, $max);
+        $parsed = new MpesaCredentials(
+            $text('consumer_key', 200),
+            $text('consumer_secret', 200),
+            $text('passkey', 200),
+            $text('environment', 20) === 'production' ? 'production' : 'sandbox',
+            $text('store_number', 20) !== '' ? $text('store_number', 20) : null,
+        );
+        if ($parsed->consumerKey === '' && trim((string) ($body['credentials'] ?? '')) !== '') {
+            $parsed = MpesaCredentials::fromJson(trim((string) $body['credentials'])) ?? $parsed;
         }
+        foreach (['consumer_key' => $parsed->consumerKey, 'consumer_secret' => $parsed->consumerSecret, 'passkey' => $parsed->passkey] as $key => $value) {
+            if ($value === '') {
+                $fields[$key] = 'Required — from your Daraja app (Lipa na M-Pesa Online).';
+            }
+        }
+        if ($accountType === 'till' && ($parsed->storeNumber === null || preg_match('/^\d{4,10}$/', $parsed->storeNumber) !== 1)) {
+            $fields['store_number'] = 'Buy Goods tills need the numeric store (head-office) number for STK push.';
+        }
+        $credentials = json_encode($parsed->toArray(), JSON_THROW_ON_ERROR);
 
         if ($fields !== []) {
             return ApiResponse::error('VALIDATION', 'Fix the highlighted fields.', 422, $fields);

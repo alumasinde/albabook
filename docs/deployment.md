@@ -151,3 +151,69 @@ is only used for plans that include `sms_messages` / `whatsapp_messages`, is
 capped by those monthly limits, and only messages the prefixes in
 `SMS_ALLOWED_PREFIXES` / `WHATSAPP_ALLOWED_PREFIXES` (default `+254`). Re-run
 the plan seeder after deploying so every plan lists every feature explicitly.
+
+## M-Pesa STK push
+
+- Each business adds its Daraja app (consumer key/secret, Lipa na M-Pesa
+  Online passkey; Buy Goods tills also need the store number) under
+  Settings → Payments, then the account must be **active**.
+- Safaricom posts results to
+  `https://api.albabook.co.ke/webhooks/mpesa/stk/{account}/{secret}` — the
+  secret is an HMAC per account, so the URL itself authenticates the call.
+  Optionally restrict sources with `MPESA_CALLBACK_IPS` (Safaricom's ranges).
+- Lost callbacks are recovered: the till polls with STK Query after ~25 s and
+  the scheduler sweeps prompts still pending after 90 s.
+- Run `cron/scheduler.php` every minute (it already must be).
+
+## WhatsApp
+
+- **Platform sender (default):** set `WHATSAPP_PROVIDER` and the platform
+  credentials, then create the 11 utility templates listed in
+  `database/migrations/028_whatsapp_templates.sql` in WhatsApp Manager with
+  the exact names and wording (variables `{{1}}…`). Messages are only sent
+  once Meta has approved them. With Twilio, replace each `wa_template_name`
+  with the Content SID (`HX…`).
+- **Own number (Growth/Pro):** the business connects its WhatsApp Cloud or
+  Twilio account (Settings → Notifications) and maps its own approved
+  templates.
+- WhatsApp is **off for customers** until a business chooses "instead of SMS"
+  or "alongside SMS".
+
+## AlbaBook subscription billing
+
+- Fill in the `MPESA_BILLING_*` values with **AlbaBook's own** Daraja app
+  (separate from the businesses' accounts) and set a long random
+  `MPESA_BILLING_CALLBACK_SECRET`. Safaricom posts results to
+  `https://api.albabook.co.ke/webhooks/billing/mpesa/{invoice}/{signature}`.
+- `cron/scheduler.php` runs the lifecycle every minute: trial reminder
+  3 days before `trial_ends_at`, invoices `BILLING_LEAD_DAYS` before the
+  period ends, marks the subscription past due at period end, and
+  `BILLING_GRACE_DAYS` after period end an unpaid workspace becomes
+  read-only (plan features denied) until it pays.
+- A trial with no plan chosen expires at `trial_ends_at`. Upgrades are
+  prorated and apply once paid; downgrades apply at the next renewal.
+- Run one sandbox payment end to end before switching
+  `MPESA_BILLING_ENVIRONMENT` to `production`.
+
+## Booking approvals and alerts
+
+- Businesses choose automatic confirmation (default) or manual approval
+  under Settings → Booking Rules. Unanswered requests expire after the
+  configured window, or once the visit time arrives (scheduler).
+- New online bookings and customer cancellations are e-mailed to team
+  members who can approve bookings for that branch, and optionally sent
+  by SMS to the alert phone in Settings → Notifications.
+
+## KRA eTIMS
+
+- AlbaBook must complete KRA's **Third-Party Integrator certification** in the
+  eTIMS sandbox before production; the OSCU payloads in
+  `app/Modules/Tax/Etims` follow the published spec and need that validation.
+- Each business registers for eTIMS (OSCU) with KRA, then in Settings →
+  Payments enters the device serial, branch id and item classification code,
+  clicks **Initialize with KRA**, and switches eTIMS on. Service charge must be
+  0% and VAT 16/8/0%.
+- Invoices are numbered and frozen at checkout and transmitted by
+  `cron/scheduler.php` with retries; the receipt shows KRA's signature and
+  verification QR once transmitted. Credit notes for refunds are not yet
+  implemented.

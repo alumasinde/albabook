@@ -17,7 +17,10 @@ use App\Tenancy\TenantContext;
  */
 final class DashboardApiController
 {
-    public function __construct(private readonly DashboardMetricsService $metrics) {}
+    public function __construct(
+        private readonly DashboardMetricsService $metrics,
+        private readonly \App\Modules\Tenants\Services\SetupReadiness $readiness,
+    ) {}
 
     /** @param array<string, string> $params */
     public function summary(Request $request, array $params): Response
@@ -31,12 +34,22 @@ final class DashboardApiController
             return ApiResponse::error('FORBIDDEN', 'You do not have permission to view the dashboard.', 403);
         }
 
-        return ApiResponse::ok($this->metrics->summary(
+        $summary = $this->metrics->summary(
             $tenant->tenantId,
             $tenant->timezone,
             $tenant->currency,
             $membership->branchIds,
             $membership->can('reports.view_financial'),
-        ));
+            $membership->can('appointments.confirm'),
+        );
+        // Setup checklist (update.md 2.3) for people who can act on it;
+        // hidden once every item is done.
+        $summary['setup'] = null;
+        if ($membership->can('booking_page.manage') || $membership->can('settings.update')) {
+            $setup = $this->readiness->check($tenant->tenantId);
+            $summary['setup'] = $setup['done'] < $setup['total'] ? $setup : null;
+        }
+
+        return ApiResponse::ok($summary);
     }
 }

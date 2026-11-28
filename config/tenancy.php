@@ -17,7 +17,7 @@ return [
     'reserved_slugs' => array_values(array_unique(array_merge([
         '_', 'admin', 'api', 'app', 'assets', 'availability', 'book',
         'embed', 'help', 'login', 'manage', 'staff', 'static', 'support',
-        'widget', 'www',
+        'verify-phone', 'widget', 'www',
     ], array_filter(array_map('trim', explode(',', (string) env('TENANCY_RESERVED_SLUGS', ''))))))),
 
     // Tenant custom booking domains (plan.md §24). OFF until the edge can

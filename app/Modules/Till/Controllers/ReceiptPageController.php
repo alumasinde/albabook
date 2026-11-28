@@ -14,6 +14,7 @@ use App\Modules\Billing\Services\FeatureGate;
 use App\Modules\Till\Repositories\TillRepository;
 use App\Modules\Till\Support\ReceiptSettings;
 use App\Modules\Till\Support\ReceiptVerifier;
+use App\Modules\Tax\Etims\EtimsService;
 use App\Shared\Http\AppUrl;
 use App\Shared\Money\CurrencyFormatter;
 use App\Shared\Money\Money;
@@ -48,6 +49,7 @@ final class ReceiptPageController
         private readonly FeatureGate $features,
         private readonly ReceiptVerifier $verifier,
         private readonly AppUrl $urls,
+        private readonly EtimsService $etims,
     ) {}
 
     /** @param array<string, string> $params */
@@ -121,6 +123,7 @@ final class ReceiptPageController
             'when' => (string) $context['start_at'],
             'back_url' => '/appointments',
             'is_preview' => false,
+            'etims' => $this->etims->invoiceFor($tenant->tenantId, $appointmentId),
         ]);
     }
 
@@ -168,6 +171,7 @@ final class ReceiptPageController
             'when' => gmdate('Y-m-d H:i:s'),
             'back_url' => '/settings',
             'is_preview' => true,
+            'etims' => null,
         ]);
     }
 
@@ -236,6 +240,11 @@ final class ReceiptPageController
             'show_powered_by' => $settings['show_powered_by'] || !$this->features->enabled($tenant->tenantId, 'white_label'),
             'back_url' => $data['back_url'],
             'is_preview' => $data['is_preview'],
+            'etims' => $data['etims'],
+            // KRA verification QR for a signed eTIMS invoice.
+            'etims_qr_b64' => is_string($data['etims']['verify_url'] ?? null)
+                ? base64_encode((new SvgWriter())->write(QrCode::create($data['etims']['verify_url'])->setSize(130)->setMargin(0))->getString())
+                : null,
         ]);
     }
 

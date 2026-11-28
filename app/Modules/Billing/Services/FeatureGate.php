@@ -99,11 +99,11 @@ final class FeatureGate
         }
 
         $stmt = $this->db->pdo()->prepare(
-            "SELECT s.status, pf.is_enabled, pf.limit_value
+            'SELECT s.status, pf.is_enabled, pf.limit_value
                FROM tenant_subscriptions s
                LEFT JOIN plan_features pf ON pf.plan_id = s.plan_id AND pf.feature_key = :f
               WHERE s.tenant_id = :t
-              ORDER BY s.id DESC LIMIT 1",
+              ORDER BY s.id DESC LIMIT 1',
         );
         $stmt->execute(['t' => $tenantId, 'f' => $feature]);
         $row = $stmt->fetch();

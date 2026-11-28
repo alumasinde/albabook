@@ -1,0 +1,33 @@
+{#
+  Guided setup wizard (update.md 2.2): location & hours → first service →
+  who takes bookings → working hours → booking rules → go live. Each step
+  saves through the normal module APIs, so the wizard can be left and
+  resumed at any time; SetupReadiness decides what is still missing.
+#}
+{% extends 'layouts/dashboard.twig' %}
+
+{% set page_title = t('setup.title') %}
+{% set active_nav = 'overview' %}
+{% set workspace = tenant.name %}
+
+{% block title %}{{ t('setup.title') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<div data-page="setup" class="mx-auto max-w-3xl">
+  <div class="mb-6">
+    <h2 class="text-2xl font-semibold text-ink">{{ t('setup.title') }}</h2>
+    <p class="mt-1 text-sm text-muted">{{ t('setup.subtitle') }}</p>
+  </div>
+
+  <ol data-setup-steps class="mb-6 flex flex-wrap gap-2" aria-label="{{ t('setup.progress_aria') }}"></ol>
+
+  <div data-setup-body>
+    <div class="card p-6">
+      <div class="flex items-center gap-3 text-sm text-muted" role="status">
+        <span class="spinner"></span>
+        <span>{{ t('common.loading') }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

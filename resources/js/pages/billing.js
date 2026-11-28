@@ -1,6 +1,6 @@
 /*
- * Billing: plan card, invoice table and payment history — read-only until
- * a billing provider is wired.
+ * Billing: plan card with change-plan, invoice table with M-Pesa pay and
+ * payment history. Hydrates via /api/billing.
  */
 AlbaBook.pages.register('billing', function (root) {
   const { api, ui } = AlbaBook;
@@ -15,15 +15,18 @@ AlbaBook.pages.register('billing', function (root) {
       .format((minor || 0) / 100);
   const pretty = (value) => String(value || '').replace(/_/g, ' ');
 
-  api.get('/api/billing')
-    .then((data) => {
-      renderPlan(data.subscription, data.features);
-      renderInvoices(data.invoices);
-      renderPayments(data.payments);
-    })
-    .catch((error) => planWrap.replaceChildren(ui.errorState(error.message, () => location.reload())));
+  function load() {
+    api.get('/api/billing')
+      .then((data) => {
+        renderPlan(data.subscription, data.features, data.plans, data.can_manage);
+        renderInvoices(data.invoices, data.can_manage);
+        renderPayments(data.payments);
+      })
+      .catch((error) => planWrap.replaceChildren(ui.errorState(error.message, () => location.reload())));
+  }
+  load();
 
-  function renderPlan(sub, features) {
+  function renderPlan(sub, features, plans, canManage) {
     planWrap.replaceChildren();
     if (!sub) {
       planWrap.append(ui.emptyState({
@@ -31,6 +34,7 @@ AlbaBook.pages.register('billing', function (root) {
         message: 'Your workspace has no subscription record yet.',
         icon: 'fa-credit-card',
       }));
+      renderPlanPicker(plans, null, canManage);
       return;
     }
     const head = el('div', 'flex items-center justify-between gap-3');
@@ -50,8 +54,17 @@ AlbaBook.pages.register('billing', function (root) {
     };
     fact('Period', `${String(sub.current_period_start).slice(0, 10)} → ${String(sub.current_period_end).slice(0, 10)}`);
     if (sub.trial_ends_at) fact('Trial ends', String(sub.trial_ends_at).slice(0, 10));
+    if (sub.scheduled_plan_name) fact('Switching to', sub.scheduled_plan_name);
     if (sub.cancelled_at) fact('Cancelled', String(sub.cancelled_at).slice(0, 10));
     planWrap.append(facts);
+
+    if (['trialing', 'expired', 'past_due'].includes(sub.status)) {
+      const note = el('p', 'mt-4 rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning-strong',
+        sub.status === 'trialing'
+          ? 'Pick a plan before the trial ends to keep taking bookings.'
+          : 'The workspace is limited until the plan invoice is paid.');
+      planWrap.append(note);
+    }
 
     if (features.length) {
       const list = el('ul', 'mt-4 space-y-1.5 border-t border-line pt-4 text-sm text-ink');
@@ -63,9 +76,47 @@ AlbaBook.pages.register('billing', function (root) {
       });
       planWrap.append(list);
     }
+
+    renderPlanPicker(plans, sub, canManage);
   }
 
-  function renderInvoices(invoices) {
+  function renderPlanPicker(plans, sub, canManage) {
+    if (!canManage || !plans.length) return;
+    const wrap = el('div', 'mt-4 border-t border-line pt-4');
+    wrap.append(el('p', 'mb-2 text-sm font-medium text-ink', 'Change plan'));
+    const select = el('select', 'select w-full');
+    select.append(el('option', '', 'Choose a plan…'));
+    select.firstChild.value = '';
+    plans.forEach((p) => {
+      const opt = el('option', '',
+        `${p.name} — ${money(p.price_minor, p.currency)}/${p.billing_interval === 'yearly' ? 'yr' : 'mo'}`);
+      opt.value = p.code;
+      if (sub && p.code === sub.plan_code) opt.disabled = true;
+      select.append(opt);
+    });
+    const btn = el('button', 'btn btn-primary btn-sm mt-3', 'Apply');
+    btn.addEventListener('click', () => {
+      if (!select.value) return;
+      ui.setBusy(btn, true, 'Applying…');
+      api.post('/api/billing/plan', { plan: select.value })
+        .then((result) => {
+          const msg = {
+            unchanged: 'Already on that plan.',
+            scheduled: `Plan change scheduled — ${result.plan} applies from the next renewal.`,
+            invoice_issued: `Invoice for ${result.plan} issued — pay it below to activate.`,
+            upgrade_invoiced: `Prorated ${result.plan} invoice issued — pay it below to upgrade.`,
+          }[result.action] || 'Plan updated.';
+          AlbaBook.toast(msg);
+          load();
+        })
+        .catch((error) => AlbaBook.toast(error.message, 'danger'))
+        .finally(() => ui.setBusy(btn, false));
+    });
+    wrap.append(select, btn);
+    planWrap.append(wrap);
+  }
+
+  function renderInvoices(invoices, canManage) {
     invoicesWrap.replaceChildren();
     if (!invoices.length) {
       invoicesWrap.append(el('p', 'px-4 py-8 text-center text-sm text-muted', 'No invoices yet.'));
@@ -74,7 +125,7 @@ AlbaBook.pages.register('billing', function (root) {
     const table = el('table', 'data-table');
     const thead = el('thead');
     const headRow = el('tr');
-    ['Invoice', 'Issued', 'Due', 'Total', 'Status'].forEach((h) => headRow.append(el('th', '', h)));
+    ['Invoice', 'Issued', 'Due', 'Total', 'Status', ''].forEach((h) => headRow.append(el('th', '', h)));
     thead.append(headRow);
     const tbody = el('tbody');
     invoices.forEach((inv) => {
@@ -89,10 +140,84 @@ AlbaBook.pages.register('billing', function (root) {
       const tone = { paid: 'success', issued: 'info', overdue: 'warning', void: 'neutral', draft: 'neutral' }[inv.status] || 'neutral';
       statusTd.append(ui.badge(inv.status, tone));
       tr.append(statusTd);
+      const payTd = el('td', 'text-right');
+      if (canManage && (inv.status === 'issued' || inv.status === 'overdue')) {
+        const pay = el('button', 'btn btn-secondary btn-xs', 'Pay with M-Pesa');
+        pay.addEventListener('click', () => openPay(inv));
+        payTd.append(pay);
+      }
+      tr.append(payTd);
       tbody.append(tr);
     });
     table.append(thead, tbody);
     invoicesWrap.append(table);
+  }
+
+  function openPay(inv) {
+    const shell = ui.drawerShell(`Pay ${inv.invoice_number}`, () => ui.drawer.close());
+    const form = el('form', 'mt-4 space-y-4');
+    const label = el('label', 'block text-sm font-medium text-ink', 'M-Pesa phone number');
+    const input = el('input', 'input mt-1 w-full');
+    input.type = 'tel';
+    input.placeholder = '0712 345 678';
+    input.required = true;
+    input.autocomplete = 'tel';
+    const err = el('p', 'field-error mt-1 text-sm text-danger-strong');
+    const submit = el('button', 'btn btn-primary btn-md w-full', `Pay ${money(inv.total_minor, inv.currency)}`);
+    submit.type = 'submit';
+    form.append(label, input, err, el('p', 'text-xs text-muted',
+      'A prompt is sent to this phone — approve it with your M-Pesa PIN.'), submit);
+    shell.append(el('p', 'mt-1 text-sm text-muted',
+      `${money(inv.total_minor, inv.currency)} to AlbaBook via M-Pesa.`));
+    shell.append(form);
+    ui.drawer.setContent(shell);
+    ui.drawer.open();
+    input.focus();
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      err.textContent = '';
+      ui.setBusy(submit, true, 'Sending prompt…');
+      api.post('/api/billing/pay', { invoice_uuid: inv.uuid, phone: input.value.trim() })
+        .then((result) => {
+          AlbaBook.toast(result.customer_message || 'Check your phone for the M-Pesa prompt.');
+          pollPayment(result.payment_uuid, submit);
+        })
+        .catch((error) => {
+          err.textContent = error.message;
+          ui.setBusy(submit, false);
+        });
+    });
+  }
+
+  /* Poll until the prompt resolves; the callback usually wins but this
+     covers it being late. */
+  function pollPayment(paymentUuid, submit) {
+    let attempts = 0;
+    const tick = () => {
+      attempts += 1;
+      api.get('/api/billing/payments/' + encodeURIComponent(paymentUuid))
+        .then((p) => {
+          if (p.status === 'pending' && attempts < 40) {
+            setTimeout(tick, 3000);
+            return;
+          }
+          ui.drawer.close();
+          ui.setBusy(submit, false);
+          if (p.status === 'succeeded') {
+            AlbaBook.toast('Payment received' + (p.receipt ? ` — ${p.receipt}` : '') + '. Thank you.');
+          } else {
+            AlbaBook.toast('The M-Pesa payment did not complete. You can try again.', 'danger');
+          }
+          load();
+        })
+        .catch(() => {
+          ui.drawer.close();
+          ui.setBusy(submit, false);
+          load();
+        });
+    };
+    setTimeout(tick, 3000);
   }
 
   function renderPayments(payments) {

@@ -174,6 +174,13 @@ final class AppointmentsApiController
         if (!$membership->can($permission)) {
             return ApiResponse::error('FORBIDDEN', 'You do not have permission to do that.', 403);
         }
+        // Same visibility rules as show(): a branch-limited member, or one who
+        // only sees their own appointments, cannot act on anyone else's by uuid.
+        $target = $this->appointments->findByUuid($tenant->tenantId, $uuid);
+        if ($target === null || !$membership->canAccessBranch((int) $target['branch_id'])) {
+            return ApiResponse::error('NOT_FOUND', 'Appointment not found.', 404);
+        }
+        $this->assertOwnScope($membership, $tenant, $target);
 
         try {
             $row = $this->transitions->transition(
@@ -206,6 +213,7 @@ final class AppointmentsApiController
         if (!$membership->canAccessBranch((int) $row['branch_id'])) {
             return ApiResponse::error('FORBIDDEN', 'Branch out of scope.', 403);
         }
+        $this->assertOwnScope($membership, $tenant, $row);
 
         $body = $request->body();
         $date = (string) ($body['date'] ?? '');
@@ -368,7 +376,12 @@ final class AppointmentsApiController
             if (!preg_match('/^\d{2}:\d{2}$/', $time)) $fields['time'] = 'Pick a valid time.';
         }
         if ($name === '' || mb_strlen($name) > 255) $fields['name'] = 'Customer name is required.';
-        if ($phone !== '' && !preg_match('/^\+[1-9]\d{6,14}$/', $phone)) $fields['phone'] = 'Use E.164 format, e.g. +254712345678.';
+        if ($phone !== '') {
+            // Staff type numbers the way customers say them (0712 345 678).
+            $normalised = \App\Shared\Validation\PhoneNumber::normalise($phone);
+            if ($normalised === null) $fields['phone'] = 'Enter a valid phone number, e.g. 0712 345 678 or +254712345678.';
+            else $phone = $normalised;
+        }
         if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) $fields['email'] = 'Invalid email address.';
         if ($fields !== []) {
             return ApiResponse::error('VALIDATION', 'Please fix the highlighted fields.', 422, $fields);
@@ -612,5 +625,6 @@ final class AppointmentsApiController
         'cancelled' => 'Cancelled',
         'no_show' => 'No-show',
         'expired' => 'Expired',
+        'rejected' => 'Declined',
     ];
 }

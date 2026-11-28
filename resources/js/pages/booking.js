@@ -181,8 +181,46 @@
     }
     if (backToTime) backToTime.addEventListener('click', () => showStep(1));
 
+    /* Phone verification (business setting): text a code, check it, then
+       book with the signed token. Changing the number starts over. */
+    const verifyPhone = root.dataset.verifyPhone === '1';
+    const otpBox = form ? form.querySelector('[data-otp]') : null;
+    const phoneInput = form ? form.querySelector('[name="phone"]') : null;
+    const verification = { phone: null, token: null };
+    function resetVerification() {
+      verification.phone = null;
+      verification.token = null;
+      if (otpBox) {
+        otpBox.hidden = true;
+        const code = otpBox.querySelector('[name="code"]');
+        if (code) code.value = '';
+      }
+    }
+    if (phoneInput) phoneInput.addEventListener('input', resetVerification);
+    function sendCode(phone) {
+      return AlbaBook.api.post(base + '/verify-phone', { phone, branch: state.branch || undefined }).then(() => {
+        if (!otpBox) return;
+        otpBox.hidden = false;
+        const sent = otpBox.querySelector('[data-otp-sent]');
+        if (sent) sent.textContent = 'Code sent to ' + phone + '. It expires in 10 minutes.';
+        const code = otpBox.querySelector('[name="code"]');
+        if (code) code.focus();
+      });
+    }
+    if (otpBox) {
+      const resend = otpBox.querySelector('[data-otp-resend]');
+      if (resend) resend.addEventListener('click', () => {
+        const phone = phoneInput ? phoneInput.value.trim() : '';
+        ui.setBusy(resend, true, 'Sending\u2026');
+        sendCode(phone)
+          .then(() => AlbaBook.toast('New code sent.'))
+          .catch((error) => AlbaBook.toast(error.message || 'Could not send a code.', 'danger'))
+          .finally(() => ui.setBusy(resend, false));
+      });
+    }
+
     if (form) {
-      form.addEventListener('submit', (event) => {
+      form.addEventListener('submit', async (event) => {
         event.preventDefault();
         ui.clearFieldErrors(form);
         const submit = form.querySelector('[type="submit"]');
@@ -190,6 +228,29 @@
 
         const fields = {};
         new FormData(form).forEach((v, k) => { fields[k] = v; });
+
+        if (verifyPhone) {
+          const phone = String(fields.phone || '').trim();
+          try {
+            if (!(verification.token && verification.phone === phone)) {
+              if (!otpBox || otpBox.hidden) {
+                // Step 1: text the code, then wait for the customer to type it.
+                await sendCode(phone);
+                ui.setBusy(submit, false);
+                return;
+              }
+              // Step 2: check the code and keep the signed token.
+              const checked = await AlbaBook.api.post(base + '/verify-phone/check', { phone, code: String(fields.code || '') });
+              verification.phone = phone;
+              verification.token = checked.verification_token;
+            }
+          } catch (error) {
+            if (error instanceof AlbaBook.ApiError && error.fields) ui.showFieldErrors(form, error.fields);
+            AlbaBook.toast(error.message || 'Could not verify your number.', 'danger');
+            ui.setBusy(submit, false);
+            return;
+          }
+        }
         // One key per booking attempt: a retry/double-click replays to the
         // same appointment instead of double-booking (exactly-once).
         if (!state.idempotencyKey) {
@@ -209,6 +270,7 @@
             phone: fields.phone,
             email: fields.email || undefined,
             notes: fields.notes || undefined,
+            verification_token: verification.token || undefined,
             locale: document.documentElement.lang || 'en',
             source: root.dataset.embed === '1' ? 'widget' : 'public_page',
           })
@@ -222,6 +284,7 @@
             }
             AlbaBook.toast(error.message || 'Booking failed. Please try again.', 'danger');
             if (error.code === 'SLOT_UNAVAILABLE') showStep(1) || loadSlots();
+            if (error.code === 'VERIFICATION_REQUIRED') resetVerification();
           })
           .finally(() => ui.setBusy(submit, false));
       });
@@ -232,6 +295,13 @@
       dots.forEach((dot) => dot.classList.add('is-done'));
       const host = panels.success;
       if (host) {
+        // Auto-confirmed bookings say so; manual-approval ones keep the
+        // "received, we'll confirm shortly" copy the template renders.
+        if (result.status === 'confirmed') {
+          host.querySelectorAll('[data-confirmed-text]').forEach((node) => {
+            node.textContent = node.getAttribute('data-confirmed-text');
+          });
+        }
         const refEl = host.querySelector('[data-booking-reference]');
         if (refEl) refEl.textContent = result.reference;
         const whenEl = host.querySelector('[data-booking-when]');

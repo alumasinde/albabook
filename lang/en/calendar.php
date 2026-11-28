@@ -13,6 +13,7 @@ return [
     'all_branches' => 'All Branches',
     'filter_staff' => 'Staff',
     'all_staff' => 'All Staff',
+    'block_time' => 'Block time',
     'new_appointment' => 'New Appointment',
     'new_appointment_help' => 'Pick a service, staff member and time. The slot is re-checked on save.',
     'legend_label' => 'Status legend',

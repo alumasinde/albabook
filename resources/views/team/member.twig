@@ -1,0 +1,102 @@
+{% extends 'layouts/dashboard.twig' %}
+
+{% set page_title = t('auth.team_title') %}
+{% set active_nav = 'team' %}
+{% set workspace = tenant.name %}
+{% set full_name = member.first_name ~ ' ' ~ member.last_name %}
+
+{% block title %}{{ full_name }} · {{ t('auth.team_title') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<a href="/team" class="text-sm font-medium text-primary-strong hover:underline">
+  <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> {{ t('auth.back_to_team') }}
+</a>
+
+<div class="mt-3 flex flex-wrap items-center gap-3">
+  <h2 class="text-2xl font-semibold text-ink">{{ full_name }}</h2>
+  <span class="badge badge-{{ member.status == 'active' ? 'success' : 'danger' }}">
+    <span class="badge-dot" aria-hidden="true"></span>{{ t('auth.status_' ~ member.status) }}
+  </span>
+</div>
+<p class="mt-1 text-sm text-muted">{{ member.email }}</p>
+
+{% if errors.member|default('') %}
+  <div class="mt-6 max-w-3xl">
+    {% include 'components/feedback/alert.twig' with { tone: 'danger', message: errors.member } only %}
+  </div>
+{% endif %}
+
+{% if is_self %}
+  <div class="mt-6 max-w-3xl">
+    {% include 'components/feedback/alert.twig' with { tone: 'info', message: t('auth.member_is_self') } only %}
+  </div>
+{% else %}
+<div class="mt-6 grid max-w-5xl gap-6 lg:grid-cols-3">
+  <form method="post" action="/team/members/{{ member.tenant_user_id }}" class="card space-y-6 p-6 lg:col-span-2" novalidate>
+    {{ csrf_field() }}
+
+    <fieldset>
+      <legend class="field-label">{{ t('auth.roles') }}</legend>
+      <p class="mt-1 text-sm text-muted">{{ t('auth.member_roles_help') }}</p>
+      <div class="mt-3 space-y-3">
+        {% for role in roles %}
+          {% include 'components/forms/checkbox.twig' with {
+            name: 'role_ids[]', id: 'role-' ~ role.id, value: role.id,
+            label: role.name ~ (role.description ? ' — ' ~ role.description : ''),
+            checked: role.id in selected_roles,
+          } only %}
+        {% endfor %}
+      </div>
+      {% if errors.role_ids|default('') %}
+        <p class="field-error mt-2"><i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>{{ errors.role_ids }}</p>
+      {% endif %}
+    </fieldset>
+
+    <fieldset class="border-t border-line pt-5" data-branch-scope>
+      <legend class="field-label">{{ t('auth.member_branches') }}</legend>
+      <div class="mt-3 space-y-2">
+        <label class="flex items-start gap-3 text-sm text-ink">
+          <input type="radio" name="branch_scope" value="all" class="radio mt-0.5"{% if branch_scope != 'some' %} checked{% endif %}>
+          <span>{{ t('auth.member_branches_all') }}</span>
+        </label>
+        <label class="flex items-start gap-3 text-sm text-ink">
+          <input type="radio" name="branch_scope" value="some" class="radio mt-0.5"{% if branch_scope == 'some' %} checked{% endif %}>
+          <span>{{ t('auth.member_branches_some') }}</span>
+        </label>
+      </div>
+      <div class="mt-3 grid gap-2 pl-7 sm:grid-cols-2">
+        {% for branch in branches %}
+          {% include 'components/forms/checkbox.twig' with {
+            name: 'branch_ids[]', id: 'branch-' ~ branch.id, value: branch.id,
+            label: branch.name, checked: branch.id in selected_branches,
+          } only %}
+        {% endfor %}
+      </div>
+      {% if errors.branch_ids|default('') %}
+        <p class="field-error mt-2"><i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>{{ errors.branch_ids }}</p>
+      {% endif %}
+    </fieldset>
+
+    {% include 'components/buttons/button.twig' with { label: t('auth.member_save'), type: 'submit' } only %}
+  </form>
+
+  <section class="card h-fit p-6" aria-labelledby="member-access-h">
+    <h3 id="member-access-h" class="text-base font-semibold text-ink">{{ t('auth.member_access') }}</h3>
+    {% if member.status == 'active' %}
+      <p class="mt-1 text-sm text-muted">{{ t('auth.member_deactivate_help') }}</p>
+      <form method="post" action="/team/members/{{ member.tenant_user_id }}/deactivate" class="mt-4"
+            data-confirm="{{ t('auth.member_deactivate_confirm', { name: full_name }) }}" data-confirm-label="{{ t('auth.member_deactivate') }}" data-confirm-danger>
+        {{ csrf_field() }}
+        {% include 'components/buttons/button.twig' with { label: t('auth.member_deactivate'), type: 'submit', variant: 'danger', full_width: true } only %}
+      </form>
+    {% else %}
+      <p class="mt-1 text-sm text-muted">{{ t('auth.member_reactivate_help') }}</p>
+      <form method="post" action="/team/members/{{ member.tenant_user_id }}/reactivate" class="mt-4">
+        {{ csrf_field() }}
+        {% include 'components/buttons/button.twig' with { label: t('auth.member_reactivate'), type: 'submit', full_width: true } only %}
+      </form>
+    {% endif %}
+  </section>
+</div>
+{% endif %}
+{% endblock %}

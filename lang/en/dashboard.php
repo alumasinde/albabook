@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    'setup_heading' => 'Get ready to take bookings',
+    'setup_cta' => 'Continue setup',
+    'approvals_heading' => 'Needs approval',
+    'approvals_subtitle' => 'Online booking requests waiting for you. Unanswered requests expire automatically.',
     'greeting' => 'Hello',
     'overview_subtitle' => 'Here\'s what\'s happening at :business today.',
     'view_calendar' => 'View Calendar',

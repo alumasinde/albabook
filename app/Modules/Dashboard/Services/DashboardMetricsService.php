@@ -25,7 +25,7 @@ final class DashboardMetricsService
      * @param array<int>|null $branchIds membership branch scope
      * @return array<string, mixed>
      */
-    public function summary(int $tenantId, string $timezone, string $currency, ?array $branchIds, bool $financial): array
+    public function summary(int $tenantId, string $timezone, string $currency, ?array $branchIds, bool $financial, bool $canApprove = false): array
     {
         $today = $this->dates->localToday($timezone);
         [$todayFrom, $todayTo] = $this->dates->localDayToUtcRange($today, $timezone);
@@ -89,8 +89,34 @@ final class DashboardMetricsService
             'cards' => $cards,
             'today_schedule' => $schedule,
             'chart' => $this->chart($tenantId, $branchIds, $timezone),
-            'alerts' => $this->alerts($tenantId, $branchIds, $counts),
+            'alerts' => $this->alerts($tenantId, $branchIds, $counts, $canApprove),
+            // Only people who may confirm see the queue (appointments.confirm).
+            'approvals' => $canApprove ? $this->approvals($tenantId, $branchIds, $timezone) : null,
         ];
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function approvals(int $tenantId, ?array $branchIds, string $timezone): array
+    {
+        $tz = new \DateTimeZone($timezone);
+        $utc = new \DateTimeZone('UTC');
+
+        return array_map(static function (array $row) use ($tz, $utc): array {
+            $start = (new \DateTimeImmutable((string) $row['start_at'], $utc))->setTimezone($tz);
+            $asked = (new \DateTimeImmutable((string) $row['created_at'], $utc))->setTimezone($tz);
+
+            return [
+                'uuid' => (string) $row['uuid'],
+                'reference' => (string) $row['reference'],
+                'version' => (int) $row['version'],
+                'customer' => (string) $row['customer_name'],
+                'phone' => (string) ($row['customer_phone'] ?? ''),
+                'service' => (string) ($row['service_name'] ?? ''),
+                'staff' => (string) ($row['staff_name'] ?? ''),
+                'when_label' => $start->format('D j M, H:i'),
+                'requested_label' => $asked->format('j M, H:i'),
+            ];
+        }, $this->dashboard->pendingQueue($tenantId, $branchIds, $this->dates->toDb($this->dates->now())));
     }
 
     private function greeting(string $timezone): string
@@ -131,11 +157,11 @@ final class DashboardMetricsService
      * @param array<string, int> $counts
      * @return list<array<string, string>>
      */
-    private function alerts(int $tenantId, ?array $branchIds, array $counts): array
+    private function alerts(int $tenantId, ?array $branchIds, array $counts, bool $hasQueue = false): array
     {
         $pending = $this->dashboard->pendingBookings($tenantId, $branchIds, $this->dates->toDb($this->dates->now()));
         $alerts = [];
-        if ($pending > 0) {
+        if ($pending > 0 && !$hasQueue) { // approvers see the queue instead
             $alerts[] = ['tone' => 'warning', 'text' => $pending . ' appointment' . ($pending === 1 ? ' is' : 's are') . ' awaiting confirmation.'];
         }
 

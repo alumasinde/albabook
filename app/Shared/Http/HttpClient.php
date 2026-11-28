@@ -22,6 +22,26 @@ final class HttpClient
      */
     public function post(string $url, array $headers, string $body, int $timeoutSeconds = 15): array
     {
+        return $this->request('POST', $url, $headers, $body, $timeoutSeconds);
+    }
+
+    /**
+     * @param array<string, string> $headers
+     * @return array{status: int, body: string}
+     */
+    public function get(string $url, array $headers, int $timeoutSeconds = 15): array
+    {
+        return $this->request('GET', $url, $headers, null, $timeoutSeconds);
+    }
+
+    /**
+     * Every outbound call goes through here, so the SSRF guard and the
+     * no-redirect / https-only rules apply to GET and POST alike.
+     * @param array<string, string> $headers
+     * @return array{status: int, body: string}
+     */
+    public function request(string $method, string $url, array $headers, ?string $body, int $timeoutSeconds = 15): array
+    {
         [$host, $port, $address] = $this->publicAddress($url);
 
         $headerLines = [];
@@ -33,9 +53,10 @@ final class HttpClient
         if ($ch === false) {
             throw new \RuntimeException('Could not initialise HTTP client.');
         }
-        curl_setopt_array($ch, [
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => $body,
+        $methodOptions = $method === 'GET'
+            ? [CURLOPT_HTTPGET => true]
+            : [CURLOPT_CUSTOMREQUEST => $method, CURLOPT_POSTFIELDS => (string) $body];
+        curl_setopt_array($ch, $methodOptions + [
             CURLOPT_HTTPHEADER => $headerLines,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => $timeoutSeconds,

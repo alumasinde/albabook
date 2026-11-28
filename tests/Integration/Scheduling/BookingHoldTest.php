@@ -13,8 +13,8 @@ use App\Modules\Booking\Repositories\BookingHoldRepository;
 use App\Modules\Booking\Repositories\BookingPageRepository;
 use App\Modules\Booking\Services\AvailabilityService;
 use App\Modules\Booking\Services\BookingHoldService;
-use App\Modules\Notifications\Services\AppointmentEventService;
 use App\Modules\Notifications\Repositories\NotificationRepository;
+use App\Modules\Notifications\Services\AppointmentEventService;
 use App\Modules\Notifications\Services\NotificationPolicy;
 use App\Modules\Till\Repositories\TillRepository;
 use App\Shared\Time\DateTimeService;
@@ -104,8 +104,12 @@ final class BookingHoldTest extends Phase2TestCase
             new BookingPageRepository($this->db),
             new DateTimeService($this->clock),
             $this->uuids,
-            new AppointmentEventService($this->db, $this->uuids, new NotificationPolicy($this->db, new Config([])),
-                new NotificationRepository($this->db, $this->uuids)),
+            new AppointmentEventService(
+                $this->db,
+                $this->uuids,
+                new NotificationPolicy($this->db, new Config([])),
+                new NotificationRepository($this->db, $this->uuids),
+            ),
             new FeatureGate($this->db),
             new TillRepository($this->db),
             new AvailabilityService(new BookingPageRepository($this->db), new DateTimeService($this->clock)),
@@ -150,9 +154,23 @@ final class BookingHoldTest extends Phase2TestCase
     private function book(int $staffId, string $time, ?string $holdToken = null): array
     {
         return $this->bookings()->create(
-            $this->tenantId, $this->branchId, 'Africa/Nairobi', $staffId, $this->serviceId,
-            self::DAY, $time, $this->customer(), 'public_page', 'en', 'KES',
-            null, 'customer', false, null, null, $holdToken,
+            $this->tenantId,
+            $this->branchId,
+            'Africa/Nairobi',
+            $staffId,
+            $this->serviceId,
+            self::DAY,
+            $time,
+            $this->customer(),
+            'public_page',
+            'en',
+            'KES',
+            null,
+            'customer',
+            false,
+            null,
+            null,
+            $holdToken,
         );
     }
 
@@ -170,7 +188,7 @@ final class BookingHoldTest extends Phase2TestCase
 
         // The holder converts: same appointment lands on the held staff.
         $created = $this->book($this->staffA, '10:00', $hold['hold_token']);
-        self::assertSame('pending', $created['status']);
+        self::assertSame('confirmed', $created['status']);
         $row = $this->holdRow($hold['hold_token']);
         self::assertNotNull($row);
         self::assertSame('converted', $row['status']);
@@ -200,7 +218,7 @@ final class BookingHoldTest extends Phase2TestCase
 
         // The expired hold no longer blocks — a fresh booking lands.
         $created = $this->book($this->staffA, '10:00');
-        self::assertSame('pending', $created['status']);
+        self::assertSame('confirmed', $created['status']);
     }
 
     public function testReleasedHoldFreesTheTimeAndCannotConvert(): void
@@ -219,7 +237,7 @@ final class BookingHoldTest extends Phase2TestCase
         }
 
         $created = $this->book($this->staffA, '11:00');
-        self::assertSame('pending', $created['status']);
+        self::assertSame('confirmed', $created['status']);
     }
 
     public function testHoldForADifferentSlotIsRejected(): void
@@ -275,15 +293,30 @@ final class BookingHoldTest extends Phase2TestCase
         // a real appointment + a hold, then every slot the grid offers must
         // fall outside every occupied range for that staff.
         $this->bookings()->create(
-            $this->tenantId, $this->branchId, 'Africa/Nairobi', $this->staffA, $this->serviceId,
-            self::DAY, '10:00', $this->customer(), 'dashboard', 'en', 'KES', null, 'tenant_user', true,
+            $this->tenantId,
+            $this->branchId,
+            'Africa/Nairobi',
+            $this->staffA,
+            $this->serviceId,
+            self::DAY,
+            '10:00',
+            $this->customer(),
+            'dashboard',
+            'en',
+            'KES',
+            null,
+            'tenant_user',
+            true,
         );
         $this->holds()->create($this->tenantId, $this->branch(), $this->service(), $this->staffA, self::DAY, '13:00', 'fp-7');
 
         $availability = new AvailabilityService(new BookingPageRepository($this->db), new DateTimeService($this->clock));
         $slots = $availability->slots($this->tenantId, $this->branch(), $this->service(), $this->staffA, self::DAY, 'Africa/Nairobi');
         $ranges = (new BookingPageRepository($this->db))->occupiedRanges(
-            $this->tenantId, [$this->staffA], self::DAY . ' 00:00:00', '2030-01-15 00:00:00',
+            $this->tenantId,
+            [$this->staffA],
+            self::DAY . ' 00:00:00',
+            '2030-01-15 00:00:00',
         );
 
         self::assertNotEmpty($slots, 'the grid should still offer free time');

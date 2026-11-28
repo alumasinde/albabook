@@ -17,7 +17,7 @@ final class TransitionGraphTest extends TestCase
 {
     public function testHappyPathIncludesInService(): void
     {
-        self::assertSame(['confirmed', 'cancelled'], AppointmentTransitionService::allowed('pending'));
+        self::assertSame(['confirmed', 'rejected', 'cancelled'], AppointmentTransitionService::allowed('pending'));
         self::assertContains('checked_in', AppointmentTransitionService::allowed('confirmed'));
         self::assertContains('no_show', AppointmentTransitionService::allowed('confirmed'));
         self::assertSame(

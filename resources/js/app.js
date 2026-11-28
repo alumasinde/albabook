@@ -128,6 +128,28 @@
     if (event.target instanceof HTMLDialogElement) event.target.close();
   });
 
+  // <form data-confirm="Message" data-confirm-label="Deactivate"> asks before
+  // submitting (CSP forbids inline onsubmit handlers).
+  document.addEventListener('submit', function (event) {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement) || !form.hasAttribute('data-confirm')) return;
+    if (form.dataset.confirmed === '1') {
+      delete form.dataset.confirmed;
+      return;
+    }
+    event.preventDefault();
+    AlbaBook.ui.confirm({
+      title: form.getAttribute('data-confirm-title') || 'Are you sure?',
+      message: form.getAttribute('data-confirm'),
+      confirmLabel: form.getAttribute('data-confirm-label') || 'Confirm',
+      danger: form.hasAttribute('data-confirm-danger'),
+    }).then(function (yes) {
+      if (!yes) return;
+      form.dataset.confirmed = '1';
+      form.requestSubmit();
+    });
+  }, true);
+
   // Server-rendered toasts: <template data-toast data-tone="success">Message</template>
   document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('template[data-toast]').forEach(function (tpl) {

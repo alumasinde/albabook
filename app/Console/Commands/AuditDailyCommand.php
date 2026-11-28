@@ -52,12 +52,21 @@ final class AuditDailyCommand implements Command
         $totalStale = 0;
         $totalApplied = 0;
 
-        $tenantsStmt = $this->db->pdo()
-            ->query('SELECT id, name, timezone FROM tenants ORDER BY id');
-        $tenants = $tenantsStmt === false ? [] : $tenantsStmt->fetchAll();
+        // One pass per BRANCH: each branch closes its day at its own local
+        // midnight (branch timezone, falling back to the business's), so a
+        // branch in another timezone is never reconciled hours early or late.
+        $branchesStmt = $this->db->pdo()->query(
+            'SELECT b.id AS branch_id, b.name AS branch_name, b.tenant_id, t.name,
+                    COALESCE(b.timezone, t.timezone) AS timezone
+               FROM branches b JOIN tenants t ON t.id = b.tenant_id
+              ORDER BY b.tenant_id, b.id',
+        );
+        $branches = $branchesStmt === false ? [] : $branchesStmt->fetchAll();
 
-        foreach ($tenants as $tenant) {
-            $tenantId = (int) $tenant['id'];
+        foreach ($branches as $tenant) {
+            $tenantId = (int) $tenant['tenant_id'];
+            $branchId = (int) $tenant['branch_id'];
+            $tenant['name'] = $tenant['name'] . ' / ' . $tenant['branch_name'];
             $tz = (string) ($tenant['timezone'] ?: 'UTC');
             try {
                 $boundary = $now->setTimezone(new \DateTimeZone($tz))->setTime(0, 0)
@@ -70,11 +79,11 @@ final class AuditDailyCommand implements Command
 
             $stmt = $this->db->pdo()->prepare(
                 "SELECT id, uuid, status, version FROM appointments
-                 WHERE tenant_id = :t AND end_at < :boundary
+                 WHERE tenant_id = :t AND branch_id = :b AND end_at < :boundary
                    AND status IN (SELECT code FROM appointment_statuses WHERE NOT is_terminal)
                  ORDER BY end_at",
             );
-            $stmt->execute(['t' => $tenantId, 'boundary' => $boundaryDb]);
+            $stmt->execute(['t' => $tenantId, 'b' => $branchId, 'boundary' => $boundaryDb]);
             /** @var list<array{id: int, uuid: string, status: string, version: int}> $stale */
             $stale = array_values($stmt->fetchAll());
             if ($stale === []) {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Auth\Repositories;
 
+use App\Modules\Auth\Services\MfaService;
 use App\Core\Database\Database;
 
 final class UserRepository
@@ -78,21 +79,35 @@ final class UserRepository
     /** Cumulative per-user TOTP failure counter; locks once $max is reached. */
     public function recordMfaFailure(int $userId, int $max, int $lockMinutes): void
     {
+        // Fixed counting window (MfaService::USER_FAILURE_WINDOW_MINUTES):
+        // a failure after the window has lapsed starts a fresh count, so
+        // stray typos spread over weeks never add up to a lock. SET clauses
+        // evaluate left to right: the window test reads the OLD start, the
+        // lock test reads the NEW attempt count.
         $this->db->pdo()->prepare(
             'UPDATE users
-                SET mfa_failed_attempts = mfa_failed_attempts + 1,
+                SET mfa_failed_attempts = IF(
+                        mfa_failures_started_at IS NULL OR mfa_failures_started_at < UTC_TIMESTAMP() - INTERVAL :win1 MINUTE,
+                        1, mfa_failed_attempts + 1),
+                    mfa_failures_started_at = IF(
+                        mfa_failures_started_at IS NULL OR mfa_failures_started_at < UTC_TIMESTAMP() - INTERVAL :win2 MINUTE,
+                        UTC_TIMESTAMP(), mfa_failures_started_at),
                     mfa_locked_until = IF(
                         mfa_failed_attempts >= :max,
                         DATE_ADD(UTC_TIMESTAMP(), INTERVAL :mins MINUTE),
                         mfa_locked_until)
               WHERE id = :id',
-        )->execute(['max' => $max, 'mins' => $lockMinutes, 'id' => $userId]);
+        )->execute([
+            'win1' => MfaService::USER_FAILURE_WINDOW_MINUTES,
+            'win2' => MfaService::USER_FAILURE_WINDOW_MINUTES,
+            'max' => $max, 'mins' => $lockMinutes, 'id' => $userId,
+        ]);
     }
 
     public function resetMfaFailures(int $userId): void
     {
         $this->db->pdo()->prepare(
-            'UPDATE users SET mfa_failed_attempts = 0, mfa_locked_until = NULL WHERE id = ?',
+            'UPDATE users SET mfa_failed_attempts = 0, mfa_failures_started_at = NULL, mfa_locked_until = NULL WHERE id = ?',
         )->execute([$userId]);
     }
 

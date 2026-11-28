@@ -48,10 +48,13 @@
         if (name === 'notifications') loadNotifications();
         if (name === 'payments') loadPayments();
         if (name === 'receipt') loadReceipt();
+        if (name === 'booking-rules') loadBookingRules();
       }
     }
     tabs.forEach((t) => t.addEventListener('click', () => activate(t.dataset.settingsTab)));
-    activate('profile');
+    // /settings#booking-rules opens that tab directly (setup checklist links).
+    const hashTab = (window.location.hash || '').replace('#', '');
+    activate(hashTab && root.querySelector('[data-settings-tab="' + hashTab + '"]') ? hashTab : 'profile');
 
     /* ------------------------------------------------------ form helpers */
     function field(labelText, input, name) {
@@ -414,6 +417,136 @@
       });
     }
 
+    /* -------------------------------------------------------- booking rules */
+    const rulesForm = root.querySelector('[data-settings-booking-rules]');
+    function loadBookingRules() {
+      if (!rulesForm) return;
+      rulesForm.replaceChildren(ui.spinner('Loading booking rules…'));
+      api.get('/api/settings/booking-rules')
+        .then((data) => renderBookingRules(data))
+        .catch((error) => rulesForm.replaceChildren(ui.errorState(error.message, loadBookingRules)));
+    }
+
+    function renderBookingRules(data) {
+      const r = data.rules;
+      const editable = !!data.can_update;
+      const number = (value, min, max, placeholder) => {
+        const i = input('number', value === null || value === undefined ? '' : value);
+        i.min = String(min);
+        i.max = String(max);
+        i.step = '1';
+        i.inputMode = 'numeric';
+        if (placeholder) i.placeholder = placeholder;
+        i.disabled = !editable;
+        return i;
+      };
+      const hint = (wrap, text) => {
+        wrap.insertBefore(el('p', 'mt-1 text-xs text-muted', text), wrap.querySelector('.field-error'));
+        return wrap;
+      };
+
+      // Confirmation mode as two radio cards: the choice that matters most.
+      const modes = [
+        ['auto', 'Confirm automatically', 'Online bookings are confirmed instantly. Best for most businesses.'],
+        ['manual', 'I approve each booking', 'Online bookings arrive as requests. You confirm or decline them from the dashboard.'],
+      ];
+      const modeSet = el('fieldset', 'grid gap-3 sm:grid-cols-2');
+      modeSet.append(el('legend', 'mb-2 text-sm font-semibold text-ink', 'Confirming online bookings'));
+      const radios = {};
+      modes.forEach(([value, title, body]) => {
+        const label = el('label', 'rule-option');
+        const radio = el('input', 'mt-1');
+        radio.type = 'radio';
+        radio.name = 'confirmation_mode';
+        radio.value = value;
+        radio.checked = r.confirmation_mode === value;
+        radio.disabled = !editable;
+        radios[value] = radio;
+        const text = el('span');
+        text.append(el('span', 'block text-sm font-semibold text-ink', title), el('span', 'mt-1 block text-xs text-muted', body));
+        label.append(radio, text);
+        modeSet.append(label);
+      });
+      const modeErr = el('p', 'field-error');
+      modeErr.id = 'field-confirmation_mode-error';
+
+      // Phone verification by SMS code (stops bookings under someone else's number).
+      const verify = select([
+        { v: 'none', l: 'No — book straight away' },
+        { v: 'otp_phone', l: 'Yes — text a 6-digit code before booking' },
+      ], r.customer_verification, (o) => o.l, (o) => o.v);
+      verify.disabled = !editable || (!data.sms_available && r.customer_verification !== 'otp_phone');
+      const verifyWrap = hint(field('Confirm the customer\u2019s phone', verify, 'customer_verification'),
+        data.sms_available
+          ? 'Customers enter a code we text them. Stops fake bookings and bookings under someone else\u2019s number. Each code uses one SMS from your allowance.'
+          : 'Needs SMS: connect an SMS account under Notifications, or upgrade to a plan that includes SMS.');
+      verifyWrap.classList.add('mt-4', 'max-w-sm');
+
+      const expiry = number(r.pending_expiry_minutes, 15, 10080);
+      const expiryWrap = hint(field('Unanswered requests expire after (minutes)', expiry, 'pending_expiry_minutes'),
+        'The slot is released and the customer told. Requests also expire once the visit time arrives. 720 = 12 hours.');
+      expiryWrap.classList.add('mt-4', 'max-w-sm');
+      const syncExpiry = () => { expiryWrap.hidden = !radios.manual.checked; };
+      Object.values(radios).forEach((radio) => radio.addEventListener('change', syncExpiry));
+      syncExpiry();
+
+      const notice = number(r.min_notice_minutes, 0, 20160);
+      const advance = number(r.max_advance_days, 1, 730, 'No limit');
+      const interval = select([5, 10, 15, 20, 30, 45, 60, 90, 120].map((v) => ({ v })), r.slot_interval_minutes, (o) => o.v + ' minutes', (o) => o.v);
+      interval.disabled = !editable;
+      const timing = el('div', 'mt-6 grid gap-4 border-t border-line pt-5 sm:grid-cols-3');
+      timing.append(
+        hint(field('Minimum notice (minutes)', notice, 'min_notice_minutes'), 'e.g. 60 stops bookings less than an hour away.'),
+        hint(field('Book up to (days ahead)', advance, 'max_advance_days'), 'Leave empty for no limit.'),
+        hint(field('Time slots every', interval, 'slot_interval_minutes'), 'Start times offered on your booking page.'),
+      );
+
+      const cancel = number(r.cancellation_cutoff_minutes, 0, 20160, 'Any time');
+      const resched = number(r.reschedule_cutoff_minutes, 0, 20160, 'Any time');
+      const maxRe = number(r.max_reschedules, 0, 20, 'Unlimited');
+      const changes = el('div', 'mt-6 grid gap-4 border-t border-line pt-5 sm:grid-cols-3');
+      changes.append(
+        hint(field('Customers can cancel until (min before)', cancel, 'cancellation_cutoff_minutes'), 'e.g. 1440 = 24 hours. Empty = any time.'),
+        hint(field('Customers can reschedule until (min before)', resched, 'reschedule_cutoff_minutes'), 'Empty = any time.'),
+        hint(field('Reschedules allowed per booking', maxRe, 'max_reschedules'), 'Empty = unlimited.'),
+      );
+
+      const note = el('p', 'mt-4 text-xs text-muted', 'Bookings your team makes from the dashboard or at the front desk are always confirmed straight away.');
+      const actions = el('div', 'mt-6 flex flex-wrap gap-3');
+      const submit = submitBtn('Save booking rules');
+      submit.disabled = !editable;
+      actions.append(submit);
+      rulesForm.replaceChildren(modeSet, modeErr, expiryWrap, verifyWrap, timing, changes, note, actions);
+
+      rulesForm.onsubmit = (event) => {
+        event.preventDefault();
+        ui.clearFieldErrors(rulesForm);
+        const val = (i) => (i.value.trim() === '' ? null : i.value.trim());
+        const payload = {
+          confirmation_mode: radios.manual.checked ? 'manual' : 'auto',
+          customer_verification: verify.value,
+          pending_expiry_minutes: val(expiry) ?? String(r.pending_expiry_minutes),
+          min_notice_minutes: val(notice),
+          max_advance_days: val(advance),
+          slot_interval_minutes: interval.value,
+          cancellation_cutoff_minutes: val(cancel),
+          reschedule_cutoff_minutes: val(resched),
+          max_reschedules: val(maxRe),
+        };
+        ui.setBusy(submit, true, 'Saving…');
+        api.patch('/api/settings/booking-rules', payload)
+          .then((saved) => {
+            AlbaBook.toast('Booking rules saved.');
+            renderBookingRules(saved);
+          })
+          .catch((error) => {
+            if (error.fields) ui.showFieldErrors(rulesForm, error.fields);
+            AlbaBook.toast(error.message, 'danger');
+          })
+          .finally(() => ui.setBusy(submit, false));
+      };
+    }
+
     /* -------------------------------------------------------------- receipt */
     const receiptForm = root.querySelector('[data-settings-receipt]');
 
@@ -498,15 +631,243 @@
       };
     }
 
+    /* ------------------------------------------------------------ whatsapp */
+    const waBox = root.querySelector('[data-whatsapp]');
+    const WA_EVENTS = {
+      booking_received: 'Booking received', booking_confirmed: 'Booking confirmed', booking_rejected: 'Booking not accepted',
+      appointment_reminder_24h: '24-hour reminder', appointment_reminder_2h: '2-hour reminder',
+      appointment_rescheduled: 'Rescheduled', appointment_cancelled: 'Cancelled', appointment_expired: 'Expired',
+      appointment_completed: 'Visit completed', payment_update: 'Payment update', manage_link: 'Manage-booking link',
+    };
+
+    function renderWhatsApp(wa) {
+      if (!waBox || !wa) return;
+      const sender = select(
+        [
+          { v: 'platform', label: 'AlbaBook’s verified number (recommended — no setup)' },
+          { v: 'business', label: wa.can_use_own_number ? 'Our own WhatsApp Business number' : 'Our own number (Growth / Pro plans)' },
+        ],
+        wa.sender_requested, (o) => o.label, (o) => o.v,
+      );
+      if (!wa.can_use_own_number) sender.querySelector('option[value="business"]').disabled = true;
+      const mode = select(
+        [
+          { v: 'off', label: 'Off — use SMS for phone numbers' },
+          { v: 'instead_of_sms', label: 'Use WhatsApp instead of SMS' },
+          { v: 'alongside_sms', label: 'Send both WhatsApp and SMS' },
+        ],
+        wa.customer_mode, (o) => o.label, (o) => o.v,
+      );
+      [sender, mode].forEach((i) => { i.disabled = !canUpdate; });
+
+      const notes = el('div', 'mt-3 space-y-1 text-xs text-muted');
+      if (wa.sender === 'platform') {
+        notes.append(el('p', null, wa.platform_available
+          ? (wa.plan_includes_platform ? 'Messages go from AlbaBook’s number and always name your business. Uses your plan’s WhatsApp allowance.' : 'Your plan does not include WhatsApp messages from the AlbaBook number.')
+          : 'The AlbaBook WhatsApp number is not configured yet on this platform.'));
+      } else {
+        notes.append(el('p', null, wa.own_account_connected
+          ? 'Messages go from your connected WhatsApp Business account, using the templates you map below.'
+          : 'Connect your WhatsApp Business account under Channels above, then map your approved templates below.'));
+      }
+
+      const form = el('form', 'grid gap-4 sm:grid-cols-2');
+      form.noValidate = true;
+      const save = submitBtn('Save WhatsApp settings');
+      form.append(field('Send from', sender, 'sender'), field('Use for customers', mode, 'customer_mode'), el('div', 'sm:col-span-2', null));
+      form.lastChild.append(notes, save);
+      form.onsubmit = (event) => {
+        event.preventDefault();
+        ui.clearFieldErrors(form);
+        ui.setBusy(save, true, 'Saving…');
+        api.patch('/api/settings/whatsapp', { sender: sender.value, customer_mode: mode.value })
+          .then((next) => { AlbaBook.toast('WhatsApp settings saved.'); renderWhatsApp(next); })
+          .catch((error) => { if (error.fields) ui.showFieldErrors(form, error.fields); AlbaBook.toast(error.message, 'danger'); })
+          .finally(() => ui.setBusy(save, false));
+      };
+
+      const parts = [form];
+      if (wa.sender_requested === 'business' && wa.can_use_own_number) parts.push(renderWaTemplates(wa));
+      waBox.replaceChildren(...parts);
+    }
+
+    /** Own-number mode: map each event to the business's approved template. */
+    function renderWaTemplates(wa) {
+      const wrap = el('form', 'mt-6 border-t border-line pt-5');
+      wrap.noValidate = true;
+      wrap.append(
+        el('h4', 'text-sm font-semibold text-ink', 'Your approved templates'),
+        el('p', 'mt-1 text-xs text-muted', 'Enter each template name exactly as approved in WhatsApp Manager (or a Twilio Content SID “HX…”), and the variables in the order of {{1}}, {{2}}…. Leave a name empty to skip that message. Available variables: ' + wa.param_keys.join(', ') + '.'),
+      );
+      const own = Object.fromEntries((wa.templates || []).map((t) => [t.event_key, t]));
+      const platform = Object.fromEntries((wa.platform_templates || []).map((t) => [t.event_key, t]));
+      const rows = [];
+      const table = el('div', 'mt-4 space-y-3');
+      Object.entries(WA_EVENTS).forEach(([event, label]) => {
+        const current = own[event] || {};
+        const name = input('text', current.name || '');
+        name.placeholder = 'template_name';
+        name.maxLength = 512;
+        const lang = input('text', current.language || 'en');
+        lang.maxLength = 6;
+        lang.className += ' w-20';
+        const params = input('text', (current.params || (platform[event] && platform[event].params) || []).join(', '));
+        params.placeholder = 'business_name, reference, start_at';
+        [name, lang, params].forEach((i) => { i.disabled = !canUpdate; });
+        const row = el('div', 'grid gap-2 rounded-lg border border-line p-3 sm:grid-cols-[1fr_1.4fr_auto_1.6fr] sm:items-center');
+        row.append(el('span', 'text-sm font-medium text-ink', label), name, lang, params);
+        if (platform[event]) row.title = 'Suggested wording: ' + platform[event].body;
+        table.append(row);
+        rows.push({ event, name, lang, params });
+      });
+      const save = submitBtn('Save templates');
+      wrap.append(table, el('div', 'mt-4'));
+      wrap.lastChild.append(save);
+      wrap.onsubmit = (event) => {
+        event.preventDefault();
+        ui.setBusy(save, true, 'Saving…');
+        api.patch('/api/settings/whatsapp/templates', {
+          templates: rows.map((r) => ({
+            event_key: r.event,
+            name: r.name.value.trim(),
+            language: r.lang.value.trim() || 'en',
+            params: r.params.value.split(',').map((s) => s.trim()).filter(Boolean),
+          })),
+        })
+          .then((next) => { AlbaBook.toast('Templates saved.'); renderWhatsApp(next); })
+          .catch((error) => AlbaBook.toast(error.fields ? Object.values(error.fields)[0] : error.message, 'danger'))
+          .finally(() => ui.setBusy(save, false));
+      };
+      return wrap;
+    }
+
+    /* --------------------------------------------------------------- eTIMS */
+    const etimsBox = root.querySelector('[data-etims]');
+
+    function loadEtims() {
+      if (!etimsBox) return;
+      etimsBox.replaceChildren(ui.spinner('Loading eTIMS…'));
+      api.get('/api/settings/etims')
+        .then(renderEtims)
+        .catch((error) => etimsBox.replaceChildren(ui.errorState(error.message, loadEtims)));
+    }
+
+    function renderEtims(e) {
+      const env = select([{ v: 'sandbox', label: 'Sandbox (KRA test)' }, { v: 'production', label: 'Production (live)' }], e.environment, (o) => o.label, (o) => o.v);
+      const bhf = input('text', e.bhf_id || '00');
+      bhf.maxLength = 2;
+      const serial = input('text', e.device_serial || '');
+      serial.placeholder = 'Device serial issued by KRA';
+      const cls = input('text', e.item_class_code || '');
+      cls.inputMode = 'numeric';
+      cls.placeholder = 'KRA item classification code';
+      const pkg = input('text', e.pkg_unit || 'NT');
+      pkg.maxLength = 3;
+      const qty = input('text', e.qty_unit || 'U');
+      qty.maxLength = 3;
+      const zero = select([{ v: 'A', label: 'A — Exempt' }, { v: 'C', label: 'C — Zero-rated' }], e.zero_rate_tax_type, (o) => o.label, (o) => o.v);
+      const on = checkLabel('etims-enabled', 'Issue eTIMS invoices at checkout', e.enabled);
+      [env, bhf, serial, cls, pkg, qty, zero, on.box].forEach((i) => { i.disabled = !canUpdate; });
+
+      const status = el('div', 'mb-4 flex flex-wrap gap-2');
+      status.append(
+        badge(e.tin ? 'KRA PIN ' + e.tin : 'No KRA PIN — add it under Profile', e.tin ? 'neutral' : 'warning'),
+        badge(e.initialized ? 'Device initialized' : 'Device not initialized', e.initialized ? 'success' : 'warning'),
+        badge(e.enabled ? 'eTIMS on' : 'eTIMS off', e.enabled ? 'success' : 'neutral'),
+      );
+      const counts = e.invoice_counts || {};
+      if (counts.pending || counts.failed) {
+        status.append(badge((counts.pending || 0) + ' pending · ' + (counts.failed || 0) + ' failed', counts.failed ? 'danger' : 'warning'));
+      }
+
+      const form = el('form', 'grid gap-4 sm:grid-cols-2');
+      form.noValidate = true;
+      form.append(
+        field('Environment', env, 'environment'), field('KRA branch id', bhf, 'bhf_id'),
+        field('Device serial', serial, 'device_serial'), field('Item classification code', cls, 'item_class_code'),
+        field('Packaging unit code', pkg, 'pkg_unit'), field('Quantity unit code', qty, 'qty_unit'),
+        field('0% VAT lines are', zero, 'zero_rate_tax_type'),
+      );
+      const onWrap = el('div', 'sm:col-span-2');
+      onWrap.append(on.label);
+      const err = el('p', 'field-error');
+      err.id = 'field-enabled-error';
+      onWrap.append(err);
+      const note = el('p', 'sm:col-span-2 text-xs text-muted', 'Order: save your details → Initialize with KRA → switch eTIMS on. The service charge must be 0% and VAT 16%, 8% or 0% while eTIMS is on. Invoices are sent in the background and retried automatically.');
+      const actions = el('div', 'sm:col-span-2 flex flex-wrap gap-3');
+      const save = submitBtn('Save eTIMS settings');
+      const init = el('button', 'btn btn-secondary btn-md', 'Initialize with KRA');
+      init.type = 'button';
+      init.disabled = !canUpdate;
+      actions.append(save, init);
+      form.append(onWrap, note, actions);
+
+      const payload = () => ({
+        environment: env.value, bhf_id: bhf.value.trim(), device_serial: serial.value.trim(),
+        item_class_code: cls.value.trim(), pkg_unit: pkg.value.trim(), qty_unit: qty.value.trim(),
+        zero_rate_tax_type: zero.value, enabled: on.box.checked,
+      });
+      form.onsubmit = (event) => {
+        event.preventDefault();
+        ui.clearFieldErrors(form);
+        ui.setBusy(save, true, 'Saving…');
+        api.patch('/api/settings/etims', payload())
+          .then((next) => { AlbaBook.toast('eTIMS settings saved.'); renderEtims(next); })
+          .catch((error) => { if (error.fields) ui.showFieldErrors(form, error.fields); AlbaBook.toast(error.message, 'danger'); })
+          .finally(() => ui.setBusy(save, false));
+      };
+      init.addEventListener('click', () => {
+        ui.setBusy(init, true, 'Contacting KRA…');
+        api.patch('/api/settings/etims', Object.assign(payload(), { enabled: false }))
+          .then(() => api.post('/api/settings/etims/initialize', {}))
+          .then((next) => { AlbaBook.toast('Device initialized with KRA. You can now switch eTIMS on.'); renderEtims(next); })
+          .catch((error) => AlbaBook.toast(error.message, 'danger'))
+          .finally(() => ui.setBusy(init, false));
+      });
+
+      etimsBox.replaceChildren(status, form);
+    }
+
     /* -------------------------------------------------------- notifications */
     const notifPrefs = root.querySelector('[data-notif-prefs]');
     const notifAccounts = root.querySelector('[data-channel-accounts]');
+
+    /* Business alerts: optional SMS phone for new bookings / cancellations. */
+    const alertsForm = root.querySelector('[data-business-alerts]');
+    function renderBusinessAlerts(alerts) {
+      if (!alertsForm) return;
+      const phone = input('tel', alerts.phone || '');
+      phone.placeholder = 'e.g. 0712 345 678 (optional)';
+      phone.autocomplete = 'tel';
+      phone.disabled = !canUpdate;
+      const wrap = field('Alert phone (SMS)', phone, 'phone');
+      wrap.classList.add('max-w-sm');
+      const actions = el('div', 'mt-4 flex flex-wrap gap-3');
+      const submit = submitBtn('Save alert phone');
+      actions.append(submit);
+      alertsForm.replaceChildren(wrap, actions);
+      alertsForm.onsubmit = (event) => {
+        event.preventDefault();
+        ui.clearFieldErrors(alertsForm);
+        ui.setBusy(submit, true, 'Saving…');
+        api.patch('/api/settings/business-alerts', { phone: phone.value.trim() })
+          .then((saved) => {
+            AlbaBook.toast(saved.phone ? 'Alerts will also be sent by SMS to ' + saved.phone + '.' : 'SMS alerts turned off.');
+            renderBusinessAlerts(saved);
+          })
+          .catch((error) => {
+            if (error.fields) ui.showFieldErrors(alertsForm, error.fields);
+            AlbaBook.toast(error.message, 'danger');
+          })
+          .finally(() => ui.setBusy(submit, false));
+      };
+    }
 
     function loadNotifications() {
       notifPrefs.replaceChildren(ui.spinner('Loading preferences…'));
       notifAccounts.replaceChildren(ui.spinner('Loading accounts…'));
       api.get('/api/settings/notifications')
-        .then((data) => { state.notif = data; renderNotifAccounts(); renderNotifPrefs(); })
+        .then((data) => { state.notif = data; renderNotifAccounts(); renderNotifPrefs(); renderWhatsApp(data.whatsapp); renderBusinessAlerts(data.business_alerts || {}); })
         .catch((error) => {
           notifPrefs.replaceChildren(ui.errorState(error.message, loadNotifications));
           notifAccounts.replaceChildren();
@@ -681,6 +1042,7 @@
     const policySave = root.querySelector('[data-policy-save]');
 
     function loadPayments() {
+      loadEtims();
       payAccounts.replaceChildren(ui.spinner('Loading accounts…'));
       api.get('/api/settings/payments')
         .then((data) => {
@@ -818,18 +1180,46 @@
       const allOpt = el('option', null, 'All branches (workspace account)');
       allOpt.value = '';
       branchSelect.prepend(allOpt);
-      const credInput = el('textarea', 'input');
-      credInput.rows = 3;
-      credInput.placeholder = '{"consumer_key":"…","consumer_secret":"…","passkey":"…"}';
+      // Daraja (Lipa na M-Pesa Online) credentials for STK push. Stored
+      // encrypted; never shown again after saving.
+      const envSelect = select(
+        [{ v: 'sandbox', label: 'Sandbox (testing)' }, { v: 'production', label: 'Production (live)' }],
+        'sandbox',
+        (o) => o.label,
+        (o) => o.v,
+      );
+      const secretInput = (placeholder) => {
+        const i = input('password', '');
+        i.autocomplete = 'off';
+        i.placeholder = placeholder;
+        return i;
+      };
+      const keyInput = secretInput('Consumer key');
+      const secretKeyInput = secretInput('Consumer secret');
+      const passkeyInput = secretInput('Lipa na M-Pesa Online passkey');
+      const storeInput = input('text', '');
+      storeInput.inputMode = 'numeric';
+      storeInput.maxLength = 10;
+      storeInput.placeholder = 'Head-office / store number';
+      const storeField = field('Store number (Buy Goods only)', storeInput, 'store_number');
+      const syncStore = () => { storeField.hidden = typeSelect.value !== 'till'; };
+      typeSelect.addEventListener('change', syncStore);
+      syncStore();
+      const help = el('p', 'text-xs text-muted', 'Find these in your Safaricom Daraja app (Go Live → Lipa na M-Pesa Online). Buy Goods tills sign prompts with the store number; the till number receives the money.');
 
       const submit = submitBtn('Add account');
       form.append(
         field('Provider', providerSelect, 'provider'),
         field('Account type', typeSelect, 'account_type'),
-        field('Shortcode', shortcodeInput, 'shortcode'),
+        field('Shortcode (till or paybill number)', shortcodeInput, 'shortcode'),
+        storeField,
         field('Label', nameInput, 'display_name'),
         field('Branch', branchSelect, 'branch_id'),
-        field('Credentials', credInput, 'credentials'),
+        field('Environment', envSelect, 'environment'),
+        field('Consumer key', keyInput, 'consumer_key'),
+        field('Consumer secret', secretKeyInput, 'consumer_secret'),
+        field('Passkey', passkeyInput, 'passkey'),
+        help,
         submit,
       );
       form.addEventListener('submit', (event) => {
@@ -842,7 +1232,11 @@
           shortcode: shortcodeInput.value.trim(),
           display_name: nameInput.value.trim(),
           branch_id: branchSelect.value === '' ? 0 : Number(branchSelect.value),
-          credentials: credInput.value.trim(),
+          environment: envSelect.value,
+          consumer_key: keyInput.value.trim(),
+          consumer_secret: secretKeyInput.value.trim(),
+          passkey: passkeyInput.value.trim(),
+          store_number: typeSelect.value === 'till' ? storeInput.value.trim() : '',
         })
           .then(() => {
             AlbaBook.toast('Payment account added.');

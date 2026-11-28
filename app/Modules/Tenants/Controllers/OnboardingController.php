@@ -65,7 +65,9 @@ final class OnboardingController
             ], 422);
         }
 
-        $response = Response::redirect('/dashboard');
+        // Guided setup wizard first (update.md 2.2): the dashboard checklist
+        // stays as the fallback if the owner leaves midway.
+        $response = Response::redirect('/setup');
         if ($session instanceof ResolvedSession) {
             $this->sessions->setActiveTenant($session->sessionId, $tenant->tenantId);
             $issued = $this->sessions->rotate($session);

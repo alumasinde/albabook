@@ -52,7 +52,55 @@ final class PublicBookingApiController
         private readonly RateLimiter $limiter,
         private readonly Config $config,
         private readonly NotificationRepository $notifications,
+        private readonly \App\Modules\Booking\Services\BookingVerificationService $verification,
     ) {}
+
+    /** POST /v1/public/businesses/{slug}/phone-verifications {phone, branch_id?}
+     * @param array<string, string> $params
+     */
+    public function sendPhoneCode(Request $request, array $params): Response
+    {
+        $tenant = $this->resolveTenant($params);
+        if ($tenant === null) {
+            return ApiResponse::error('NOT_FOUND', 'Business not found.', 404);
+        }
+        $body = $request->body();
+        $branchId = (int) ($body['branch_id'] ?? 0);
+        $result = $this->verification->send(
+            (int) $tenant['id'], (string) $tenant['name'], $branchId > 0 ? $branchId : null,
+            is_scalar($body['phone'] ?? null) ? (string) $body['phone'] : '', $request->clientIp(),
+        );
+        if (!$result['ok']) {
+            return ApiResponse::error((string) $result['code'], (string) $result['message'], $result['code'] === 'RATE_LIMITED' ? 429 : 422, ['phone' => (string) $result['message']]);
+        }
+
+        return ApiResponse::ok(['sent' => true, 'expires_in' => \App\Modules\Booking\Services\BookingVerificationService::CODE_TTL_SECONDS], 201);
+    }
+
+    /** POST /v1/public/businesses/{slug}/phone-verifications/check {phone, code}
+     * @param array<string, string> $params
+     */
+    public function checkPhoneCode(Request $request, array $params): Response
+    {
+        $tenant = $this->resolveTenant($params);
+        if ($tenant === null) {
+            return ApiResponse::error('NOT_FOUND', 'Business not found.', 404);
+        }
+        if (!$this->limiter->hit('otp-check:' . $tenant['id'] . ':' . $request->clientIp(), 20, 900)->allowed) {
+            return ApiResponse::error('RATE_LIMITED', 'Too many attempts. Try again shortly.', 429);
+        }
+        $body = $request->body();
+        $token = $this->verification->verify(
+            (int) $tenant['id'],
+            is_scalar($body['phone'] ?? null) ? (string) $body['phone'] : '',
+            is_scalar($body['code'] ?? null) ? (string) $body['code'] : '',
+        );
+        if ($token === null) {
+            return ApiResponse::error('INVALID_CODE', 'That code is wrong or has expired.', 422, ['code' => 'Wrong or expired code.']);
+        }
+
+        return ApiResponse::ok(['verification_token' => $token, 'expires_in' => \App\Modules\Booking\Services\BookingVerificationService::TOKEN_TTL_SECONDS]);
+    }
 
     /** @param array<string, string> $params */
     public function business(Request $request, array $params): Response
@@ -279,6 +327,18 @@ final class PublicBookingApiController
         if ($fields !== []) {
             return ApiResponse::error('VALIDATION_FAILED', 'Check the highlighted fields.', 422, $fields);
         }
+        $gate = $this->verification->gate(
+            (int) $tenant['id'], $this->pages->policy((int) $tenant['id'], (int) $branch['id']),
+            $customer['phone'], is_scalar($body['verification_token'] ?? null) ? (string) $body['verification_token'] : '',
+        );
+        if ($gate['error'] !== null) {
+            $prefixed = [];
+            foreach ($gate['error']['fields'] as $k => $v) {
+                $prefixed['customer.' . $k] = $v;
+            }
+
+            return ApiResponse::error($gate['error']['code'], $gate['error']['message'], 422, $prefixed);
+        }
 
         $idempotencyKey = trim((string) ($request->header('Idempotency-Key') ?? $body['idempotency_key'] ?? ''));
         if ($idempotencyKey !== '' && !preg_match('/^[A-Za-z0-9_-]{8,64}$/', $idempotencyKey)) {
@@ -347,6 +407,7 @@ final class PublicBookingApiController
                 null,
                 $idempotencyKey !== '' ? $idempotencyKey : null,
                 $holdToken !== '' ? $holdToken : null,
+                $gate['verified'],
             );
         } catch (TransitionException $e) {
             return $this->withAlternatives($e, (int) $tenant['id'], $branch, $service, $staffId, $date);
@@ -709,7 +770,8 @@ final class PublicBookingApiController
         $stored = $digits((string) ($appointment['customer_phone_snapshot'] ?? ''));
         $given = $digits($contact);
 
-        return $stored !== '' && $given !== '' && str_ends_with($stored, substr($given, -9));
+        // At least nine digits, so "45" cannot match every number ending in 45.
+        return strlen($stored) >= 9 && strlen($given) >= 9 && str_ends_with($stored, substr($given, -9));
     }
 
     /**

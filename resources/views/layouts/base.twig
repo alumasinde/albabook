@@ -21,26 +21,20 @@
   <script src="{{ asset('js/ui.js') }}" defer></script>
   <script src="{{ asset('js/spa.js') }}" defer></script>
   <script src="{{ asset('js/pages.js') }}" defer></script>
-  <script src="{{ asset('js/appointment-modal.js') }}" defer></script>
-  <script src="{{ asset('js/pages/dashboard.js') }}" defer></script>
-  <script src="{{ asset('js/pages/appointments.js') }}" defer></script>
-  <script src="{{ asset('js/pages/calendar.js') }}" defer></script>
-  <script src="{{ asset('js/pages/booking.js') }}" defer></script>
-  <script src="{{ asset('js/pages/services.js') }}" defer></script>
-  <script src="{{ asset('js/pages/staff.js') }}" defer></script>
-  <script src="{{ asset('js/pages/customers.js') }}" defer></script>
-  <script src="{{ asset('js/pages/settings.js') }}" defer></script>
-  <script src="{{ asset('js/pages/branches.js') }}" defer></script>
-  <script src="{{ asset('js/pages/resources.js') }}" defer></script>
-  <script src="{{ asset('js/pages/booking-page.js') }}" defer></script>
-  <script src="{{ asset('js/pages/manage-booking.js') }}" defer></script>
-  <script src="{{ asset('js/pages/notifications.js') }}" defer></script>
-  <script src="{{ asset('js/pages/reports.js') }}" defer></script>
-  <script src="{{ asset('js/pages/integrations.js') }}" defer></script>
-  <script src="{{ asset('js/pages/billing.js') }}" defer></script>
-  <script src="{{ asset('js/pages/till.js') }}" defer></script>
-  <script src="{{ asset('js/pages/receipt.js') }}" defer></script>
-  <script src="{{ asset('js/pages/marketing.js') }}" defer></script>
+  {# Page bundles. The default is the dashboard superset; public and other
+     lean shells set page_scripts to only what their pages need so the
+     booking page stays light on slow connections (update.md 4.2/9.2). #}
+  {% for src in page_scripts|default([
+      'appointment-modal.js',
+      'pages/dashboard.js', 'pages/appointments.js', 'pages/calendar.js',
+      'pages/availability.js', 'pages/setup.js', 'pages/services.js',
+      'pages/staff.js', 'pages/customers.js', 'pages/settings.js',
+      'pages/branches.js', 'pages/resources.js', 'pages/booking-page.js',
+      'pages/notifications.js', 'pages/reports.js', 'pages/integrations.js',
+      'pages/billing.js', 'pages/till.js',
+  ]) %}
+  <script src="{{ asset('js/' ~ src) }}" defer></script>
+  {% endfor %}
 </head>
 <body class="{% block body_class %}min-h-full bg-surface text-ink antialiased{% endblock %}">
   <a href="#main" class="skip-link">{{ t('common.skip_to_content') }}</a>

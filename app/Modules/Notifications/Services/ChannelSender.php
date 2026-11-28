@@ -34,11 +34,18 @@ final class ChannelSender
      * resolved provider account. Throws on any failure — the caller
      * records the error and schedules a retry.
      */
-    public function send(int $tenantId, string $channel, string $recipient, string $text): void
+    /**
+     * @param array{name: string, language: string, params: list<string>}|null $template
+     *        WhatsApp: a provider-approved template (required outside Meta's
+     *        24-hour customer window). Null sends $text as free-form.
+     */
+    public function send(int $tenantId, string $channel, string $recipient, string $text, ?array $template = null): void
     {
         $account = $this->resolveAccount($tenantId, $channel);
         if ($account === null) {
-            throw new \RuntimeException("No active {$channel} provider account for this business.");
+            throw new \RuntimeException($channel === 'whatsapp' && $this->whatsappSender($tenantId) === 'business'
+                ? 'WhatsApp is set to send from your own number, but no active WhatsApp account is connected (Settings → Notifications).'
+                : "No active {$channel} provider account for this business.");
         }
 
         // Anti-pumping: anyone can type any number into a public booking
@@ -54,7 +61,27 @@ final class ChannelSender
             );
         }
 
-        $this->dispatch($account['provider_code'], $account['credentials'], $account['sender_id'], $recipient, $text);
+        $this->dispatch($account['provider_code'], $account['credentials'], $account['sender_id'], $recipient, $text, $template);
+    }
+
+    /**
+     * WhatsApp sender mode for a business: 'platform' (AlbaBook's verified
+     * number and templates — the default) or 'business' (their own number
+     * and templates; plan feature whatsapp_own_number). A downgraded plan
+     * falls back to platform automatically.
+     */
+    public function whatsappSender(int $tenantId): string
+    {
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT JSON_UNQUOTE(JSON_EXTRACT(COALESCE(preferences, JSON_OBJECT()), '$.whatsapp.sender'))
+               FROM tenant_settings WHERE tenant_id = ?",
+        );
+        $stmt->execute([$tenantId]);
+        $mode = $stmt->fetchColumn();
+
+        return $mode === 'business' && $this->features->enabled($tenantId, 'whatsapp_own_number')
+            ? 'business'
+            : 'platform';
     }
 
     /**
@@ -64,6 +91,18 @@ final class ChannelSender
      */
     public function resolveAccount(int $tenantId, string $channel): ?array
     {
+        // WhatsApp follows the explicit sender mode instead of "tenant first":
+        // platform mode always uses the platform number (its templates are
+        // approved under the platform account); business mode uses only the
+        // business's own account — never a silent fallback to the platform
+        // number, which would send the business's templates from the wrong
+        // account and fail.
+        if ($channel === 'whatsapp') {
+            if ($this->whatsappSender($tenantId) === 'platform') {
+                return $this->platformAccount('whatsapp');
+            }
+        }
+
         $stmt = $this->db->pdo()->prepare(
             "SELECT a.sender_id, a.credentials_encrypted, p.code AS provider_code
                FROM tenant_notification_accounts a
@@ -96,7 +135,7 @@ final class ChannelSender
             ];
         }
 
-        return $this->platformAccount($channel);
+        return $channel === 'whatsapp' ? null : $this->platformAccount($channel);
     }
 
     /** E.164 recipient whose prefix is in notifications.platform.{channel}.allowed_prefixes. */
@@ -151,13 +190,13 @@ final class ChannelSender
     }
 
     /** @param array<string, mixed> $credentials */
-    private function dispatch(string $provider, array $credentials, string $senderId, string $recipient, string $text): void
+    private function dispatch(string $provider, array $credentials, string $senderId, string $recipient, string $text, ?array $template = null): void
     {
         match ($provider) {
             'africastalking_sms' => $this->africasTalking($credentials, $senderId, $recipient, $text),
             'twilio_sms' => $this->twilio($credentials, $senderId, $recipient, $text, false),
-            'twilio_whatsapp' => $this->twilio($credentials, $senderId, $recipient, $text, true),
-            'whatsapp_cloud' => $this->whatsAppCloud($credentials, $senderId, $recipient, $text),
+            'twilio_whatsapp' => $this->twilio($credentials, $senderId, $recipient, $text, true, $template),
+            'whatsapp_cloud' => $this->whatsAppCloud($credentials, $senderId, $recipient, $text, $template),
             default => throw new \RuntimeException("Unsupported channel provider: {$provider}"),
         };
     }
@@ -187,7 +226,13 @@ final class ChannelSender
     }
 
     /** @param array<string, mixed> $creds */
-    private function twilio(array $creds, string $senderId, string $recipient, string $text, bool $whatsApp): void
+    /**
+     * @param array<string, mixed> $creds
+     * @param array{name: string, language: string, params: list<string>}|null $template
+     *        Twilio WhatsApp templates are Content API items: name = the
+     *        ContentSid ("HX…"), params fill {{1}}, {{2}}, ….
+     */
+    private function twilio(array $creds, string $senderId, string $recipient, string $text, bool $whatsApp, ?array $template = null): void
     {
         $sid = (string) ($creds['account_sid'] ?? '');
         $token = (string) ($creds['auth_token'] ?? '');
@@ -196,22 +241,36 @@ final class ChannelSender
             throw new \RuntimeException('Twilio account is missing account_sid/auth_token/from.');
         }
 
+        $fields = [
+            'From' => $whatsApp ? "whatsapp:{$from}" : $from,
+            'To' => $whatsApp ? "whatsapp:{$recipient}" : $recipient,
+        ];
+        if ($whatsApp && $template !== null && str_starts_with($template['name'], 'HX')) {
+            $vars = [];
+            foreach ($template['params'] as $i => $value) {
+                $vars[(string) ($i + 1)] = self::waParam($value);
+            }
+            $fields['ContentSid'] = $template['name'];
+            $fields['ContentVariables'] = json_encode($vars, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+        } else {
+            $fields['Body'] = $text;
+        }
+
         $response = $this->http->post(
             "https://api.twilio.com/2010-04-01/Accounts/{$sid}/Messages.json",
             ['Authorization' => 'Basic ' . base64_encode("{$sid}:{$token}"), 'Content-Type' => 'application/x-www-form-urlencoded'],
-            http_build_query([
-                'From' => $whatsApp ? "whatsapp:{$from}" : $from,
-                'To' => $whatsApp ? "whatsapp:{$recipient}" : $recipient,
-                'Body' => $text,
-            ]),
+            http_build_query($fields),
         );
         if ($response['status'] < 200 || $response['status'] >= 300) {
             throw new \RuntimeException("Twilio rejected the message (HTTP {$response['status']}).");
         }
     }
 
-    /** @param array<string, mixed> $creds */
-    private function whatsAppCloud(array $creds, string $senderId, string $recipient, string $text): void
+    /**
+     * @param array<string, mixed> $creds
+     * @param array{name: string, language: string, params: list<string>}|null $template
+     */
+    private function whatsAppCloud(array $creds, string $senderId, string $recipient, string $text, ?array $template = null): void
     {
         $phoneId = (string) ($creds['phone_number_id'] ?? '');
         $token = (string) ($creds['access_token'] ?? '');
@@ -219,18 +278,45 @@ final class ChannelSender
             throw new \RuntimeException('WhatsApp Cloud account is missing phone_number_id/access_token.');
         }
 
+        // Template message (works any time) when one is mapped; otherwise
+        // free-form text, which Meta only delivers inside the 24-hour
+        // customer-service window.
+        $message = $template !== null
+            ? [
+                'type' => 'template',
+                'template' => [
+                    'name' => $template['name'],
+                    'language' => ['code' => $template['language']],
+                    'components' => $template['params'] === [] ? [] : [[
+                        'type' => 'body',
+                        'parameters' => array_map(
+                            static fn(string $v): array => ['type' => 'text', 'text' => self::waParam($v)],
+                            $template['params'],
+                        ),
+                    ]],
+                ],
+            ]
+            : ['type' => 'text', 'text' => ['body' => $text]];
+
         $response = $this->http->post(
             "https://graph.facebook.com/v19.0/{$phoneId}/messages",
             ['Authorization' => "Bearer {$token}", 'Content-Type' => 'application/json'],
-            json_encode([
-                'messaging_product' => 'whatsapp',
-                'to' => $recipient,
-                'type' => 'text',
-                'text' => ['body' => $text],
-            ], JSON_THROW_ON_ERROR),
+            json_encode(['messaging_product' => 'whatsapp', 'to' => ltrim($recipient, '+')] + $message, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
         );
         if ($response['status'] < 200 || $response['status'] >= 300) {
-            throw new \RuntimeException("WhatsApp Cloud rejected the message (HTTP {$response['status']}).");
+            $error = json_decode($response['body'], true);
+            $detail = is_array($error) ? (string) ($error['error']['message'] ?? '') : '';
+            throw new \RuntimeException("WhatsApp Cloud rejected the message (HTTP {$response['status']})" . ($detail !== '' ? ": {$detail}" : '.'));
         }
+    }
+
+    /** WhatsApp template parameters may not contain newlines/tabs or 4+ spaces, max 1024 chars. */
+    private static function waParam(string $value): string
+    {
+        $value = (string) preg_replace('/[\r\n\t]+/', ' ', $value);
+        $value = (string) preg_replace('/ {4,}/', '   ', $value);
+        $value = trim($value);
+
+        return $value === '' ? '-' : mb_substr($value, 0, 1024);
     }
 }

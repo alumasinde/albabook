@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Platform\Repositories;
 
+use App\Modules\Auth\Services\MfaService;
 use App\Core\Database\Database;
 
 /**
@@ -90,21 +91,31 @@ final class PlatformUserRepository
 
     public function recordMfaFailure(int $platformUserId, int $max, int $lockMinutes): void
     {
+        // Same fixed counting window as UserRepository::recordMfaFailure().
         $this->db->pdo()->prepare(
             'UPDATE platform_users
-                SET mfa_failed_attempts = mfa_failed_attempts + 1,
+                SET mfa_failed_attempts = IF(
+                        mfa_failures_started_at IS NULL OR mfa_failures_started_at < UTC_TIMESTAMP() - INTERVAL :win1 MINUTE,
+                        1, mfa_failed_attempts + 1),
+                    mfa_failures_started_at = IF(
+                        mfa_failures_started_at IS NULL OR mfa_failures_started_at < UTC_TIMESTAMP() - INTERVAL :win2 MINUTE,
+                        UTC_TIMESTAMP(), mfa_failures_started_at),
                     mfa_locked_until = IF(
                         mfa_failed_attempts >= :max,
                         DATE_ADD(UTC_TIMESTAMP(), INTERVAL :mins MINUTE),
                         mfa_locked_until)
               WHERE id = :id',
-        )->execute(['max' => $max, 'mins' => $lockMinutes, 'id' => $platformUserId]);
+        )->execute([
+            'win1' => MfaService::USER_FAILURE_WINDOW_MINUTES,
+            'win2' => MfaService::USER_FAILURE_WINDOW_MINUTES,
+            'max' => $max, 'mins' => $lockMinutes, 'id' => $platformUserId,
+        ]);
     }
 
     public function resetMfaFailures(int $platformUserId): void
     {
         $this->db->pdo()->prepare(
-            'UPDATE platform_users SET mfa_failed_attempts = 0, mfa_locked_until = NULL WHERE id = ?',
+            'UPDATE platform_users SET mfa_failed_attempts = 0, mfa_failures_started_at = NULL, mfa_locked_until = NULL WHERE id = ?',
         )->execute([$platformUserId]);
     }
 

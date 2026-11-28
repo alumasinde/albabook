@@ -25,6 +25,8 @@ return static function (RouteRegistrar $r): void {
     $r->post('/v1/public/businesses/{slug}/holds', [PublicBookingApiController::class, 'createHold'], name: 'api.public.holds.create');
     $r->delete('/v1/public/businesses/{slug}/holds/{holdToken}', [PublicBookingApiController::class, 'releaseHold'], name: 'api.public.holds.release');
     $r->post('/v1/public/businesses/{slug}/bookings', [PublicBookingApiController::class, 'createBooking'], name: 'api.public.bookings.create');
+    $r->post('/v1/public/businesses/{slug}/phone-verifications', [PublicBookingApiController::class, 'sendPhoneCode'], name: 'api.public.phone_verifications.create');
+    $r->post('/v1/public/businesses/{slug}/phone-verifications/check', [PublicBookingApiController::class, 'checkPhoneCode'], name: 'api.public.phone_verifications.check');
     $r->post('/v1/public/businesses/{slug}/booking-lookup', [PublicBookingApiController::class, 'bookingLookup'], name: 'api.public.bookings.lookup');
 
     $r->get('/v1/public/bookings/{manageToken}', [PublicBookingApiController::class, 'bookingShow'], name: 'api.public.booking.show');

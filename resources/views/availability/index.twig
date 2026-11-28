@@ -1,0 +1,32 @@
+{#
+  Time off & closures (update.md 3.2): weekly breaks, time off/leave,
+  branch closures & special hours, and blocked time. Everything hydrates
+  from /api/availability; the API decides what each member may change.
+#}
+{% extends 'layouts/dashboard.twig' %}
+
+{% set page_title = t('nav.time_off') %}
+{% set active_nav = 'time_off' %}
+{% set workspace = tenant.name %}
+
+{% block title %}{{ t('nav.time_off') }} · {{ app_name }}{% endblock %}
+
+{% block content %}
+<div data-page="availability">
+  <div class="mb-6">
+    <h2 class="text-2xl font-semibold text-ink">{{ t('nav.time_off') }}</h2>
+    <p class="mt-1 text-sm text-muted">Breaks, time off, closures and blocked time. Your booking page never offers these times.</p>
+  </div>
+
+  <nav class="mb-6 flex flex-wrap gap-1 rounded-xl border border-line bg-white p-1" aria-label="Sections">
+    <button type="button" class="tab-btn" data-av-tab="leave">Time off</button>
+    <button type="button" class="tab-btn" data-av-tab="breaks">Breaks</button>
+    <button type="button" class="tab-btn" data-av-tab="closures">Closures &amp; holidays</button>
+    <button type="button" class="tab-btn" data-av-tab="blocks">Blocked time</button>
+  </nav>
+
+  <div data-av-body>
+    <div class="card p-6" data-av-loading></div>
+  </div>
+</div>
+{% endblock %}

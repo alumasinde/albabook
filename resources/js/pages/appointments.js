@@ -12,6 +12,7 @@
 
   const TRANSITIONS = {
     confirmed: { label: 'Confirm Appointment', tone: 'primary', icon: 'fa-circle-check' },
+    rejected: { label: 'Decline Request', tone: 'secondary', icon: 'fa-circle-xmark' },
     checked_in: { label: 'Check In', tone: 'primary', icon: 'fa-user-check' },
     in_service: { label: 'Start Service', tone: 'primary', icon: 'fa-play' },
     completed: { label: 'Mark Completed', tone: 'primary', icon: 'fa-flag-checkered' },
@@ -166,7 +167,7 @@
         // Status-colored event timeline: who did what, when, and any
         // reason / timing-override / reschedule detail the event carries.
         const DOT = {
-          cancelled: 'bg-danger', no_show: 'bg-danger', expired: 'bg-warning',
+          cancelled: 'bg-danger', no_show: 'bg-danger', expired: 'bg-warning', rejected: 'bg-danger',
           completed: 'bg-success',
         };
         body.append(el('h4', 'mt-6 text-sm font-semibold text-ink', 'History'));
@@ -200,7 +201,7 @@
         actions.append(appointmentDrawer._cancelForm(d, actions, onChange, btn));
         return;
       }
-      if (to === 'no_show') {
+      if (to === 'no_show' || to === 'rejected') {
         const yes = await ui.confirm({
           title: spec.label,
           message: 'This changes the appointment status to ' + to.replace(/_/g, ' ') + '.',

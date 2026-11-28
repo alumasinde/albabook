@@ -19,6 +19,8 @@ return static function (RouteRegistrar $r): void {
     $r->get('/{slug}/availability', [BookingPageController::class, 'availability'], name: 'booking.availability');
     $r->get('/{slug}/staff', [BookingPageController::class, 'staffList'], name: 'booking.staff');
     $r->post('/{slug}/book', [BookingPageController::class, 'book'], name: 'booking.book');
+    $r->post('/{slug}/verify-phone', [BookingPageController::class, 'sendPhoneCode'], name: 'booking.verify_phone');
+    $r->post('/{slug}/verify-phone/check', [BookingPageController::class, 'checkPhoneCode'], name: 'booking.verify_phone.check');
     // Customer self-service — the manage token is the capability (D-008).
     $r->get('/{slug}/manage/{token}', [ManageBookingController::class, 'page'], name: 'booking.manage');
     $r->post('/{slug}/manage/{token}/cancel', [ManageBookingController::class, 'cancel'], name: 'booking.manage.cancel');
@@ -30,6 +32,8 @@ return static function (RouteRegistrar $r): void {
     $r->get('/availability', [BookingPageController::class, 'availability'], name: 'booking.domain.availability');
     $r->get('/staff', [BookingPageController::class, 'staffList'], name: 'booking.domain.staff');
     $r->post('/book', [BookingPageController::class, 'book'], name: 'booking.domain.book');
+    $r->post('/verify-phone', [BookingPageController::class, 'sendPhoneCode'], name: 'booking.domain.verify_phone');
+    $r->post('/verify-phone/check', [BookingPageController::class, 'checkPhoneCode'], name: 'booking.domain.verify_phone.check');
     $r->get('/manage/{token}', [ManageBookingController::class, 'page'], name: 'booking.domain.manage');
     $r->post('/manage/{token}/cancel', [ManageBookingController::class, 'cancel'], name: 'booking.domain.manage.cancel');
     $r->post('/manage/{token}/reschedule', [ManageBookingController::class, 'reschedule'], name: 'booking.domain.manage.reschedule');

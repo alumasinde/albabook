@@ -19,6 +19,7 @@ return static function (Router $router, string $basePath): void {
         'web.php' => HostGroup::Tenant,
         'public.php' => HostGroup::Booking,
         'api.php' => HostGroup::Api,
+        'webhooks.php' => HostGroup::Api,
         'admin.php' => HostGroup::Admin,
         'site.php' => HostGroup::Marketing,
     ];

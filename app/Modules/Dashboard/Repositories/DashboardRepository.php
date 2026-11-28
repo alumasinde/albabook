@@ -76,6 +76,36 @@ final class DashboardRepository
         return (int) $stmt->fetchColumn();
     }
 
+    /**
+     * Booking requests awaiting approval (manual confirmation mode), soonest
+     * visit first — the dashboard's "Needs approval" queue.
+     *
+     * @param array<int>|null $branchIds
+     * @return list<array<string, mixed>>
+     */
+    public function pendingQueue(int $tenantId, ?array $branchIds, string $nowUtc, int $limit = 8): array
+    {
+        $params = ['t' => $tenantId, 'n' => $nowUtc];
+        $scope = $this->scopeSql($branchIds, $params, 'a.branch_id');
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT a.uuid, a.reference, a.version, a.start_at, a.created_at,
+                    a.customer_name_snapshot AS customer_name,
+                    a.customer_phone_snapshot AS customer_phone,
+                    s.display_name AS staff_name,
+                    (SELECT ai.service_name_snapshot FROM appointment_items ai
+                      WHERE ai.tenant_id = a.tenant_id AND ai.appointment_id = a.id
+                      ORDER BY ai.item_position LIMIT 1) AS service_name
+               FROM appointments a
+               LEFT JOIN staff s ON s.tenant_id = a.tenant_id AND s.id = a.staff_id
+              WHERE a.tenant_id = :t AND a.status = 'pending' AND a.start_at > :n{$scope}
+              ORDER BY a.start_at
+              LIMIT " . max(1, $limit),
+        );
+        $stmt->execute($params);
+
+        return array_values($stmt->fetchAll());
+    }
+
     public function activeCustomers(int $tenantId): int
     {
         $stmt = $this->db->pdo()->prepare(

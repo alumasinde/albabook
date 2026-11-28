@@ -26,6 +26,9 @@ final class AppointmentEventService
         'cancelled' => 'appointment_cancelled',
         'completed' => 'appointment_completed',
         'expired' => 'appointment_expired',
+        // Reschedules go through onTransitioned('rescheduled'): the customer
+        // gets the new time, reminders are re-armed against the new version.
+        'rescheduled' => 'appointment_rescheduled',
     ];
 
     /** scheduled_notifications.kind => seconds before start_at. */
@@ -35,6 +38,12 @@ final class AppointmentEventService
     ];
 
     private const TERMINAL = ['cancelled', 'rejected', 'completed', 'no_show', 'expired'];
+
+    /** Bookings customers make themselves; only these alert the business. */
+    private const CUSTOMER_SOURCES = ['public_page', 'widget', 'api'];
+
+    /** Upper bound on alert e-mails per event (large teams). */
+    private const MAX_ALERT_RECIPIENTS = 10;
 
     public function __construct(
         private readonly Database $db,
@@ -57,6 +66,10 @@ final class AppointmentEventService
         $this->notify($appointment, $event);
         $this->emit($appointment, 'appointment.created', $event);
         $this->scheduleReminders($appointment);
+        // Online bookings tell the business (staff-made ones need no alert).
+        if (in_array((string) ($appointment['booking_source'] ?? ''), self::CUSTOMER_SOURCES, true)) {
+            $this->alertBusiness($appointment, 'business_new_booking');
+        }
     }
 
     /**
@@ -76,6 +89,11 @@ final class AppointmentEventService
             $this->notify($appointment, $event);
         }
         $this->emit($appointment, 'appointment.' . $to, $event ?? 'status.changed');
+        // A customer cancelling (manage link / public API) frees a slot the
+        // business should know about; staff cancellations need no alert.
+        if ($to === 'cancelled' && (string) ($appointment['cancelled_by'] ?? '') === 'customer') {
+            $this->alertBusiness($appointment, 'business_booking_cancelled');
+        }
         $this->cancelReminders($tenantId, $appointmentId);
         if (!in_array($to, self::TERMINAL, true)) {
             $this->scheduleReminders($appointment);
@@ -86,13 +104,65 @@ final class AppointmentEventService
     private function notify(array $appointment, string $event): void
     {
         $payload = $this->payload($appointment, $event);
-        foreach (['email' => 'customer_email_snapshot', 'sms' => 'customer_phone_snapshot'] as $channel => $column) {
+        // Phone recipients go to SMS and/or WhatsApp per the business's setting.
+        $channels = ['email' => 'customer_email_snapshot'];
+        foreach ($this->policy->phoneChannels((int) $appointment['tenant_id']) as $phoneChannel) {
+            $channels[$phoneChannel] = 'customer_phone_snapshot';
+        }
+        foreach ($channels as $channel => $column) {
             $recipient = trim((string) ($appointment[$column] ?? ''));
             if ($recipient === '' || !$this->policy->allows((int) $appointment['tenant_id'], $channel, $event)) {
                 continue;
             }
             $this->queue->enqueue((int) $appointment['tenant_id'], (int) $appointment['id'], $channel, $recipient, $payload);
         }
+    }
+
+    /**
+     * Business-facing alert: e-mail to every active team member who can
+     * approve bookings for this branch (appointments.confirm, branch scope
+     * honoured), plus an SMS to the optional alert phone in Settings ->
+     * Notifications. Each channel obeys the business's preference grid.
+     *
+     * @param array<string, mixed> $appointment
+     */
+    private function alertBusiness(array $appointment, string $event): void
+    {
+        $tenantId = (int) $appointment['tenant_id'];
+        $payload = $this->payload($appointment, $event);
+
+        if ($this->policy->allows($tenantId, 'email', $event)) {
+            foreach ($this->alertEmails($tenantId, (int) $appointment['branch_id']) as $email) {
+                $this->queue->enqueue($tenantId, (int) $appointment['id'], 'email', $email, $payload);
+            }
+        }
+        $phone = $this->policy->businessAlertPhone($tenantId);
+        if ($phone !== null && $this->policy->allows($tenantId, 'sms', $event)) {
+            $this->queue->enqueue($tenantId, (int) $appointment['id'], 'sms', $phone, $payload);
+        }
+    }
+
+    /** @return list<string> */
+    private function alertEmails(int $tenantId, int $branchId): array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT DISTINCT u.email
+               FROM tenant_users tu
+               JOIN users u ON u.id = tu.user_id AND u.status = 'active' AND u.email_verified_at IS NOT NULL
+               JOIN membership_roles mr ON mr.tenant_id = tu.tenant_id AND mr.tenant_user_id = tu.id
+               JOIN role_permissions rp ON rp.role_id = mr.role_id
+               JOIN permissions p ON p.id = rp.permission_id AND p.scope = 'tenant' AND p.identifier = 'appointments.confirm'
+              WHERE tu.tenant_id = :t AND tu.status = 'active'
+                AND (NOT EXISTS (SELECT 1 FROM membership_branches mb
+                                  WHERE mb.tenant_id = tu.tenant_id AND mb.tenant_user_id = tu.id)
+                     OR EXISTS (SELECT 1 FROM membership_branches mb2
+                                 WHERE mb2.tenant_id = tu.tenant_id AND mb2.tenant_user_id = tu.id AND mb2.branch_id = :b))
+              ORDER BY u.email
+              LIMIT " . self::MAX_ALERT_RECIPIENTS,
+        );
+        $stmt->execute(['t' => $tenantId, 'b' => $branchId]);
+
+        return array_values(array_map('strval', $stmt->fetchAll(\PDO::FETCH_COLUMN)));
     }
 
     /** @param array<string, mixed> $appointment */
@@ -162,6 +232,10 @@ final class AppointmentEventService
             'customer_name' => (string) ($appointment['customer_name_snapshot'] ?? ''),
             'business_name' => (string) ($appointment['business_name'] ?? ''),
             'branch_name' => (string) ($appointment['branch_name'] ?? ''),
+            // Business alerts: who booked what, and whether it needs approval.
+            'customer_phone' => (string) ($appointment['customer_phone_snapshot'] ?? ''),
+            'service_name' => (string) ($appointment['service_name'] ?? ''),
+            'approval_note' => (string) $appointment['status'] === 'pending' ? 'Needs your approval in AlbaBook.' : '',
         ], JSON_THROW_ON_ERROR);
     }
 
@@ -188,8 +262,12 @@ final class AppointmentEventService
     private function load(int $tenantId, int $appointmentId): ?array
     {
         $stmt = $this->db->pdo()->prepare(
-            'SELECT a.id, a.tenant_id, a.uuid, a.reference, a.status, a.version, a.start_at,
+            'SELECT a.id, a.tenant_id, a.branch_id, a.uuid, a.reference, a.status, a.version, a.start_at,
+                    a.booking_source, a.cancelled_by,
                     a.customer_name_snapshot, a.customer_email_snapshot, a.customer_phone_snapshot,
+                    (SELECT ai.service_name_snapshot FROM appointment_items ai
+                      WHERE ai.tenant_id = a.tenant_id AND ai.appointment_id = a.id
+                      ORDER BY ai.item_position LIMIT 1) AS service_name,
                     t.name AS business_name, b.name AS branch_name,
                     COALESCE(b.timezone, t.timezone) AS timezone
                FROM appointments a

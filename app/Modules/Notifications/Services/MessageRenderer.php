@@ -36,6 +36,9 @@ final class MessageRenderer
         'appointment_completed' => 'Thank you for visiting {business_name}! Your appointment {reference} is complete.',
         'appointment_rescheduled' => '{business_name}: your appointment {reference} was moved to {start_at}.',
         'manage_link' => '{business_name}: manage your booking {reference}: {manage_url}',
+        // Business-facing alerts (to the team, not the customer).
+        'business_new_booking' => 'New online booking {reference}: {customer_name} ({customer_phone}), {service_name}, {start_at} at {branch_name}. {approval_note}',
+        'business_booking_cancelled' => 'Cancelled by customer: {reference}, {customer_name} ({customer_phone}), {service_name}, {start_at} at {branch_name}. The slot is free again.',
     ];
 
     /** Built-in email subjects per event (templates may override). */
@@ -51,18 +54,26 @@ final class MessageRenderer
         'appointment_completed' => 'Thank you for your visit — {business_name}',
         'appointment_rescheduled' => 'Appointment moved — {business_name}',
         'manage_link' => 'Manage your booking — {business_name}',
+        'business_new_booking' => 'New booking {reference} — {customer_name}, {start_at}',
+        'business_booking_cancelled' => 'Booking cancelled by customer — {reference}, {start_at}',
     ];
 
     public function __construct(private readonly Database $db) {}
 
     /**
      * @param array<string, mixed> $payload
-     * @return array{subject: string, body: string}
+     * @param string|null $waSender WhatsApp sender mode ('platform'|'business');
+     *        decides whose templates apply (see 028_whatsapp_templates.sql)
+     * @return array{subject: string, body: string, template: array{name: string, language: string, params: list<string>}|null}
      */
-    public function render(int $tenantId, string $channel, string $locale, array $payload): array
+    public function render(int $tenantId, string $channel, string $locale, array $payload, ?string $waSender = null): array
     {
         $event = (string) ($payload['event'] ?? '');
-        $template = $this->template($tenantId, $channel, $event, $locale);
+        // WhatsApp scope: platform mode uses only the platform's approved
+        // templates; business mode only the business's own mappings (their
+        // names exist only in their WhatsApp account).
+        $scope = $channel === 'whatsapp' ? ($waSender === 'business' ? 'tenant' : 'platform') : 'any';
+        $template = $this->template($tenantId, $channel, $event, $locale, $scope);
         $subject = ($template['subject'] ?? '') !== ''
             ? (string) $template['subject']
             : (self::SUBJECTS[$event] ?? self::FALLBACK_SUBJECT);
@@ -75,9 +86,24 @@ final class MessageRenderer
             $values['business_name'] = $this->businessName($tenantId);
         }
 
+        $waTemplate = null;
+        if ($channel === 'whatsapp' && ($template['wa_template_name'] ?? null) !== null && $template['wa_template_name'] !== '') {
+            $keys = json_decode((string) ($template['wa_params'] ?? '[]'), true);
+            $waTemplate = [
+                'name' => (string) $template['wa_template_name'],
+                'language' => (string) ($template['wa_language'] ?: 'en'),
+                // Positional {{1}}, {{2}}… values from the payload keys.
+                'params' => array_values(array_map(
+                    static fn(mixed $k): string => is_string($k) ? ($values[$k] ?? '') : '',
+                    is_array($keys) ? $keys : [],
+                )),
+            ];
+        }
+
         return [
             'subject' => $this->interpolate((string) $subject, $values),
             'body' => $this->interpolate($body, $values),
+            'template' => $waTemplate,
         ];
     }
 
@@ -90,14 +116,22 @@ final class MessageRenderer
         return is_string($name) && $name !== '' ? $name : 'AlbaBook';
     }
 
-    /** @return array{subject: ?string, body: string}|null */
-    private function template(int $tenantId, string $channel, string $event, string $locale): ?array
+    /**
+     * @param 'any'|'platform'|'tenant' $scope
+     * @return array<string, mixed>|null
+     */
+    private function template(int $tenantId, string $channel, string $event, string $locale, string $scope = 'any'): ?array
     {
+        $scopeSql = match ($scope) {
+            'platform' => 'tenant_id IS NULL AND :t >= 0',
+            'tenant' => 'tenant_id = :t',
+            default => '(tenant_id = :t OR tenant_id IS NULL)',
+        };
         $stmt = $this->db->pdo()->prepare(
-            'SELECT subject, body FROM notification_templates
+            "SELECT subject, body, wa_template_name, wa_language, wa_params FROM notification_templates
               WHERE channel = :c AND event_key = :e AND locale = :l AND is_active = 1
-                AND (tenant_id = :t OR tenant_id IS NULL)
-              ORDER BY tenant_id IS NULL LIMIT 1',
+                AND {$scopeSql}
+              ORDER BY tenant_id IS NULL LIMIT 1",
         );
         $stmt->execute(['c' => $channel, 'e' => $event, 'l' => $locale, 't' => $tenantId]);
         $row = $stmt->fetch();

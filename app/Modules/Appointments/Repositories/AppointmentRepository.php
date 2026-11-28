@@ -376,7 +376,10 @@ final class AppointmentRepository
     public function findByManageToken(string $tokenHash): ?array
     {
         $stmt = $this->db->pdo()->prepare(
-            'SELECT * FROM appointments WHERE manage_token_hash = :h LIMIT 1',
+            // Links expire 30 days after the visit ends: an old SMS or a
+            // forwarded e-mail should not keep exposing a customer's booking.
+            'SELECT * FROM appointments WHERE manage_token_hash = :h
+                AND end_at > UTC_TIMESTAMP() - INTERVAL 30 DAY LIMIT 1',
         );
         $stmt->execute(['h' => $tokenHash]);
         $row = $stmt->fetch();
@@ -427,6 +430,17 @@ final class AppointmentRepository
      * Count occupied windows for a staff member overlapping [fromUtc, toUtc)
      * on statuses that block time (appointment_statuses.blocks_time).
      */
+    /**
+     * Serialises quota checks for one tenant inside the booking transaction
+     * (released on commit/rollback). Lock order: tenant → staff → resources.
+     */
+    public function lockTenantForQuota(int $tenantId): void
+    {
+        $stmt = $this->db->pdo()->prepare('SELECT id FROM tenants WHERE id = :t FOR UPDATE');
+        $stmt->execute(['t' => $tenantId]);
+        $stmt->fetchAll();
+    }
+
     /** Appointments created at/after an instant — the monthly_bookings meter. */
     public function countCreatedSince(int $tenantId, string $sinceUtc): int
     {

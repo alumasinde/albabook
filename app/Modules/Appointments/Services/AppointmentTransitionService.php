@@ -17,7 +17,7 @@ final class AppointmentTransitionService
 {
     /** @var array<string, list<string>> */
     private const GRAPH = [
-        'pending' => ['confirmed', 'cancelled'],
+        'pending' => ['confirmed', 'rejected', 'cancelled'],
         'confirmed' => ['checked_in', 'cancelled', 'no_show', 'completed'],
         'checked_in' => ['in_service', 'completed', 'cancelled', 'no_show'],
         'in_service' => ['completed', 'cancelled'],
@@ -31,6 +31,7 @@ final class AppointmentTransitionService
     /** Permission required per target status. */
     private const PERMISSION = [
         'confirmed' => 'appointments.confirm',
+        'rejected' => 'appointments.confirm',
         'checked_in' => 'appointments.update',
         'in_service' => 'appointments.update',
         'completed' => 'appointments.update',
@@ -176,6 +177,13 @@ final class AppointmentTransitionService
             }
             if ($expectedVersion !== null && (int) $row['version'] !== $expectedVersion) {
                 throw new TransitionException('STALE_APPOINTMENT', 'This appointment was changed by someone else. Reload it and retry.', 409);
+            }
+            // Self-service ends when the visit starts, whatever the cutoff
+            // policy: otherwise a customer could "cancel" after missing the
+            // appointment and erase the no-show.
+            if ($actorType === 'customer' && $to === 'cancelled'
+                && new \DateTimeImmutable((string) $row['start_at'], new \DateTimeZone('UTC')) <= new \DateTimeImmutable('now', new \DateTimeZone('UTC'))) {
+                throw new TransitionException('CUTOFF_PASSED', 'This appointment has already started — contact the business.', 409, ['time' => 'The appointment time has passed.']);
             }
 
             $override = null;

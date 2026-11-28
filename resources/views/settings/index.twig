@@ -20,12 +20,21 @@
 
   <nav class="mb-6 flex flex-wrap gap-1 rounded-xl border border-line bg-white p-1" aria-label="{{ t('settings.tabs_label') }}">
     <button type="button" class="tab-btn" data-settings-tab="profile">{{ t('settings.tab_profile') }}</button>
+    <button type="button" class="tab-btn" data-settings-tab="booking-rules">{{ t('settings.tab_booking_rules') }}</button>
     <button type="button" class="tab-btn" data-settings-tab="categories">{{ t('settings.tab_categories') }}</button>
     <button type="button" class="tab-btn" data-settings-tab="theme">{{ t('settings.tab_theme') }}</button>
     <button type="button" class="tab-btn" data-settings-tab="notifications">{{ t('settings.tab_notifications') }}</button>
     <button type="button" class="tab-btn" data-settings-tab="payments">{{ t('settings.tab_payments') }}</button>
     <button type="button" class="tab-btn" data-settings-tab="receipt">{{ t('settings.tab_receipt') }}</button>
   </nav>
+
+  <section data-settings-panel="booking-rules" hidden aria-labelledby="settings-booking-rules-h">
+    <div class="card max-w-3xl p-6">
+      <h3 id="settings-booking-rules-h" class="text-lg font-semibold text-ink">{{ t('settings.booking_rules_heading') }}</h3>
+      <p class="mt-1 text-sm text-muted">{{ t('settings.booking_rules_subtitle') }}</p>
+      <form data-settings-booking-rules class="mt-5" novalidate></form>
+    </div>
+  </section>
 
   <section data-settings-panel="receipt" hidden aria-labelledby="settings-receipt-h">
     <div class="card max-w-3xl p-6">
@@ -107,10 +116,25 @@
         <p class="mt-1 text-sm text-muted">{{ t('settings.prefs_subtitle') }}</p>
         <div data-notif-prefs class="mt-5"></div>
       </div>
+      <div class="card p-6">
+        <h3 class="text-lg font-semibold text-ink"><i class="fa-brands fa-whatsapp text-success" aria-hidden="true"></i> {{ t('settings.whatsapp_heading') }}</h3>
+        <p class="mt-1 text-sm text-muted">{{ t('settings.whatsapp_subtitle') }}</p>
+        <div data-whatsapp class="mt-5"></div>
+      </div>
+      <div class="card p-6">
+        <h3 class="text-lg font-semibold text-ink"><i class="fa-solid fa-bell text-primary" aria-hidden="true"></i> {{ t('settings.alerts_heading') }}</h3>
+        <p class="mt-1 text-sm text-muted">{{ t('settings.alerts_subtitle') }}</p>
+        <form data-business-alerts class="mt-5" novalidate></form>
+      </div>
     </div>
   </section>
 
   <section data-settings-panel="payments" hidden aria-labelledby="settings-payments-h">
+    <div class="card p-6 mb-6">
+      <h3 class="text-lg font-semibold text-ink">{{ t('settings.etims_heading') }}</h3>
+      <p class="mt-1 text-sm text-muted">{{ t('settings.etims_subtitle') }}</p>
+      <div data-etims class="mt-5"></div>
+    </div>
     <div class="card p-6 mb-6" data-payment-policy hidden>
       <div class="flex items-start justify-between gap-4">
         <div>

@@ -310,8 +310,77 @@
             error.classList.remove('hidden');
           });
       });
-      box.append(method, amount, ref, error, pay);
+      // M-Pesa STK push: prompt the customer's phone instead of typing a
+      // reference. Shown only for the M-Pesa method; the server reserves the
+      // amount while the prompt is open and settles it from Safaricom.
+      const stkBox = el('div', 'mt-3 hidden rounded-lg bg-surface p-3');
+      const phone = el('input', 'input');
+      phone.type = 'tel';
+      phone.inputMode = 'tel';
+      phone.placeholder = 'Customer phone, e.g. 0712 345 678';
+      phone.value = (t.appointment && t.appointment.customer_phone) || '';
+      const stkBtn = el('button', 'btn btn-secondary btn-md mt-2 w-full');
+      stkBtn.type = 'button';
+      stkBtn.append(el('i', 'fa-solid fa-mobile-screen-button'));
+      stkBtn.append(document.createTextNode(' Send M-Pesa prompt'));
+      const stkStatus = el('p', 'mt-2 hidden text-sm text-ink');
+      stkBox.append(el('p', 'mb-2 text-xs text-muted', 'Or prompt the customer to pay on their phone:'), phone, stkBtn, stkStatus);
+      const syncStk = () => { stkBox.classList.toggle('hidden', method.value !== 'mpesa'); };
+      method.addEventListener('change', syncStk);
+      syncStk();
+
+      const stkKey = (crypto.randomUUID ? crypto.randomUUID() : 'stk-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+      stkBtn.addEventListener('click', () => {
+        error.classList.add('hidden');
+        ui.setBusy(stkBtn, true, 'Sending prompt…');
+        api.post('/api/appointments/' + this._uuid + '/mpesa/stk', {
+          phone: phone.value.trim(),
+          amount_minor: Math.round(Number(amount.value || 0) * 100),
+          idempotency_key: stkKey,
+        })
+          .then((req) => this._watchStk(req, stkStatus, stkBtn))
+          .catch((e) => {
+            ui.setBusy(stkBtn, false);
+            error.textContent = (e.fields && Object.values(e.fields)[0]) || e.message;
+            error.classList.remove('hidden');
+          });
+      });
+
+      box.append(method, amount, ref, error, pay, stkBox);
       return box;
+    },
+
+    /** Poll an STK prompt until Safaricom settles it (≈ 2.5 min ceiling). */
+    _watchStk(req, statusEl, btn) {
+      statusEl.classList.remove('hidden');
+      statusEl.textContent = req.message;
+      const started = Date.now();
+      const tick = () => {
+        api.get('/api/appointments/' + this._uuid + '/mpesa/stk/' + encodeURIComponent(req.uuid))
+          .then((s) => {
+            statusEl.textContent = s.message;
+            if (s.done) {
+              ui.setBusy(btn, false);
+              if (s.status === 'succeeded') {
+                AlbaBook.toast('M-Pesa payment received' + (s.receipt ? ' — ' + s.receipt : '') + '.');
+                api.get('/api/appointments/' + encodeURIComponent(this._uuid) + '/ticket').then((ticket) => this._done(ticket));
+              }
+              return;
+            }
+            if (Date.now() - started > 150000) {
+              ui.setBusy(btn, false);
+              statusEl.textContent = 'Still waiting for M-Pesa. It will settle automatically — check the ticket shortly.';
+              return;
+            }
+            setTimeout(tick, 3000);
+          })
+          .catch(() => setTimeout(tick, 5000));
+      };
+      if (req.done) {
+        ui.setBusy(btn, false);
+        return;
+      }
+      setTimeout(tick, 3000);
     },
 
     _qty(t, item, delta) {

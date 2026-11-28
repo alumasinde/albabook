@@ -147,10 +147,114 @@
     );
   }
 
+  /* Setup checklist: what is missing before the page can take bookings. */
+  function renderSetup(section, setup) {
+    if (!section) return;
+    if (!setup) {
+      section.hidden = true;
+      return;
+    }
+    section.hidden = false;
+    const summary = section.querySelector('[data-setup-summary]');
+    summary.textContent = setup.ready
+      ? 'You can take bookings. ' + (setup.total - setup.done) + ' optional step' + (setup.total - setup.done === 1 ? '' : 's') + ' left.'
+      : setup.done + ' of ' + setup.total + ' done. Finish the required steps to start taking online bookings.';
+    const bar = section.querySelector('[data-setup-bar]');
+    bar.style.width = Math.round((setup.done / Math.max(1, setup.total)) * 100) + '%';
+    const cta = section.querySelector('[data-setup-cta]');
+    if (cta) cta.hidden = setup.ready;
+    const list = section.querySelector('[data-setup-list]');
+    list.replaceChildren(
+      ...setup.items.map((item) => {
+        const li = el('li');
+        const link = el('a', 'flex items-start gap-3 rounded-lg border border-line p-3 hover:border-primary');
+        link.href = item.href;
+        const icon = el('i', 'fa-solid mt-0.5 ' + (item.done ? 'fa-circle-check text-success' : 'fa-circle text-line'));
+        icon.setAttribute('aria-hidden', 'true');
+        const text = el('span', 'min-w-0');
+        const title = el('span', 'block text-sm font-medium ' + (item.done ? 'text-muted line-through' : 'text-ink'), item.label);
+        text.append(title);
+        if (!item.done) text.append(el('span', 'block text-xs text-muted', item.hint + (item.blocking ? '' : ' (optional)')));
+        const sr = el('span', 'sr-only', item.done ? ' (done)' : ' (to do)');
+        link.append(icon, text, sr);
+        li.append(link);
+        return li;
+      }),
+    );
+  }
+
+  /* Booking requests awaiting approval (manual confirmation mode). */
+  function renderApprovals(section, items, reload) {
+    if (!section) return;
+    if (!items || !items.length) {
+      section.hidden = true;
+      return;
+    }
+    section.hidden = false;
+    const count = section.querySelector('[data-approvals-count]');
+    if (count) count.textContent = String(items.length);
+    const list = section.querySelector('[data-approvals-list]');
+    list.replaceChildren(
+      ...items.map((item) => {
+        const li = el('li', 'flex flex-wrap items-center justify-between gap-3 py-3');
+        const info = el('button', 'min-w-0 flex-1 text-left');
+        info.type = 'button';
+        info.append(
+          el('p', 'truncate text-sm font-semibold text-ink', item.customer + ' · ' + item.service),
+          el('p', 'text-xs text-muted', item.when_label + (item.staff ? ' with ' + item.staff : '') + ' · requested ' + item.requested_label),
+        );
+        info.addEventListener('click', () => AlbaBook.appointmentDrawer.open(item.uuid, reload));
+
+        const act = (to, label, cls, icon) => {
+          const btn = el('button', 'btn btn-sm ' + cls);
+          btn.type = 'button';
+          const i = el('i', 'fa-solid ' + icon);
+          i.setAttribute('aria-hidden', 'true');
+          btn.append(i, document.createTextNode(' ' + label));
+          btn.setAttribute('aria-label', label + ' ' + item.customer + ', ' + item.when_label);
+          btn.addEventListener('click', async () => {
+            if (to === 'rejected') {
+              const yes = await ui.confirm({
+                title: 'Decline this request?',
+                message: item.customer + ' will be told the booking was declined and the slot is released.',
+                confirmLabel: 'Decline',
+                danger: true,
+              });
+              if (!yes) return;
+            }
+            ui.setBusy(btn, true, to === 'confirmed' ? 'Confirming…' : 'Declining…');
+            AlbaBook.api
+              .post('/api/appointments/' + encodeURIComponent(item.uuid) + '/transition', { to, version: item.version })
+              .then(() => {
+                AlbaBook.toast(to === 'confirmed' ? 'Booking confirmed. The customer has been notified.' : 'Request declined.', 'success');
+                reload();
+              })
+              .catch((error) => {
+                ui.setBusy(btn, false);
+                AlbaBook.toast(error.message || 'Update failed.', 'danger');
+                if (error.code === 'STALE_APPOINTMENT' || error.code === 'INVALID_TRANSITION') reload();
+              });
+          });
+          return btn;
+        };
+        const buttons = el('div', 'flex shrink-0 gap-2');
+        buttons.append(
+          act('rejected', 'Decline', 'btn-secondary', 'fa-xmark'),
+          act('confirmed', 'Confirm', 'btn-primary', 'fa-check'),
+        );
+        li.append(info, buttons);
+        return li;
+      }),
+    );
+  }
+
   AlbaBook.pages.register('dashboard', function (root) {
     const cards = root.querySelector('[data-kpi-cards]');
     const schedule = root.querySelector('[data-today-schedule]');
     const alerts = root.querySelector('[data-alerts]');
+    const approvals = root.querySelector('[data-approvals]');
+    const setupBox = root.querySelector('[data-setup]');
+    const reload = () => AlbaBook.pages.mount(document);
     const canvas = root.querySelector('[data-chart]');
     const greeting = root.querySelector('[data-greeting]');
 
@@ -164,6 +268,8 @@
         if (cards) renderCards(cards, summary.cards || []);
         if (schedule) renderSchedule(schedule, summary.today_schedule || []);
         renderAlerts(alerts, summary.alerts || []);
+        renderApprovals(approvals, summary.approvals, reload);
+        renderSetup(setupBox, summary.setup);
         renderChart(canvas, summary.chart);
       })
       .catch((error) => {

@@ -20,9 +20,11 @@ final class BillingRepository
             'SELECT s.uuid, s.status, s.starts_at, s.current_period_start,
                     s.current_period_end, s.trial_ends_at, s.cancelled_at,
                     p.code AS plan_code, p.name AS plan_name, p.description AS plan_description,
-                    p.price_minor, p.currency, p.billing_interval
+                    p.price_minor, p.currency, p.billing_interval,
+                    sp.name AS scheduled_plan_name
              FROM tenant_subscriptions s
              JOIN plans p ON p.id = s.plan_id
+             LEFT JOIN plans sp ON sp.id = s.scheduled_plan_id
              WHERE s.tenant_id = ?
              ORDER BY s.created_at DESC LIMIT 1',
         );

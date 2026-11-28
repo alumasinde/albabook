@@ -25,7 +25,7 @@
 
 {% block content %}
 {% set first_branch = branches|first %}
-<div data-page="booking" data-slug="{{ tenant.slug }}" data-api-base="{{ api_base }}"{% if embed %} data-embed="1"{% endif %}>
+<div data-page="booking" data-slug="{{ tenant.slug }}" data-api-base="{{ api_base }}"{% if embed %} data-embed="1"{% endif %}{% if verify_phone %} data-verify-phone="1"{% endif %}>
 
 {% if sections.hero is not defined or sections.hero %}
   <section class="booking-hero">
@@ -199,8 +199,18 @@
             </div>
             <div>
               <label class="field-label" for="booking-phone">{{ t('booking.field_phone') }}</label>
-              <input id="booking-phone" name="phone" type="tel" class="input mt-1" maxlength="20" autocomplete="tel" placeholder="+2547XXXXXXXX" data-field="phone">
+              <input id="booking-phone" name="phone" type="tel" class="input mt-1" maxlength="20" autocomplete="tel" inputmode="tel" placeholder="0712 345 678" data-field="phone"{% if verify_phone %} required{% endif %}>
+              {% if verify_phone %}<p class="mt-1 text-xs text-muted">{{ t('booking.verify_hint') }}</p>{% endif %}
             </div>
+            {% if verify_phone %}
+            <div data-otp hidden class="rounded-lg border border-line bg-surface p-3">
+              <label class="field-label" for="booking-code">{{ t('booking.verify_code_label') }}</label>
+              <input id="booking-code" name="code" type="text" class="input mt-1 tracking-widest" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" data-field="code">
+              <p class="field-error" id="field-code-error"></p>
+              <p class="mt-1 text-xs text-muted" data-otp-sent></p>
+              <button type="button" class="btn btn-ghost btn-sm mt-1" data-otp-resend>{{ t('booking.verify_resend') }}</button>
+            </div>
+            {% endif %}
             <div>
               <label class="field-label" for="booking-email">{{ t('booking.field_email') }}</label>
               <input id="booking-email" name="email" type="email" class="input mt-1" maxlength="254" autocomplete="email" data-field="email">
@@ -218,8 +228,8 @@
           <span class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-success-soft text-success">
             <i class="fa-solid fa-check text-2xl" aria-hidden="true"></i>
           </span>
-          <h3 class="mt-3 text-lg font-semibold text-ink">{{ t('booking.success_title') }}</h3>
-          <p class="mt-1 text-sm text-muted">{{ t('booking.success_body') }}</p>
+          <h3 class="mt-3 text-lg font-semibold text-ink" data-confirmed-text="{{ t('booking.success_confirmed_title') }}">{{ t('booking.success_title') }}</h3>
+          <p class="mt-1 text-sm text-muted" data-confirmed-text="{{ t('booking.success_confirmed_body') }}">{{ t('booking.success_body') }}</p>
           <dl class="mt-4 space-y-1 rounded-lg border border-line p-4 text-left text-sm">
             <div class="flex justify-between gap-4"><dt class="text-muted">{{ t('booking.field_service') }}</dt><dd class="font-medium text-ink" data-booking-service></dd></div>
             <div class="flex justify-between gap-4"><dt class="text-muted">{{ t('booking.field_when') }}</dt><dd class="font-medium text-ink" data-booking-when></dd></div>

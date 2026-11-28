@@ -101,6 +101,8 @@ final class NotificationDispatcher
                 (string) $job['channel'],
                 (string) $job['locale'],
                 is_array($payload) ? $payload : [],
+                // WhatsApp: whose approved templates apply (platform vs own number).
+                $job['channel'] === 'whatsapp' ? $this->channels->whatsappSender((int) $job['tenant_id']) : null,
             );
 
             if ($job['channel'] === 'email') {
@@ -115,6 +117,7 @@ final class NotificationDispatcher
                     (string) $job['channel'],
                     (string) $job['recipient'],
                     $rendered['body'],
+                    $rendered['template'],
                 );
             }
 

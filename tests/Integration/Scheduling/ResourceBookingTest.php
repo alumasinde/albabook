@@ -7,7 +7,6 @@ namespace Tests\Integration\Scheduling;
 use App\Modules\Appointments\Repositories\AppointmentRepository;
 use App\Modules\Appointments\Services\ManualBookingService;
 use App\Modules\Appointments\Services\TransitionException;
-use App\Modules\Booking\Repositories\BookingHoldRepository;
 use App\Modules\Booking\Repositories\BookingPageRepository;
 use App\Shared\Time\DateTimeService;
 use Tests\Integration\Support\Phase2TestCase;
@@ -109,12 +108,21 @@ final class ResourceBookingTest extends Phase2TestCase
     {
         $service = $this->bookingService();
         $created = $service->create(
-            $this->tenantA, $this->branchA, 'Africa/Nairobi',
-            $this->staffA1, $this->serviceA, '2030-01-14', '10:00',
+            $this->tenantA,
+            $this->branchA,
+            'Africa/Nairobi',
+            $this->staffA1,
+            $this->serviceA,
+            '2030-01-14',
+            '10:00',
             ['name' => 'Guest', 'phone' => null, 'email' => null, 'notes' => null],
-            'dashboard', 'en', 'KES', null, 'tenant_user',
+            'dashboard',
+            'en',
+            'KES',
+            null,
+            'tenant_user',
         );
-        self::assertSame('pending', $created['status']);
+        self::assertSame('confirmed', $created['status']);
 
         $rows = $this->pdo->query(
             'SELECT resource_id FROM appointment_resources WHERE tenant_id = ' . $this->tenantA,
@@ -128,18 +136,38 @@ final class ResourceBookingTest extends Phase2TestCase
         $service = $this->bookingService();
         $customer = ['name' => 'Guest', 'phone' => null, 'email' => null, 'notes' => null];
         $service->create(
-            $this->tenantA, $this->branchA, 'Africa/Nairobi',
-            $this->staffA1, $this->serviceA, '2030-01-15', '10:00', $customer,
-            'dashboard', 'en', 'KES', null, 'tenant_user',
+            $this->tenantA,
+            $this->branchA,
+            'Africa/Nairobi',
+            $this->staffA1,
+            $this->serviceA,
+            '2030-01-15',
+            '10:00',
+            $customer,
+            'dashboard',
+            'en',
+            'KES',
+            null,
+            'tenant_user',
         );
 
         // Different staff, same room window — the resource is the blocker now.
         $this->expectException(TransitionException::class);
         $this->expectExceptionMessage('No room or equipment is free');
         $service->create(
-            $this->tenantA, $this->branchA, 'Africa/Nairobi',
-            $this->staffA2, $this->serviceA, '2030-01-15', '10:30', $customer,
-            'dashboard', 'en', 'KES', null, 'tenant_user',
+            $this->tenantA,
+            $this->branchA,
+            'Africa/Nairobi',
+            $this->staffA2,
+            $this->serviceA,
+            '2030-01-15',
+            '10:30',
+            $customer,
+            'dashboard',
+            'en',
+            'KES',
+            null,
+            'tenant_user',
         );
     }
 
@@ -151,9 +179,19 @@ final class ResourceBookingTest extends Phase2TestCase
         $this->expectException(TransitionException::class);
         $this->expectExceptionMessage('outside working hours');
         $service->create(
-            $this->tenantA, $this->branchA, 'Africa/Nairobi',
-            $this->staffA1, $this->serviceA, '2030-01-14', '19:00', $customer,
-            'dashboard', 'en', 'KES', null, 'tenant_user',
+            $this->tenantA,
+            $this->branchA,
+            'Africa/Nairobi',
+            $this->staffA1,
+            $this->serviceA,
+            '2030-01-14',
+            '19:00',
+            $customer,
+            'dashboard',
+            'en',
+            'KES',
+            null,
+            'tenant_user',
         );
     }
 
@@ -161,13 +199,22 @@ final class ResourceBookingTest extends Phase2TestCase
     {
         $service = $this->bookingService();
         $created = $service->create(
-            $this->tenantA, $this->branchA, 'Africa/Nairobi',
-            $this->staffA1, $this->serviceA, '2030-01-14', '19:00',
+            $this->tenantA,
+            $this->branchA,
+            'Africa/Nairobi',
+            $this->staffA1,
+            $this->serviceA,
+            '2030-01-14',
+            '19:00',
             ['name' => 'Guest', 'phone' => null, 'email' => null, 'notes' => null],
-            'dashboard', 'en', 'KES', null, 'tenant_user',
+            'dashboard',
+            'en',
+            'KES',
+            null,
+            'tenant_user',
             true,
         );
-        self::assertSame('pending', $created['status']);
+        self::assertSame('confirmed', $created['status']);
     }
 
     public function testDashboardBookingInsideAStaffBreakIsRejected(): void
@@ -183,9 +230,19 @@ final class ResourceBookingTest extends Phase2TestCase
         $this->expectException(TransitionException::class);
         $this->expectExceptionMessage('outside working hours');
         $service->create(
-            $this->tenantA, $this->branchA, 'Africa/Nairobi',
-            $this->staffA1, $this->serviceA, '2030-01-16', '12:30', $customer,
-            'dashboard', 'en', 'KES', null, 'tenant_user',
+            $this->tenantA,
+            $this->branchA,
+            'Africa/Nairobi',
+            $this->staffA1,
+            $this->serviceA,
+            '2030-01-16',
+            '12:30',
+            $customer,
+            'dashboard',
+            'en',
+            'KES',
+            null,
+            'tenant_user',
         );
     }
 
@@ -201,9 +258,20 @@ final class ResourceBookingTest extends Phase2TestCase
         $this->expectException(TransitionException::class);
         $this->expectExceptionMessage('not assigned to this branch');
         $service->create(
-            $this->tenantA, $this->branchA, 'Africa/Nairobi',
-            $float, $this->serviceA, '2030-01-14', '10:00', $customer,
-            'dashboard', 'en', 'KES', null, 'tenant_user', true,
+            $this->tenantA,
+            $this->branchA,
+            'Africa/Nairobi',
+            $float,
+            $this->serviceA,
+            '2030-01-14',
+            '10:00',
+            $customer,
+            'dashboard',
+            'en',
+            'KES',
+            null,
+            'tenant_user',
+            true,
         );
     }
 
@@ -223,9 +291,19 @@ final class ResourceBookingTest extends Phase2TestCase
         $this->expectException(TransitionException::class);
         $this->expectExceptionMessage('does not offer this service');
         $service->create(
-            $this->tenantA, $this->branchA, 'Africa/Nairobi',
-            $helper, $this->serviceA, '2030-01-14', '10:00', $customer,
-            'dashboard', 'en', 'KES', null, 'tenant_user',
+            $this->tenantA,
+            $this->branchA,
+            'Africa/Nairobi',
+            $helper,
+            $this->serviceA,
+            '2030-01-14',
+            '10:00',
+            $customer,
+            'dashboard',
+            'en',
+            'KES',
+            null,
+            'tenant_user',
         );
     }
 
@@ -241,9 +319,19 @@ final class ResourceBookingTest extends Phase2TestCase
 
         try {
             $service->create(
-                $this->tenantA, $this->branchA, 'Africa/Nairobi',
-                $this->staffA1, $this->serviceA, '2030-01-14', '10:30', $customer,
-                'dashboard', 'en', 'KES', null, 'tenant_user',
+                $this->tenantA,
+                $this->branchA,
+                'Africa/Nairobi',
+                $this->staffA1,
+                $this->serviceA,
+                '2030-01-14',
+                '10:30',
+                $customer,
+                'dashboard',
+                'en',
+                'KES',
+                null,
+                'tenant_user',
             );
             self::fail('A booking inside the notice window should be rejected.');
         } catch (TransitionException $e) {
@@ -252,11 +340,22 @@ final class ResourceBookingTest extends Phase2TestCase
         }
 
         $created = $service->create(
-            $this->tenantA, $this->branchA, 'Africa/Nairobi',
-            $this->staffA1, $this->serviceA, '2030-01-14', '10:30', $customer,
-            'dashboard', 'en', 'KES', null, 'tenant_user', true,
+            $this->tenantA,
+            $this->branchA,
+            'Africa/Nairobi',
+            $this->staffA1,
+            $this->serviceA,
+            '2030-01-14',
+            '10:30',
+            $customer,
+            'dashboard',
+            'en',
+            'KES',
+            null,
+            'tenant_user',
+            true,
         );
-        self::assertSame('pending', $created['status']);
+        self::assertSame('confirmed', $created['status']);
     }
 
     public function testWalkInStartsNowAndSkipsMinNotice(): void
@@ -267,12 +366,21 @@ final class ResourceBookingTest extends Phase2TestCase
         ]);
         $service = $this->bookingService();
         $created = $service->create(
-            $this->tenantA, $this->branchA, 'Africa/Nairobi',
-            $this->staffA1, $this->serviceA, '2030-01-14', '10:05',
+            $this->tenantA,
+            $this->branchA,
+            'Africa/Nairobi',
+            $this->staffA1,
+            $this->serviceA,
+            '2030-01-14',
+            '10:05',
             ['name' => 'Guest', 'phone' => null, 'email' => null, 'notes' => null],
-            'walk_in', 'en', 'KES', null, 'tenant_user',
+            'walk_in',
+            'en',
+            'KES',
+            null,
+            'tenant_user',
         );
-        self::assertSame('pending', $created['status']);
+        self::assertSame('confirmed', $created['status']);
         self::assertSame('2030-01-14 07:00:00', $created['start_at']);
 
         $row = $this->pdo->query(
@@ -291,9 +399,19 @@ final class ResourceBookingTest extends Phase2TestCase
         $this->expectException(TransitionException::class);
         $this->expectExceptionMessage('outside working hours');
         $service->create(
-            $this->tenantA, $this->branchA, 'Africa/Nairobi',
-            $this->staffA1, $this->serviceA, '2030-01-14', '21:00', $customer,
-            'walk_in', 'en', 'KES', null, 'tenant_user',
+            $this->tenantA,
+            $this->branchA,
+            'Africa/Nairobi',
+            $this->staffA1,
+            $this->serviceA,
+            '2030-01-14',
+            '21:00',
+            $customer,
+            'walk_in',
+            'en',
+            'KES',
+            null,
+            'tenant_user',
         );
     }
 
@@ -305,9 +423,19 @@ final class ResourceBookingTest extends Phase2TestCase
         $this->expectException(TransitionException::class);
         $this->expectExceptionMessage('Cannot book a past date');
         $service->create(
-            $this->tenantA, $this->branchA, 'Africa/Nairobi',
-            $this->staffA1, $this->serviceA, '2020-01-02', '10:00', $customer,
-            'dashboard', 'en', 'KES', null, 'tenant_user',
+            $this->tenantA,
+            $this->branchA,
+            'Africa/Nairobi',
+            $this->staffA1,
+            $this->serviceA,
+            '2020-01-02',
+            '10:00',
+            $customer,
+            'dashboard',
+            'en',
+            'KES',
+            null,
+            'tenant_user',
         );
     }
 
@@ -321,9 +449,19 @@ final class ResourceBookingTest extends Phase2TestCase
 
         try {
             $service->create(
-                $this->tenantA, $this->branchA, 'Africa/Nairobi',
-                $this->staffA1, $this->serviceA, '2030-01-14', '10:00', $customer,
-                'dashboard', 'en', 'KES', null, 'tenant_user',
+                $this->tenantA,
+                $this->branchA,
+                'Africa/Nairobi',
+                $this->staffA1,
+                $this->serviceA,
+                '2030-01-14',
+                '10:00',
+                $customer,
+                'dashboard',
+                'en',
+                'KES',
+                null,
+                'tenant_user',
             );
             self::fail('Booking beyond the advance window should be rejected.');
         } catch (TransitionException $e) {
@@ -331,23 +469,45 @@ final class ResourceBookingTest extends Phase2TestCase
         }
 
         $created = $service->create(
-            $this->tenantA, $this->branchA, 'Africa/Nairobi',
-            $this->staffA1, $this->serviceA, '2030-01-14', '10:00', $customer,
-            'dashboard', 'en', 'KES', null, 'tenant_user', true,
+            $this->tenantA,
+            $this->branchA,
+            'Africa/Nairobi',
+            $this->staffA1,
+            $this->serviceA,
+            '2030-01-14',
+            '10:00',
+            $customer,
+            'dashboard',
+            'en',
+            'KES',
+            null,
+            'tenant_user',
+            true,
         );
-        self::assertSame('pending', $created['status']);
+        self::assertSame('confirmed', $created['status']);
     }
 
     public function testDashboardBookingWithAnExplicitRoomPick(): void
     {
         $service = $this->bookingService();
         $created = $service->create(
-            $this->tenantA, $this->branchA, 'Africa/Nairobi',
-            $this->staffA1, $this->serviceA, '2030-01-14', '12:00',
+            $this->tenantA,
+            $this->branchA,
+            'Africa/Nairobi',
+            $this->staffA1,
+            $this->serviceA,
+            '2030-01-14',
+            '12:00',
             ['name' => 'Guest', 'phone' => null, 'email' => null, 'notes' => null],
-            'dashboard', 'en', 'KES', null, 'tenant_user', false, $this->roomA,
+            'dashboard',
+            'en',
+            'KES',
+            null,
+            'tenant_user',
+            false,
+            $this->roomA,
         );
-        self::assertSame('pending', $created['status']);
+        self::assertSame('confirmed', $created['status']);
 
         $rows = $this->pdo->query(
             'SELECT resource_id FROM appointment_resources WHERE tenant_id = ' . $this->tenantA,
@@ -361,9 +521,19 @@ final class ResourceBookingTest extends Phase2TestCase
         $service = $this->bookingService();
         $customer = ['name' => 'Guest', 'phone' => null, 'email' => null, 'notes' => null];
         $service->create(
-            $this->tenantA, $this->branchA, 'Africa/Nairobi',
-            $this->staffA1, $this->serviceA, '2030-01-15', '10:00', $customer,
-            'dashboard', 'en', 'KES', null, 'tenant_user',
+            $this->tenantA,
+            $this->branchA,
+            'Africa/Nairobi',
+            $this->staffA1,
+            $this->serviceA,
+            '2030-01-15',
+            '10:00',
+            $customer,
+            'dashboard',
+            'en',
+            'KES',
+            null,
+            'tenant_user',
         );
 
         // Auto-assign would happily find another room — the explicit pick
@@ -371,9 +541,21 @@ final class ResourceBookingTest extends Phase2TestCase
         $this->expectException(TransitionException::class);
         $this->expectExceptionMessage('room is not free');
         $service->create(
-            $this->tenantA, $this->branchA, 'Africa/Nairobi',
-            $this->staffA2, $this->serviceA, '2030-01-15', '10:30', $customer,
-            'dashboard', 'en', 'KES', null, 'tenant_user', false, $this->roomA,
+            $this->tenantA,
+            $this->branchA,
+            'Africa/Nairobi',
+            $this->staffA2,
+            $this->serviceA,
+            '2030-01-15',
+            '10:30',
+            $customer,
+            'dashboard',
+            'en',
+            'KES',
+            null,
+            'tenant_user',
+            false,
+            $this->roomA,
         );
     }
 
@@ -392,10 +574,21 @@ final class ResourceBookingTest extends Phase2TestCase
         $this->expectException(TransitionException::class);
         $this->expectExceptionMessage('not required for this service');
         $service->create(
-            $this->tenantA, $this->branchA, 'Africa/Nairobi',
-            $this->staffA1, $this->serviceA, '2030-01-14', '14:00',
+            $this->tenantA,
+            $this->branchA,
+            'Africa/Nairobi',
+            $this->staffA1,
+            $this->serviceA,
+            '2030-01-14',
+            '14:00',
             ['name' => 'Guest', 'phone' => null, 'email' => null, 'notes' => null],
-            'dashboard', 'en', 'KES', null, 'tenant_user', false, $chair,
+            'dashboard',
+            'en',
+            'KES',
+            null,
+            'tenant_user',
+            false,
+            $chair,
         );
     }
 
@@ -414,10 +607,21 @@ final class ResourceBookingTest extends Phase2TestCase
         $this->expectException(TransitionException::class);
         $this->expectExceptionMessage('not required for this service');
         $service->create(
-            $this->tenantA, $this->branchA, 'Africa/Nairobi',
-            $this->staffA1, $plain, '2030-01-14', '15:00',
+            $this->tenantA,
+            $this->branchA,
+            'Africa/Nairobi',
+            $this->staffA1,
+            $plain,
+            '2030-01-14',
+            '15:00',
             ['name' => 'Guest', 'phone' => null, 'email' => null, 'notes' => null],
-            'dashboard', 'en', 'KES', null, 'tenant_user', false, $this->roomA,
+            'dashboard',
+            'en',
+            'KES',
+            null,
+            'tenant_user',
+            false,
+            $this->roomA,
         );
     }
 
@@ -436,17 +640,37 @@ final class ResourceBookingTest extends Phase2TestCase
         $service = $this->bookingService();
         $customer = ['name' => 'Guest', 'phone' => '+254700000001', 'email' => null, 'notes' => null];
         $service->create(
-            $this->tenantA, $this->branchA, 'Africa/Nairobi',
-            $this->staffA1, $this->serviceA, '2030-01-14', '10:00', $customer,
-            'public_page', 'en', 'KES', null, 'customer',
+            $this->tenantA,
+            $this->branchA,
+            'Africa/Nairobi',
+            $this->staffA1,
+            $this->serviceA,
+            '2030-01-14',
+            '10:00',
+            $customer,
+            'public_page',
+            'en',
+            'KES',
+            null,
+            'customer',
         );
 
         $this->expectException(TransitionException::class);
         $this->expectExceptionMessage('already have an appointment');
         $service->create(
-            $this->tenantA, $this->branchA, 'Africa/Nairobi',
-            $this->staffA2, $this->serviceA, '2030-01-14', '10:30', $customer,
-            'public_page', 'en', 'KES', null, 'customer',
+            $this->tenantA,
+            $this->branchA,
+            'Africa/Nairobi',
+            $this->staffA2,
+            $this->serviceA,
+            '2030-01-14',
+            '10:30',
+            $customer,
+            'public_page',
+            'en',
+            'KES',
+            null,
+            'customer',
         );
     }
 
@@ -456,9 +680,14 @@ final class ResourceBookingTest extends Phase2TestCase
 
         // Tenant B asking for a room at tenant A's branch finds nothing.
         self::assertNull($repo->freeResourceForType(
-            $this->tenantB, $this->branchA, 1,
-            '2030-01-14 00:00:00', '2030-01-15 00:00:00',
-            2, '08:00:00', '18:00:00',
+            $this->tenantB,
+            $this->branchA,
+            1,
+            '2030-01-14 00:00:00',
+            '2030-01-15 00:00:00',
+            2,
+            '08:00:00',
+            '18:00:00',
         ));
         // Tenant B cannot read tenant A's service either.
         self::assertNull($repo->serviceFor($this->tenantB, $this->serviceA, $this->branchA));

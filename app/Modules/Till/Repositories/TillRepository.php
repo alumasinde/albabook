@@ -287,6 +287,43 @@ final class TillRepository
     }
 
     /** Derived ticket totals + payment status write-back. */
+    /**
+     * Recompute the ticket total and derived payment status and persist both.
+     * Shared by the till and the M-Pesa callback so every payment path
+     * derives status the same way.
+     * @return array{total_minor: int, payment_status: string}
+     */
+    public function refreshTotals(int $tenantId, int $appointmentId): array
+    {
+        $totals = $this->computeTotals($tenantId, $appointmentId);
+        $balance = $totals['total_minor'] - $totals['paid_minor'];
+
+        $status = match (true) {
+            $totals['total_minor'] <= 0 => 'not_required',
+            $totals['paid_minor'] <= 0 => 'unpaid',
+            $balance > 0 && $totals['refunded_minor'] > 0 => 'partially_refunded',
+            $balance <= 0 && $totals['refunded_minor'] > 0 => 'refunded',
+            $balance > 0 => 'partially_paid',
+            default => 'paid',
+        };
+
+        $this->writeTotals($tenantId, $appointmentId, $totals['total_minor'], $status);
+
+        return ['total_minor' => $totals['total_minor'], 'payment_status' => $status];
+    }
+
+    /** Sum of M-Pesa prompts still awaiting the customer (reserved against the balance). */
+    public function pendingPromptTotal(int $tenantId, int $appointmentId): int
+    {
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT COALESCE(SUM(amount_minor), 0) FROM payments
+              WHERE tenant_id = ? AND appointment_id = ? AND status = 'pending'",
+        );
+        $stmt->execute([$tenantId, $appointmentId]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
     public function writeTotals(int $tenantId, int $appointmentId, int $totalMinor, string $paymentStatus): void
     {
         $this->db->pdo()->prepare(

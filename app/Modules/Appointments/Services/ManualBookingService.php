@@ -63,6 +63,7 @@ final class ManualBookingService
         ?int $resourceId = null,
         ?string $idempotencyKey = null,
         ?string $holdToken = null,
+        bool $phoneVerified = false,
     ): array {
         // Exactly-once booking (booking-engine.md §18): a client that
         // retries with the same key gets the original appointment back.
@@ -159,8 +160,16 @@ final class ManualBookingService
             $tenantId, $branchId, $branchTimezone, $staffId, $service, $duration, $bufferBefore, $bufferAfter,
             $price, $start, $end, $occupiedStart, $occupiedEnd, $localDate,
             $customer, $source, $locale, $currency, $actorUserId, $actorType, $resourceId,
-            $idempotencyKey, $holdToken, $publicSource,
+            $idempotencyKey, $holdToken, $publicSource, $policy, $phoneVerified,
         ): array {
+            // A finite monthly cap is counted under a lock on the tenant row,
+            // so two simultaneous bookings at 499/500 cannot both pass. Taken
+            // before the staff lock (fixed order: tenant → staff → resources)
+            // and only for capped plans, so uncapped tenants keep full
+            // booking concurrency.
+            if ($this->features->limit($tenantId, 'monthly_bookings') !== null) {
+                $this->appointments->lockTenantForQuota($tenantId);
+            }
             $bookingCount = $this->appointments->countCreatedSince($tenantId, gmdate('Y-m-01 00:00:00'));
             if (!$this->features->underLimit($tenantId, 'monthly_bookings', $bookingCount)) {
                 throw new TransitionException('BOOKING_LIMIT', 'This business has reached its monthly booking limit.', 422, ['date' => 'Monthly booking limit reached.']);
@@ -266,7 +275,7 @@ final class ManualBookingService
                     throw new TransitionException('RESOURCE_INVALID', 'That room is not required for this service.', 422, ['resource_id' => 'Choose a room this service uses.']);
                 }
 
-            $customerId = $this->upsertCustomer($tenantId, $customer, $actorType);
+            $customerId = $this->upsertCustomer($tenantId, $customer, $actorType, $phoneVerified);
             // A customer cannot hold two overlapping live bookings; staff
             // bookings skip this (reception may book for several people
             // under one contact).
@@ -293,7 +302,7 @@ final class ManualBookingService
             $reference = $this->generateReference($tenantId);
             $uuid = $this->uuids->generate();
             $policyVersion = $this->appointments->policyVersionFor($tenantId, $branchId) ?? 1;
-            $status = 'pending';
+            $status = self::initialStatus($actorType, $policy);
             $paymentStatus = $price > 0 ? 'unpaid' : 'not_required';
             $manageToken = bin2hex(random_bytes(24));
 
@@ -307,6 +316,7 @@ final class ManualBookingService
                 'manage_token_hash' => hash('sha256', $manageToken),
                 'idempotency_key' => $idempotencyKey,
                 'status' => $status,
+                'confirmed_at' => $status === 'confirmed' ? $this->dates->toDb($this->dates->now()) : null,
                 'payment_status' => $paymentStatus,
                 'booking_source' => $source,
                 'start_at' => $this->dates->toDb($start),
@@ -391,6 +401,21 @@ final class ManualBookingService
                 'existing' => false,
             ];
         }, IsolationLevel::ReadCommitted);
+    }
+
+    /**
+     * Staff and integrations book on the business's behalf, so their
+     * bookings are confirmed at once. Customer bookings follow the policy:
+     * auto-confirm (default) or manual approval (lands as pending).
+     *
+     * @param array<string, mixed> $policy
+     */
+    public static function initialStatus(string $actorType, array $policy): string
+    {
+        if ($actorType !== 'customer') {
+            return 'confirmed';
+        }
+        return ($policy['confirmation_mode'] ?? 'auto') === 'manual' ? 'pending' : 'confirmed';
     }
 
     /**
@@ -519,6 +544,9 @@ final class ManualBookingService
             // row — a parallel reschedule cannot slip past the count limit.
             if ($isCustomer) {
                 $oldStart = new \DateTimeImmutable((string) $locked['start_at'], new \DateTimeZone('UTC'));
+                if ($this->dates->now() >= $oldStart) {
+                    throw new TransitionException('CUTOFF_PASSED', 'This appointment has already started — contact the business.', 409, ['time' => 'The appointment time has passed.']);
+                }
                 $cutoff = isset($policy['reschedule_cutoff_minutes']) ? (int) $policy['reschedule_cutoff_minutes'] : null;
                 if ($cutoff !== null && $this->dates->now() > $oldStart->modify("-{$cutoff} minutes")) {
                     throw new TransitionException('CUTOFF_PASSED', 'It is too late to reschedule this appointment.', 409, ['time' => 'The reschedule deadline has passed — contact the business.']);
@@ -692,17 +720,30 @@ final class ManualBookingService
     }
 
     /**
-     * Upsert by phone match key (D-018 lite: phone match is the MVP policy).
+     * Find-or-create the customer (update.md 1.8).
+     *
+     * A phone number alone is not proof of identity on a public form: anyone
+     * can type someone else's number. So an online booking joins an existing
+     * customer only when the phone was verified by SMS code, or when the
+     * name or e-mail also matches. Otherwise it becomes a separate customer
+     * without the phone match key; it then shows up as a possible duplicate
+     * (same phone) for staff to merge. Staff and integration bookings keep
+     * matching on phone: the business vouches for those.
+     *
      * @param array{name: string, phone: ?string, email: ?string, notes: ?string} $customer
      */
-    private function upsertCustomer(int $tenantId, array $customer, string $actorType): int
+    private function upsertCustomer(int $tenantId, array $customer, string $actorType, bool $phoneVerified = false): int
     {
         $pdo = $this->db->pdo();
         $phone = $customer['phone'];
+        $claimKey = true;
         if ($phone !== null && $phone !== '') {
             $existing = $this->appointments->findCustomerByPhone($tenantId, $phone);
             if ($existing !== null) {
-                return (int) $existing['id'];
+                if ($actorType !== 'customer' || $phoneVerified || $this->sameCustomer($tenantId, (int) $existing['id'], $customer)) {
+                    return (int) $existing['id'];
+                }
+                $claimKey = false; // provisional: never steals the phone key
             }
         }
 
@@ -715,7 +756,7 @@ final class ManualBookingService
         $stmt->execute(['u' => $uuid, 't' => $tenantId, 'f' => $first, 'l' => $last, 'p' => $phone, 'e' => $customer['email']]);
         $customerId = (int) $pdo->lastInsertId();
 
-        if ($phone !== null && $phone !== '') {
+        if ($phone !== null && $phone !== '' && $claimKey) {
             try {
                 $pdo->prepare(
                     "INSERT INTO customer_match_keys (tenant_id, match_type, match_value, customer_id)
@@ -742,6 +783,30 @@ final class ManualBookingService
         return $customerId;
     }
 
+    /**
+     * Unverified online booking vs an existing customer with the same phone:
+     * same person when the e-mail matches, or the first name does.
+     *
+     * @param array{name: string, phone: ?string, email: ?string, notes: ?string} $customer
+     */
+    private function sameCustomer(int $tenantId, int $customerId, array $customer): bool
+    {
+        $stmt = $this->db->pdo()->prepare('SELECT first_name, email FROM customers WHERE tenant_id = :t AND id = :c');
+        $stmt->execute(['t' => $tenantId, 'c' => $customerId]);
+        $row = $stmt->fetch();
+        if ($row === false) {
+            return false;
+        }
+        $email = mb_strtolower(trim((string) ($row['email'] ?? '')));
+        if ($email !== '' && $customer['email'] !== null && hash_equals($email, mb_strtolower($customer['email']))) {
+            return true;
+        }
+        $given = mb_strtolower($this->splitName($customer['name'])[0]);
+        $stored = mb_strtolower(trim((string) $row['first_name']));
+
+        return $given !== '' && $given === $stored;
+    }
+
     /** @return array{0: string, 1: string} */
     private function splitName(string $name): array
     {
@@ -756,9 +821,8 @@ final class ManualBookingService
         $length = strlen(self::REFERENCE_ALPHABET);
         for ($attempt = 0; $attempt < 8; $attempt += 1) {
             $reference = '';
-            $bytes = random_bytes(8);
             for ($i = 0; $i < 8; $i += 1) {
-                $reference .= self::REFERENCE_ALPHABET[ord($bytes[$i]) % $length];
+                $reference .= self::REFERENCE_ALPHABET[random_int(0, $length - 1)];
             }
             $stmt = $pdo->prepare('SELECT 1 FROM appointments WHERE tenant_id = :t AND reference = :r LIMIT 1');
             $stmt->execute(['t' => $tenantId, 'r' => $reference]);

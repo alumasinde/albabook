@@ -20,6 +20,10 @@
   <div class="mt-6">
     {% include 'components/feedback/alert.twig' with { tone: 'success', message: t('auth.revoked_done'), dismissible: true } only %}
   </div>
+{% elseif status in ['member_updated', 'member_deactivated', 'member_reactivated'] %}
+  <div class="mt-6">
+    {% include 'components/feedback/alert.twig' with { tone: 'success', message: t('auth.' ~ status ~ '_done'), dismissible: true } only %}
+  </div>
 {% endif %}
 
 <div class="mt-8 grid gap-6 lg:grid-cols-3">
@@ -40,6 +44,7 @@
               <th scope="col" class="text-left">{{ t('auth.roles') }}</th>
               <th scope="col" class="text-left">{{ t('auth.account_status') }}</th>
               <th scope="col" class="text-left">{{ t('auth.member_since') }}</th>
+              <th scope="col" class="text-right">{{ t('common.actions') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -54,6 +59,11 @@
                   </span>
                 </td>
                 <td data-label="{{ t('auth.member_since') }}">{{ member.joined_at ? member.joined_at|date('d M Y', 'UTC') : '—' }}</td>
+                <td data-label="{{ t('common.actions') }}" class="md:text-right">
+                  {% if member.status in ['active', 'suspended'] %}
+                    <a class="btn btn-secondary btn-sm" href="/team/members/{{ member.tenant_user_id }}">{{ t('auth.manage_member') }}</a>
+                  {% endif %}
+                </td>
               </tr>
             {% endfor %}
           </tbody>

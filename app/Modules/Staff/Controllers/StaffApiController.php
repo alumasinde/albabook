@@ -260,8 +260,13 @@ final class StaffApiController
             $fields['email'] = 'Enter a valid email address.';
         }
         $phone = trim((string) ($body['phone_e164'] ?? ''));
-        if ($phone !== '' && preg_match('/^\+[1-9]\d{6,14}$/', $phone) !== 1) {
-            $fields['phone_e164'] = 'Use international format, e.g. +254712345678.';
+        if ($phone !== '') {
+            $normalised = \App\Shared\Validation\PhoneNumber::normalise($phone);
+            if ($normalised === null) {
+                $fields['phone_e164'] = 'Enter a valid phone number, e.g. 0712 345 678 or +254712345678.';
+            } else {
+                $phone = $normalised;
+            }
         }
 
         $memberLink = (int) ($body['tenant_user_id'] ?? 0);

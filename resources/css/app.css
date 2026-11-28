@@ -358,6 +358,14 @@
     @apply bg-primary-soft text-primary-strong;
   }
 
+  /* Booking rules: radio cards for auto / manual confirmation */
+  .rule-option {
+    @apply flex cursor-pointer gap-3 rounded-xl border border-line p-4 transition-colors hover:border-primary;
+  }
+  .rule-option:has(input:checked) {
+    @apply border-primary bg-primary-soft;
+  }
+
   /* ----------------------------------------------------- Quick actions */
   .quick-action {
     @apply flex flex-col items-center gap-2 rounded-xl border border-line bg-white px-3 py-4 text-center transition-colors hover:border-primary hover:bg-primary-soft;
@@ -804,3 +812,16 @@
 }
 @page receipt80 { size: 80mm auto; margin: 0; }
 @page receipt58 { size: 58mm auto; margin: 0; }
+
+/* KRA eTIMS block on the receipt */
+@layer components {
+  .receipt-etims {
+    @apply text-center;
+  }
+  .receipt-etims-title {
+    @apply mb-1 text-[12px] font-bold uppercase tracking-wide text-black;
+  }
+  .receipt-etims .receipt-rows {
+    @apply text-left;
+  }
+}

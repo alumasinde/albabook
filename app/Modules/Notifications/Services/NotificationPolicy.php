@@ -51,21 +51,74 @@ final class NotificationPolicy
         return $value === false || (bool) $value;
     }
 
+    /**
+     * Channels used for a customer's PHONE number, per the business's
+     * WhatsApp setting (preferences.whatsapp.customer_mode):
+     *   off (default)   → SMS only
+     *   instead_of_sms  → WhatsApp only
+     *   alongside_sms   → both
+     * Each channel is still subject to allows() (preference + availability).
+     * @return list<string>
+     */
+    public function phoneChannels(int $tenantId): array
+    {
+        return match ($this->whatsappSetting($tenantId, 'customer_mode')) {
+            'instead_of_sms' => ['whatsapp'],
+            'alongside_sms' => ['sms', 'whatsapp'],
+            default => ['sms'],
+        };
+    }
+
+    /**
+     * Optional phone that receives business alerts by SMS
+     * (preferences.business_alerts.phone, E.164). Null when not set.
+     */
+    public function businessAlertPhone(int $tenantId): ?string
+    {
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT JSON_UNQUOTE(JSON_EXTRACT(COALESCE(preferences, JSON_OBJECT()), '$.business_alerts.phone'))
+               FROM tenant_settings WHERE tenant_id = :t",
+        );
+        $stmt->execute(['t' => $tenantId]);
+        $value = $stmt->fetchColumn();
+
+        return is_string($value) && preg_match('/^\+[1-9]\d{7,14}$/', $value) === 1 ? $value : null;
+    }
+
+    private function whatsappSetting(int $tenantId, string $key): string
+    {
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT JSON_UNQUOTE(JSON_EXTRACT(COALESCE(preferences, JSON_OBJECT()), :p))
+               FROM tenant_settings WHERE tenant_id = :t",
+        );
+        $stmt->execute(['p' => '$.whatsapp.' . $key, 't' => $tenantId]);
+        $value = $stmt->fetchColumn();
+
+        return is_string($value) ? $value : '';
+    }
+
     private function channelAvailable(int $tenantId, string $channel): bool
     {
         if ($channel === 'email') {
             return true; // platform mailer; no tenant account needed
         }
 
-        // The tenant's own provider account: they pay their provider.
-        $stmt = $this->db->pdo()->prepare(
-            "SELECT 1 FROM tenant_notification_accounts a
-               JOIN notification_providers p ON p.id = a.provider_id
-              WHERE a.tenant_id = :t AND a.status = 'active' AND p.channel = :c AND p.is_active = 1
-              LIMIT 1",
-        );
-        $stmt->execute(['t' => $tenantId, 'c' => $channel]);
-        if ($stmt->fetchColumn() !== false) {
+        $features = $this->features ?? new FeatureGate($this->db);
+        // WhatsApp follows the explicit sender mode (see ChannelSender):
+        // business mode needs the business's own active account; platform
+        // mode needs the platform number and a plan that includes WhatsApp.
+        if ($channel === 'whatsapp') {
+            $business = $this->whatsappSetting($tenantId, 'sender') === 'business'
+                && $features->enabled($tenantId, 'whatsapp_own_number');
+            if ($business) {
+                return $this->tenantAccountActive($tenantId, 'whatsapp');
+            }
+
+            return $this->config->get('notifications.platform.whatsapp.provider', '') !== ''
+                && $features->underLimit($tenantId, 'whatsapp_messages', 0);
+        }
+
+        if ($this->tenantAccountActive($tenantId, $channel)) {
             return true;
         }
 
@@ -76,8 +129,20 @@ final class NotificationPolicy
         if ($this->config->get('notifications.platform.' . $channel . '.provider', '') === '') {
             return false;
         }
-        $features = $this->features ?? new FeatureGate($this->db);
 
         return $features->underLimit($tenantId, $channel . '_messages', 0);
+    }
+
+    private function tenantAccountActive(int $tenantId, string $channel): bool
+    {
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT 1 FROM tenant_notification_accounts a
+               JOIN notification_providers p ON p.id = a.provider_id
+              WHERE a.tenant_id = :t AND a.status = 'active' AND p.channel = :c AND p.is_active = 1
+              LIMIT 1",
+        );
+        $stmt->execute(['t' => $tenantId, 'c' => $channel]);
+
+        return $stmt->fetchColumn() !== false;
     }
 }

@@ -36,6 +36,10 @@ final class MfaService
      * verification for USER_LOCK_MINUTES — re-logging in cannot reset it. */
     public const USER_LOCK_ATTEMPTS = 10;
     public const USER_LOCK_MINUTES = 15;
+    /** Failures are counted within this window from the first one; after it
+     * lapses the next failure starts a fresh count (typos never accumulate
+     * across days). */
+    public const USER_FAILURE_WINDOW_MINUTES = 60;
 
     public function __construct(
         private readonly Config $config,

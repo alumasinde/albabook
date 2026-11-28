@@ -44,7 +44,55 @@ final class BookingPageController
         private readonly CurrencyFormatter $currency,
         private readonly FeatureGate $features,
         private readonly \App\Core\Http\RequestContext $context,
+        private readonly \App\Modules\Booking\Services\BookingVerificationService $verification,
     ) {}
+
+    /** Text a 6-digit booking code to the customer's phone (update.md 1.7).
+     * @param array<string, string> $params
+     */
+    public function sendPhoneCode(Request $request, array $params): Response
+    {
+        $tenant = $this->tenant($params);
+        if ($tenant === null) {
+            return ApiResponse::error('NOT_FOUND', 'Booking page not found.', 404);
+        }
+        $body = $request->body();
+        $branchId = (int) ($body['branch'] ?? 0);
+        $result = $this->verification->send(
+            (int) $tenant['id'], (string) $tenant['name'], $branchId > 0 ? $branchId : null,
+            is_scalar($body['phone'] ?? null) ? (string) $body['phone'] : '', $request->clientIp(),
+        );
+        if (!$result['ok']) {
+            $status = $result['code'] === 'RATE_LIMITED' ? 429 : 422;
+
+            return ApiResponse::error((string) $result['code'], (string) $result['message'], $status, ['phone' => (string) $result['message']]);
+        }
+
+        return ApiResponse::ok(['sent' => true, 'expires_in' => \App\Modules\Booking\Services\BookingVerificationService::CODE_TTL_SECONDS]);
+    }
+
+    /** @param array<string, string> $params */
+    public function checkPhoneCode(Request $request, array $params): Response
+    {
+        $tenant = $this->tenant($params);
+        if ($tenant === null) {
+            return ApiResponse::error('NOT_FOUND', 'Booking page not found.', 404);
+        }
+        if (!$this->limiter->hit('otp-check:' . $tenant['id'] . ':' . $request->clientIp(), 20, 900)->allowed) {
+            return ApiResponse::error('RATE_LIMITED', 'Too many attempts. Try again shortly.', 429);
+        }
+        $body = $request->body();
+        $token = $this->verification->verify(
+            (int) $tenant['id'],
+            is_scalar($body['phone'] ?? null) ? (string) $body['phone'] : '',
+            is_scalar($body['code'] ?? null) ? (string) $body['code'] : '',
+        );
+        if ($token === null) {
+            return ApiResponse::error('INVALID_CODE', 'That code is wrong or has expired. Check the SMS or send a new code.', 422, ['code' => 'Wrong or expired code.']);
+        }
+
+        return ApiResponse::ok(['verification_token' => $token]);
+    }
 
     /** @param array<string, string> $params */
     public function page(Request $request, array $params): Response
@@ -100,6 +148,8 @@ final class BookingPageController
             // Bookings submitted from the framed widget are recorded with
             // booking_source 'widget' (the page JS reads data-embed).
             'embed' => str_ends_with($request->path(), '/embed'),
+            // SMS code step before confirming (booking rules, 1.7).
+            'verify_phone' => $this->verification->required((int) $tenant['id'], $this->pages->policy((int) $tenant['id'], null)),
         ]);
     }
 
@@ -338,6 +388,13 @@ final class BookingPageController
         if ($branch === null || $service === null) {
             return ApiResponse::error('NOT_FOUND', 'That service or location is not available.', 404);
         }
+        $gate = $this->verification->gate(
+            (int) $tenant['id'], $this->pages->policy((int) $tenant['id'], (int) $branch['id']),
+            $customer['phone'], is_scalar($body['verification_token'] ?? null) ? (string) $body['verification_token'] : '',
+        );
+        if ($gate['error'] !== null) {
+            return ApiResponse::error($gate['error']['code'], $gate['error']['message'], 422, $gate['error']['fields']);
+        }
 
         $slots = $this->availability->slots(
             (int) $tenant['id'], $branch, $service, $staffId, $date, (string) $tenant['timezone'],
@@ -459,6 +516,7 @@ final class BookingPageController
                 null,
                 $idempotencyKey !== '' ? $idempotencyKey : null,
                 $holdToken !== '' ? $holdToken : null,
+                $gate['verified'],
             );
         } catch (TransitionException $e) {
             return ApiResponse::error($e->apiCode, $e->getMessage(), $e->status, $e->fields ?: null);

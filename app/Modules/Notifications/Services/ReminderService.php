@@ -85,7 +85,12 @@ final class ReminderService
         ], JSON_THROW_ON_ERROR);
 
         $queued = 0;
-        foreach (['email' => $appointment['customer_email'], 'sms' => $appointment['customer_phone']] as $channel => $recipient) {
+        // Phone recipients go to SMS and/or WhatsApp per the business's setting.
+        $channels = ['email' => $appointment['customer_email']];
+        foreach ($this->policy->phoneChannels((int) $row['tenant_id']) as $phoneChannel) {
+            $channels[$phoneChannel] = $appointment['customer_phone'];
+        }
+        foreach ($channels as $channel => $recipient) {
             if ($recipient === null || $recipient === ''
                 || !$this->policy->allows((int) $row['tenant_id'], $channel, (string) $row['kind'])) {
                 continue;

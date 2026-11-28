@@ -6,23 +6,8 @@ use App\Core\Routing\RouteRegistrar;
 use App\Middleware\GuestOnlyMiddleware;
 use App\Middleware\PermissionMiddleware;
 use App\Middleware\RequireAuthMiddleware;
-use App\Tenancy\TenantMiddleware;
 use App\Modules\Appointments\Controllers\AppointmentsApiController;
 use App\Modules\Appointments\Controllers\AppointmentsPageController;
-use App\Modules\Billing\Controllers\BillingApiController;
-use App\Modules\Billing\Controllers\BillingPageController;
-use App\Modules\Booking\Controllers\BookingEditorApiController;
-use App\Modules\Booking\Controllers\BookingEditorPageController;
-use App\Modules\Booking\Controllers\DomainsApiController;
-use App\Modules\Integrations\Controllers\IntegrationsApiController;
-use App\Modules\Integrations\Controllers\IntegrationsPageController;
-use App\Modules\Notifications\Controllers\NotificationsApiController;
-use App\Modules\Notifications\Controllers\NotificationsPageController;
-use App\Modules\Products\Controllers\ProductsApiController;
-use App\Modules\Till\Controllers\ReceiptPageController;
-use App\Modules\Till\Controllers\TillApiController;
-use App\Modules\Reports\Controllers\ReportsApiController;
-use App\Modules\Reports\Controllers\ReportsPageController;
 use App\Modules\Auth\Controllers\EmailVerificationController;
 use App\Modules\Auth\Controllers\InvitationController;
 use App\Modules\Auth\Controllers\LoginController;
@@ -34,23 +19,44 @@ use App\Modules\Auth\Controllers\TeamController;
 use App\Modules\Auth\Controllers\TwoFactorController;
 use App\Modules\Auth\Controllers\TwoFactorEnrollmentController;
 use App\Modules\Auth\Controllers\WorkspaceController;
+use App\Modules\Availability\Controllers\AvailabilityApiController;
+use App\Modules\Availability\Controllers\AvailabilityPageController;
+use App\Modules\Billing\Controllers\BillingApiController;
+use App\Modules\Billing\Controllers\BillingPageController;
+use App\Modules\Booking\Controllers\BookingEditorApiController;
+use App\Modules\Booking\Controllers\BookingEditorPageController;
+use App\Modules\Booking\Controllers\DomainsApiController;
 use App\Modules\Branches\Controllers\BranchesApiController;
 use App\Modules\Branches\Controllers\BranchesPageController;
 use App\Modules\Customers\Controllers\CustomersApiController;
 use App\Modules\Customers\Controllers\CustomersPageController;
 use App\Modules\Dashboard\Controllers\DashboardApiController;
 use App\Modules\Dashboard\Controllers\DashboardController;
+use App\Modules\Integrations\Controllers\IntegrationsApiController;
+use App\Modules\Integrations\Controllers\IntegrationsPageController;
+use App\Modules\Notifications\Controllers\NotificationsApiController;
+use App\Modules\Notifications\Controllers\NotificationsPageController;
+use App\Modules\Payments\Controllers\MpesaApiController;
 use App\Modules\Platform\Controllers\SupportEntryController;
+use App\Modules\Products\Controllers\ProductsApiController;
+use App\Modules\Reports\Controllers\ReportsApiController;
+use App\Modules\Reports\Controllers\ReportsPageController;
 use App\Modules\Resources\Controllers\ResourcesApiController;
 use App\Modules\Resources\Controllers\ResourcesPageController;
 use App\Modules\Services\Controllers\ServicesApiController;
 use App\Modules\Services\Controllers\ServicesPageController;
+use App\Modules\Settings\Controllers\BookingRulesApiController;
 use App\Modules\Settings\Controllers\SettingsApiController;
 use App\Modules\Settings\Controllers\SettingsPageController;
 use App\Modules\Staff\Controllers\StaffApiController;
 use App\Modules\Staff\Controllers\StaffPageController;
 use App\Modules\System\Controllers\HomeController;
 use App\Modules\Tenants\Controllers\OnboardingController;
+use App\Modules\Tenants\Controllers\SetupWizardApiController;
+use App\Modules\Tenants\Controllers\SetupWizardPageController;
+use App\Modules\Till\Controllers\ReceiptPageController;
+use App\Modules\Till\Controllers\TillApiController;
+use App\Tenancy\TenantMiddleware;
 
 // Tenant portal — app.albabook.co.ke (plan.md §18).
 return static function (RouteRegistrar $r): void {
@@ -99,6 +105,18 @@ return static function (RouteRegistrar $r): void {
     $r->get('/customers', [CustomersPageController::class, 'index'], [...$workspace, PermissionMiddleware::class], name: 'customers', options: ['permission' => 'customers.view']);
     $r->get('/settings', [SettingsPageController::class, 'index'], [...$workspace, PermissionMiddleware::class], name: 'settings', options: ['permission' => 'settings.view']);
     $r->get('/branches', [BranchesPageController::class, 'index'], [...$workspace, PermissionMiddleware::class], name: 'branches', options: ['permission' => 'branches.view']);
+    $r->get('/setup', [SetupWizardPageController::class, 'index'], $workspace, name: 'setup');
+    $r->get('/api/setup', [SetupWizardApiController::class, 'state'], $workspace, name: 'api.setup');
+    $r->get('/time-off', [AvailabilityPageController::class, 'index'], $workspace, name: 'availability');
+    $r->get('/api/availability', [AvailabilityApiController::class, 'overview'], $workspace, name: 'api.availability');
+    $r->post('/api/availability/breaks', [AvailabilityApiController::class, 'addBreak'], $workspace, name: 'api.availability.breaks.add');
+    $r->delete('/api/availability/breaks/{id}', [AvailabilityApiController::class, 'deleteBreak'], $workspace, name: 'api.availability.breaks.delete');
+    $r->post('/api/availability/leave', [AvailabilityApiController::class, 'addLeave'], $workspace, name: 'api.availability.leave.add');
+    $r->post('/api/availability/leave/{id}/status', [AvailabilityApiController::class, 'leaveStatus'], $workspace, name: 'api.availability.leave.status');
+    $r->post('/api/availability/closures', [AvailabilityApiController::class, 'saveClosure'], $workspace, name: 'api.availability.closures.save');
+    $r->delete('/api/availability/closures/{id}', [AvailabilityApiController::class, 'deleteClosure'], $workspace, name: 'api.availability.closures.delete');
+    $r->post('/api/availability/blocks', [AvailabilityApiController::class, 'addBlock'], $workspace, name: 'api.availability.blocks.add');
+    $r->delete('/api/availability/blocks/{id}', [AvailabilityApiController::class, 'deleteBlock'], $workspace, name: 'api.availability.blocks.delete');
     $r->get('/resources', [ResourcesPageController::class, 'index'], [...$workspace, PermissionMiddleware::class], name: 'resources', options: ['permission' => 'resources.view']);
     $r->get('/booking-page', [BookingEditorPageController::class, 'index'], [...$workspace, PermissionMiddleware::class], name: 'booking-page', options: ['permission' => 'booking_page.view']);
     $r->get('/notifications', [NotificationsPageController::class, 'index'], [...$workspace, PermissionMiddleware::class], name: 'notifications', options: ['permission' => 'notifications.view']);
@@ -122,6 +140,9 @@ return static function (RouteRegistrar $r): void {
     $r->post('/api/appointments/{uuid}/payments', [TillApiController::class, 'pay'], $workspace, name: 'api.till.pay');
     $r->post('/api/appointments/{uuid}/payments/{payment_uuid}/refund', [TillApiController::class, 'refund'], $workspace, name: 'api.till.refund');
     $r->post('/api/appointments/{uuid}/checkout', [TillApiController::class, 'checkout'], $workspace, name: 'api.till.checkout');
+    // M-Pesa STK push from the till (prompt the customer's phone, poll result).
+    $r->post('/api/appointments/{uuid}/mpesa/stk', [MpesaApiController::class, 'start'], $workspace, name: 'api.till.mpesa.start');
+    $r->get('/api/appointments/{uuid}/mpesa/stk/{request}', [MpesaApiController::class, 'status'], $workspace, name: 'api.till.mpesa.status');
     $r->get('/appointments/{uuid}/receipt', [ReceiptPageController::class, 'show'], [...$workspace, PermissionMiddleware::class], name: 'receipt', options: ['permission' => 'payments.view']);
     // Sample receipt rendered with the business's saved receipt design.
     $r->get('/settings/receipt/preview', [ReceiptPageController::class, 'preview'], [...$workspace, PermissionMiddleware::class], name: 'receipt.preview', options: ['permission' => 'settings.view']);
@@ -131,6 +152,8 @@ return static function (RouteRegistrar $r): void {
     $r->delete('/api/products/{uuid}', [ProductsApiController::class, 'destroy'], $workspace, name: 'api.products.destroy');
     $r->patch('/api/settings/payments/policy', [SettingsApiController::class, 'updatePaymentPolicy'], $workspace, name: 'api.settings.payment-policy');
     $r->patch('/api/settings/receipt', [SettingsApiController::class, 'updateReceipt'], $workspace, name: 'api.settings.receipt');
+    $r->get('/api/settings/booking-rules', [BookingRulesApiController::class, 'show'], $workspace, name: 'api.settings.booking-rules');
+    $r->patch('/api/settings/booking-rules', [BookingRulesApiController::class, 'update'], $workspace, name: 'api.settings.booking-rules.update');
     $r->get('/api/calendar/events', [AppointmentsApiController::class, 'events'], $workspace, name: 'api.calendar.events');
     // Static segment before the {uuid} variable route (FastRoute shadowing).
     $r->get('/api/services/meta', [ServicesApiController::class, 'meta'], $workspace, name: 'api.services.meta');
@@ -164,6 +187,12 @@ return static function (RouteRegistrar $r): void {
     $r->patch('/api/settings/branding', [SettingsApiController::class, 'updateBranding'], $workspace, name: 'api.settings.branding');
     $r->get('/api/settings/notifications', [SettingsApiController::class, 'notifications'], $workspace, name: 'api.settings.notifications');
     $r->patch('/api/settings/notifications/preferences', [SettingsApiController::class, 'updateNotificationPref'], $workspace, name: 'api.settings.notifications.pref');
+    $r->patch('/api/settings/whatsapp', [SettingsApiController::class, 'updateWhatsApp'], $workspace, name: 'api.settings.whatsapp');
+    $r->patch('/api/settings/business-alerts', [SettingsApiController::class, 'updateBusinessAlerts'], $workspace, name: 'api.settings.business-alerts');
+    $r->get('/api/settings/etims', [SettingsApiController::class, 'etims'], $workspace, name: 'api.settings.etims');
+    $r->patch('/api/settings/etims', [SettingsApiController::class, 'updateEtims'], $workspace, name: 'api.settings.etims.update');
+    $r->post('/api/settings/etims/initialize', [SettingsApiController::class, 'initializeEtims'], $workspace, name: 'api.settings.etims.initialize');
+    $r->patch('/api/settings/whatsapp/templates', [SettingsApiController::class, 'saveWhatsAppTemplates'], $workspace, name: 'api.settings.whatsapp.templates');
     $r->post('/api/settings/notifications/accounts', [SettingsApiController::class, 'createNotificationAccount'], $workspace, name: 'api.settings.notifications.accounts.create');
     $r->patch('/api/settings/notifications/accounts/{id}', [SettingsApiController::class, 'updateNotificationAccount'], $workspace, name: 'api.settings.notifications.accounts.update');
     $r->get('/api/settings/payments', [SettingsApiController::class, 'payments'], $workspace, name: 'api.settings.payments');
@@ -206,6 +235,9 @@ return static function (RouteRegistrar $r): void {
     $r->post('/api/integrations/credentials/{uuid}/rotate', [IntegrationsApiController::class, 'rotateCredential'], $workspace, name: 'api.integrations.credentials.rotate');
     $r->delete('/api/integrations/credentials/{uuid}', [IntegrationsApiController::class, 'destroyCredential'], $workspace, name: 'api.integrations.credentials.destroy');
     $r->get('/api/billing', [BillingApiController::class, 'show'], $workspace, name: 'api.billing.show');
+    $r->post('/api/billing/plan', [BillingApiController::class, 'changePlan'], $workspace, name: 'api.billing.plan');
+    $r->post('/api/billing/pay', [BillingApiController::class, 'pay'], $workspace, name: 'api.billing.pay');
+    $r->get('/api/billing/payments/{uuid}', [BillingApiController::class, 'paymentStatus'], $workspace, name: 'api.billing.payment_status');
     $r->get('/api/resources/meta', [ResourcesApiController::class, 'meta'], $workspace, name: 'api.resources.meta');
     $r->get('/api/resources', [ResourcesApiController::class, 'list'], $workspace, name: 'api.resources.list');
     $r->post('/api/resources', [ResourcesApiController::class, 'create'], $workspace, name: 'api.resources.create');
@@ -220,6 +252,10 @@ return static function (RouteRegistrar $r): void {
     $r->get('/team', [TeamController::class, 'index'], [...$workspace, PermissionMiddleware::class], name: 'team', options: ['permission' => 'users.manage']);
     $r->post('/team/invitations', [TeamController::class, 'invite'], [...$workspace, PermissionMiddleware::class], name: 'team.invite', options: ['permission' => 'users.manage']);
     $r->post('/team/invitations/{invitation}/revoke', [TeamController::class, 'revoke'], [...$workspace, PermissionMiddleware::class], name: 'team.revoke', options: ['permission' => 'users.manage']);
+    $r->get('/team/members/{member}', [TeamController::class, 'member'], [...$workspace, PermissionMiddleware::class], name: 'team.member', options: ['permission' => 'users.manage']);
+    $r->post('/team/members/{member}', [TeamController::class, 'updateMember'], [...$workspace, PermissionMiddleware::class], name: 'team.member.update', options: ['permission' => 'users.manage']);
+    $r->post('/team/members/{member}/deactivate', [TeamController::class, 'deactivateMember'], [...$workspace, PermissionMiddleware::class], name: 'team.member.deactivate', options: ['permission' => 'users.manage']);
+    $r->post('/team/members/{member}/reactivate', [TeamController::class, 'reactivateMember'], [...$workspace, PermissionMiddleware::class], name: 'team.member.reactivate', options: ['permission' => 'users.manage']);
 
     // Audited support entry/exit. The token is verified again before the
     // tenant-host cookie is set (multi-tenancy.md §7).

@@ -31,6 +31,9 @@ final class AuditAction
     public const INVITATION_RESENT = 'invitation.resent';
     public const INVITATION_ACCEPTED = 'invitation.accepted';
     public const INVITATION_REVOKED = 'invitation.revoked';
+    public const MEMBER_UPDATED = 'team.member_updated';
+    public const MEMBER_DEACTIVATED = 'team.member_deactivated';
+    public const MEMBER_REACTIVATED = 'team.member_reactivated';
 
     public const PLATFORM_LOGIN_SUCCEEDED = 'platform.login_succeeded';
     public const PLATFORM_LOGIN_FAILED = 'platform.login_failed';

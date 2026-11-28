@@ -31,6 +31,11 @@
       <select class="input select w-auto" data-cal-staff aria-label="{{ t('calendar.filter_staff') }}">
         <option value="">{{ t('calendar.all_staff') }}</option>
       </select>
+      {% if membership.can('calendar.manage_blocks') %}
+        <a class="btn btn-secondary btn-md" href="/time-off#blocks">
+          <i class="fa-solid fa-ban" aria-hidden="true"></i> {{ t('calendar.block_time') }}
+        </a>
+      {% endif %}
       {% if membership.can('appointments.create') %}
         <button type="button" class="btn btn-primary btn-md" data-modal-open="new-appointment-modal"
           {% if booking_cap.reached %}disabled title="{{ t('appointments.limit_title') }}"{% endif %}>

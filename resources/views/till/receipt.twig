@@ -7,6 +7,8 @@
 #}
 {% extends 'layouts/base.twig' %}
 
+{% set page_scripts = ['pages/receipt.js'] %}
+
 {% block title %}{{ t('receipt.title') }} {{ r.reference }} · {{ business_name }}{% endblock %}
 
 {% block body_class %}min-h-full bg-surface text-ink antialiased{% endblock %}
@@ -128,6 +130,32 @@
       </div>
     </dl>
 
+    {# ---------------------------------------------------------- eTIMS #}
+    {% if etims %}
+      <hr class="receipt-dash">
+      <section class="receipt-etims" aria-label="{{ t('receipt.etims_heading') }}">
+        <p class="receipt-etims-title">{{ t('receipt.etims_heading') }}</p>
+        {% if etims.status == 'submitted' %}
+          <dl class="receipt-rows receipt-mono receipt-row-sm">
+            {% if etims.sdc_id %}<div><dt>{{ t('receipt.etims_cu_serial') }}:</dt><dd>{{ etims.sdc_id }}</dd></div>{% endif %}
+            <div><dt>{{ t('receipt.etims_cu_invoice') }}:</dt><dd>{{ etims.sdc_id ? etims.sdc_id ~ '/' : '' }}{{ etims.rcpt_no }}</dd></div>
+            <div><dt>{{ t('receipt.etims_invoice_no') }}:</dt><dd>{{ etims.invoice_no }}</dd></div>
+            {% if etims.sdc_date_time %}<div><dt>{{ t('receipt.date') }}:</dt><dd>{{ etims.sdc_date_time }}</dd></div>{% endif %}
+            <div><dt>{{ t('receipt.etims_internal_data') }}:</dt><dd class="receipt-wrap break-all">{{ etims.intrl_data }}</dd></div>
+            <div><dt>{{ t('receipt.etims_signature') }}:</dt><dd class="receipt-wrap break-all">{{ etims.rcpt_sign }}</dd></div>
+          </dl>
+          {% if etims_qr_b64 %}
+            <figure class="receipt-qr">
+              <img src="data:image/svg+xml;base64,{{ etims_qr_b64 }}" width="130" height="130" alt="{{ t('receipt.etims_qr_alt') }}">
+              <figcaption><span class="receipt-qr-title">{{ t('receipt.etims_scan') }}</span></figcaption>
+            </figure>
+          {% endif %}
+        {% else %}
+          <p class="receipt-meta">{{ t('receipt.etims_pending', { no: etims.invoice_no }) }}</p>
+        {% endif %}
+      </section>
+    {% endif %}
+
     {# ---------------------------------------------------------- Verify #}
     {% if qr_svg_b64 %}
       <hr class="receipt-dash">
@@ -143,7 +171,7 @@
     <hr class="receipt-dash">
     <footer class="receipt-footer">
       <p class="receipt-thanks">{{ footer_note ?: t('receipt.thanks_for_choosing', { name: business_name|upper }) }}</p>
-      <p class="receipt-meta">{{ t('receipt.not_a_tax_invoice') }}</p>
+      {% if not etims %}<p class="receipt-meta">{{ t('receipt.not_a_tax_invoice') }}</p>{% endif %}
       {% if show_powered_by %}<p class="receipt-powered">{{ t('common.powered_by') }}</p>{% endif %}
     </footer>
   </article>

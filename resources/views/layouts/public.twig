@@ -4,6 +4,9 @@
 #}
 {% extends 'layouts/base.twig' %}
 
+{# Customer-facing: only the booking flow bundles, not the whole dashboard. #}
+{% set page_scripts = ['pages/booking.js', 'pages/manage-booking.js'] %}
+
 {% block body_class %}min-h-full bg-white text-ink antialiased text-base{% endblock %}
 
 {% block body %}

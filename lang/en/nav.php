@@ -12,6 +12,7 @@ return [
     'appointments' => 'Appointments',
     'services' => 'Services',
     'staff' => 'Staff',
+    'time_off' => 'Time Off & Closures',
     'customers' => 'Customers',
     'branches' => 'Branches',
     'resources' => 'Resources',

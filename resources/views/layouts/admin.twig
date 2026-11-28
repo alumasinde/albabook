@@ -5,6 +5,8 @@
 #}
 {% extends 'layouts/base.twig' %}
 
+{% set page_scripts = [] %}
+
 {% block body %}
 {% set sections = [
   { title: t('nav.platform'), items: [

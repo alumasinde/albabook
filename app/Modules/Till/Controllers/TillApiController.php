@@ -12,8 +12,11 @@ use App\Modules\Appointments\Services\AppointmentTransitionService;
 use App\Modules\Appointments\Services\TransitionException;
 use App\Modules\Auth\Context\MembershipContext;
 use App\Modules\Notifications\Services\NotificationPolicy;
+use App\Modules\Tax\Etims\EtimsException;
+use App\Modules\Tax\Etims\EtimsService;
 use App\Modules\Till\Repositories\TillRepository;
 use App\Shared\Http\ApiResponse;
+use Psr\Log\LoggerInterface;
 use App\Shared\Support\UuidFactory;
 use App\Tenancy\TenantContext;
 
@@ -38,6 +41,8 @@ final class TillApiController
         private readonly NotificationPolicy $notificationPolicy,
         private readonly AppointmentRepository $appointments,
         private readonly AppointmentTransitionService $transitions,
+        private readonly EtimsService $etims,
+        private readonly LoggerInterface $logger,
     ) {}
 
     /** Full ticket state for the checkout drawer.
@@ -275,7 +280,10 @@ final class TillApiController
                 // Overpayment cap: nothing may be recorded beyond the balance
                 // actually due (net of succeeded refunds).
                 $totals = $this->computeTotals($tenant->tenantId, (int) $appointment['id']);
-                $outstanding = max(0, $totals['total_minor'] - $totals['paid_minor'] + $totals['refunded_minor']);
+                // M-Pesa prompts still awaiting the customer are reserved, so
+                // cash + a pending prompt can never overpay the ticket.
+                $outstanding = max(0, $totals['total_minor'] - $totals['paid_minor'] + $totals['refunded_minor']
+                    - $this->till->pendingPromptTotal($tenant->tenantId, (int) $appointment['id']));
                 if ((int) $amount > $outstanding) {
                     throw new TransitionException(
                         'PAYMENT_EXCEEDS_BALANCE',
@@ -471,6 +479,16 @@ final class TillApiController
                     'completed',
                 );
 
+                // eTIMS: number and freeze the tax invoice in this same
+                // transaction (submitted to KRA later by the scheduler, so
+                // checkout never waits on KRA). A setup problem must not
+                // block completing a paid visit — it is logged instead.
+                try {
+                    $this->etims->queueInvoice($tenant->tenantId, (int) $appointment['id']);
+                } catch (EtimsException $e) {
+                    $this->logger->error('etims.queue.failed', ['appointment' => $appointment['uuid'], 'error' => $e->getMessage()]);
+                }
+
                 $this->emitNotifications($tenant->tenantId, $appointment, $totals);
 
                 return $this->payload($tenant, $membership, $this->till->appointment($tenant->tenantId, (string) $params['uuid']) ?? $appointment);
@@ -489,21 +507,7 @@ final class TillApiController
      */
     private function refreshTotals(int $tenantId, int $appointmentId): array
     {
-        $totals = $this->computeTotals($tenantId, $appointmentId);
-        $balance = $totals['total_minor'] - $totals['paid_minor'];
-
-        $status = match (true) {
-            $totals['total_minor'] <= 0 => 'not_required',
-            $totals['paid_minor'] <= 0 => 'unpaid',
-            $balance > 0 && $totals['refunded_minor'] > 0 => 'partially_refunded',
-            $balance <= 0 && $totals['refunded_minor'] > 0 => 'refunded',
-            $balance > 0 => 'partially_paid',
-            default => 'paid',
-        };
-
-        $this->till->writeTotals($tenantId, $appointmentId, $totals['total_minor'], $status);
-
-        return ['total_minor' => $totals['total_minor'], 'payment_status' => $status];
+        return $this->till->refreshTotals($tenantId, $appointmentId);
     }
 
     /** Ticket breakdown — the repository owns the math (receipt shares it).
@@ -533,6 +537,8 @@ final class TillApiController
                 'payment_status' => $appointment['payment_status'],
                 'currency' => $appointment['currency'],
                 'customer_name' => $appointment['customer_name_snapshot'],
+                // Pre-fills the M-Pesa prompt number (staff can change it).
+                'customer_phone' => $appointment['customer_phone_snapshot'],
             ],
             'booked_items' => $this->till->bookedItems($tenant->tenantId, (int) $appointment['id']),
             'sale_items' => $this->till->saleItems($tenant->tenantId, (int) $appointment['id']),
@@ -646,8 +652,11 @@ final class TillApiController
         $phone = trim((string) ($appointment['customer_phone_snapshot'] ?? ''));
         $email = trim((string) ($appointment['customer_email_snapshot'] ?? ''));
 
-        if ($phone !== '' && $this->notificationPolicy->allows($tenantId, 'sms', 'payment_update')) {
-            $this->till->enqueueReceipt($tenantId, $this->uuids->generate(), (int) $appointment['id'], 'sms', $phone, $eventPayload);
+        // Phone recipients go to SMS and/or WhatsApp per the business's setting.
+        foreach ($this->notificationPolicy->phoneChannels($tenantId) as $phoneChannel) {
+            if ($phone !== '' && $this->notificationPolicy->allows($tenantId, $phoneChannel, 'payment_update')) {
+                $this->till->enqueueReceipt($tenantId, $this->uuids->generate(), (int) $appointment['id'], $phoneChannel, $phone, $eventPayload);
+            }
         }
         if ($email !== '' && $this->notificationPolicy->allows($tenantId, 'email', 'payment_update')) {
             $this->till->enqueueReceipt($tenantId, $this->uuids->generate(), (int) $appointment['id'], 'email', $email, $eventPayload);
