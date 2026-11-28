@@ -59,8 +59,11 @@ final class BookingPageController
         $body = $request->body();
         $branchId = (int) ($body['branch'] ?? 0);
         $result = $this->verification->send(
-            (int) $tenant['id'], (string) $tenant['name'], $branchId > 0 ? $branchId : null,
-            is_scalar($body['phone'] ?? null) ? (string) $body['phone'] : '', $request->clientIp(),
+            (int) $tenant['id'],
+            (string) $tenant['name'],
+            $branchId > 0 ? $branchId : null,
+            is_scalar($body['phone'] ?? null) ? (string) $body['phone'] : '',
+            $request->clientIp(),
         );
         if (!$result['ok']) {
             $status = $result['code'] === 'RATE_LIMITED' ? 429 : 422;
@@ -150,6 +153,8 @@ final class BookingPageController
             'embed' => str_ends_with($request->path(), '/embed'),
             // SMS code step before confirming (booking rules, 1.7).
             'verify_phone' => $this->verification->required((int) $tenant['id'], $this->pages->policy((int) $tenant['id'], null)),
+            // "Instant confirmation" is only true in automatic mode.
+            'instant_confirm' => ($this->pages->policy((int) $tenant['id'], null)['confirmation_mode'] ?? 'auto') !== 'manual',
         ]);
     }
 
@@ -175,7 +180,7 @@ final class BookingPageController
                 "font-src 'self'",
                 "connect-src 'self'",
                 "form-action 'self'",
-                "frame-ancestors *",
+                'frame-ancestors *',
                 "base-uri 'self'",
                 "object-src 'none'",
             ]),
@@ -187,7 +192,6 @@ final class BookingPageController
      * CSP requires a nonce'd style block; dashboards are never re-themed).
      * Returns null when branding is absent so the view can skip the tag.
      *
-     * @param array<string, mixed>|null $branding
      */
     /**
      * schema.org LocalBusiness + OfferCatalog for the booking page — lets
@@ -388,16 +392,14 @@ final class BookingPageController
         if ($branch === null || $service === null) {
             return ApiResponse::error('NOT_FOUND', 'That service or location is not available.', 404);
         }
-        $gate = $this->verification->gate(
-            (int) $tenant['id'], $this->pages->policy((int) $tenant['id'], (int) $branch['id']),
-            $customer['phone'], is_scalar($body['verification_token'] ?? null) ? (string) $body['verification_token'] : '',
-        );
-        if ($gate['error'] !== null) {
-            return ApiResponse::error($gate['error']['code'], $gate['error']['message'], 422, $gate['error']['fields']);
-        }
 
         $slots = $this->availability->slots(
-            (int) $tenant['id'], $branch, $service, $staffId, $date, (string) $tenant['timezone'],
+            (int) $tenant['id'],
+            $branch,
+            $service,
+            $staffId,
+            $date,
+            (string) $tenant['timezone'],
         );
 
         return ApiResponse::ok(['slots' => $slots]);
@@ -462,6 +464,31 @@ final class BookingPageController
         $service = $this->resolveService((int) $tenant['id'], $serviceId);
         if ($branch === null || $service === null) {
             return ApiResponse::error('NOT_FOUND', 'That service or location is not available.', 404);
+        }
+        // Exactly-once replay: the slot pre-check below sees the retry's own
+        // booking as busy, so the idempotency hit must short-circuit first.
+        $replay = $this->bookings->existing((int) $tenant['id'], $idempotencyKey !== '' ? $idempotencyKey : null);
+        if ($replay !== null) {
+            return ApiResponse::ok([
+                'uuid' => $replay['uuid'],
+                'reference' => $replay['reference'],
+                'status' => $replay['status'],
+                'start_at' => $replay['start_at'],
+                'staff_name' => $replay['staff_name'] ?? '',
+                'service_name' => $replay['service_name'] ?? (string) $service['name'],
+                'existing' => true,
+                'manage_url' => null,
+            ]);
+        }
+        // Phone confirmation by SMS code when the business requires it (1.7).
+        $gate = $this->verification->gate(
+            (int) $tenant['id'],
+            $this->pages->policy((int) $tenant['id'], (int) $branch['id']),
+            $customer['phone'],
+            is_scalar($body['verification_token'] ?? null) ? (string) $body['verification_token'] : '',
+        );
+        if ($gate['error'] !== null) {
+            return ApiResponse::error($gate['error']['code'], $gate['error']['message'], 422, $gate['error']['fields']);
         }
 
         if ($holdToken !== '') {
@@ -606,7 +633,13 @@ final class BookingPageController
         }
         foreach ($candidates as $member) {
             if ($this->availability->slotAvailableForStaff(
-                $tenantId, $branch, $service, (int) $member['id'], $date, $time, $timezone,
+                $tenantId,
+                $branch,
+                $service,
+                (int) $member['id'],
+                $date,
+                $time,
+                $timezone,
             )) {
                 return $member;
             }

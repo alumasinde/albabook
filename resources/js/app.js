@@ -123,6 +123,30 @@
     }
   });
 
+  // <form data-slug-autofill>: the slug field follows the name field until
+  // the user types in the slug themselves.
+  document.addEventListener('input', function (event) {
+    const form = event.target.closest && event.target.closest('form[data-slug-autofill]');
+    if (!form) return;
+    const slug = form.querySelector('[name="slug"]');
+    if (!slug) return;
+    if (event.target === slug) {
+      slug.dataset.edited = slug.value.trim() === '' ? '' : '1';
+      return;
+    }
+    if (event.target.name === 'name' && slug.dataset.edited !== '1') {
+      slug.value = event.target.value.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+    }
+  });
+
+  // Close an open account menu (<details>) when clicking outside it.
+  document.addEventListener('click', function (event) {
+    document.querySelectorAll('details[data-account-menu][open]').forEach((menu) => {
+      if (!menu.contains(event.target)) menu.removeAttribute('open');
+    });
+  });
+
   // Close a <dialog> when its backdrop is clicked.
   document.addEventListener('click', function (event) {
     if (event.target instanceof HTMLDialogElement) event.target.close();

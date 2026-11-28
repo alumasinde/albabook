@@ -13,8 +13,9 @@ final class TenantPolicyMatrix
     public const DEFAULTS = [
         // Pending businesses finish setup (services, staff, branches) while
         // awaiting approval; operational booking stays off until trial/active.
-        'pending' => ['dashboard.view', 'onboarding.manage', 'business.manage'],
-        'trial' => ['dashboard.view', 'booking.create', 'business.manage'],
+        // Keep in step with TenantStatusPolicySeeder (the database wins).
+        'pending' => ['dashboard.view', 'onboarding.manage', 'business.manage', 'billing.view'],
+        'trial' => ['dashboard.view', 'booking.create', 'business.manage', 'billing.view', 'onboarding.manage'],
         'active' => ['*'],
         'suspended' => [],
         'cancelled' => ['dashboard.view', 'billing.view', 'data.export'],

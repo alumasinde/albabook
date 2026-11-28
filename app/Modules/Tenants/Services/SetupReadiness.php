@@ -46,7 +46,7 @@ final class SetupReadiness
             ), false, '/settings#booking-rules', 'Automatic confirmation is on until you choose.'),
             $this->item('live', 'Turn on your booking page', $this->exists(
                 'SELECT 1 FROM booking_page_settings WHERE tenant_id = :t AND is_enabled = 1 LIMIT 1', $tenantId,
-            ), false, '/booking-page', 'Share your link once it is live.'),
+            ), false, '/setup', 'Going live starts your free trial. Then share your link.'),
         ];
 
         $blockingDone = array_reduce($items, static fn(bool $ok, array $i): bool => $ok && (!$i['blocking'] || $i['done']), true);

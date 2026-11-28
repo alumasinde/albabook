@@ -188,9 +188,9 @@ final class StaffRepository
     {
         $this->db->pdo()->prepare(
             'INSERT INTO staff (uuid, tenant_id, tenant_user_id, first_name, last_name, display_name,
-                email, phone_e164, bio, booking_priority, is_bookable_online, status, created_at, updated_at)
+                email, phone_e164, bio, commission_pct, booking_priority, is_bookable_online, status, created_at, updated_at)
              VALUES (:uuid, :tenant_id, :tenant_user_id, :first_name, :last_name, :display_name,
-                :email, :phone_e164, :bio, :booking_priority, :is_bookable_online, :status, NOW(), NOW())',
+                :email, :phone_e164, :bio, :commission_pct, :booking_priority, :is_bookable_online, :status, NOW(), NOW())',
         )->execute($data);
 
         return (int) $this->db->pdo()->lastInsertId();
@@ -202,7 +202,7 @@ final class StaffRepository
         $this->db->pdo()->prepare(
             'UPDATE staff SET tenant_user_id = :tenant_user_id, first_name = :first_name,
                 last_name = :last_name, display_name = :display_name, email = :email,
-                phone_e164 = :phone_e164, bio = :bio, booking_priority = :booking_priority,
+                phone_e164 = :phone_e164, bio = :bio, commission_pct = :commission_pct, booking_priority = :booking_priority,
                 is_bookable_online = :is_bookable_online, status = :status, updated_at = NOW()
              WHERE tenant_id = :tenant_id AND id = :id',
         )->execute($data + ['tenant_id' => $tenantId, 'id' => $staffId]);

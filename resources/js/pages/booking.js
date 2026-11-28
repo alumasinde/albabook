@@ -305,7 +305,13 @@
         const refEl = host.querySelector('[data-booking-reference]');
         if (refEl) refEl.textContent = result.reference;
         const whenEl = host.querySelector('[data-booking-when]');
-        if (whenEl) whenEl.textContent = state.date + ' · ' + state.slot.start_time;
+        if (whenEl) {
+          let day = state.date;
+          try {
+            day = new Date(state.date + 'T00:00:00').toLocaleDateString(document.documentElement.lang || 'en', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+          } catch (e) { /* keep ISO date */ }
+          whenEl.textContent = day + ' · ' + state.slot.start_time;
+        }
         const svcEl = host.querySelector('[data-booking-service]');
         if (svcEl) svcEl.textContent = state.service.name;
         const manageEl = host.querySelector('[data-booking-manage]');

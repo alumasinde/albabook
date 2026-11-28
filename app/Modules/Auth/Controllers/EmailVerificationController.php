@@ -30,6 +30,9 @@ final class EmailVerificationController
         if ((string) $request->query('token', '') !== '') {
             return $this->verify($request);
         }
+        if ($this->auth->user?->emailVerified === true) {
+            return Response::redirect('/dashboard');
+        }
 
         return $this->view->response('auth/verify-email.twig', [
             'verified' => false,

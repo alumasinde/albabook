@@ -54,7 +54,10 @@
     tabs.forEach((t) => t.addEventListener('click', () => activate(t.dataset.settingsTab)));
     // /settings#booking-rules opens that tab directly (setup checklist links).
     const hashTab = (window.location.hash || '').replace('#', '');
-    activate(hashTab && root.querySelector('[data-settings-tab="' + hashTab + '"]') ? hashTab : 'profile');
+    // Deferred: the tab loaders (rulesForm, receiptForm…) are declared further
+    // down this function, so activating synchronously would hit them before
+    // initialisation (ReferenceError) when a hash opens a non-profile tab.
+    queueMicrotask(() => activate(hashTab && root.querySelector('[data-settings-tab="' + hashTab + '"]') ? hashTab : 'profile'));
 
     /* ------------------------------------------------------ form helpers */
     function field(labelText, input, name) {

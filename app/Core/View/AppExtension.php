@@ -27,6 +27,7 @@ final class AppExtension extends AbstractExtension implements GlobalsInterface
         private readonly AssetVersions $assets,
         private readonly Config $config,
         private readonly ?CurrencyFormatter $currency = null,
+        private readonly ?\App\Modules\Auth\Context\AuthContext $auth = null,
     ) {}
 
     /** @return array<string, mixed> */
@@ -55,6 +56,13 @@ final class AppExtension extends AbstractExtension implements GlobalsInterface
             new TwigFunction('request_id', fn(): string => $this->context->requestId ?? ''),
             new TwigFunction('locale', fn(): string => $this->context->locale),
             new TwigFunction('host_group', fn(): ?string => $this->context->hostGroup?->value),
+            // Signed-in tenant user for shared chrome (account menu). Read at
+            // call time: middleware sets it after Twig is built.
+            new TwigFunction('current_user', fn(): ?array => $this->auth?->user === null ? null : [
+                'name' => $this->auth->user->displayName(),
+                'email' => $this->auth->user->email,
+                'initials' => mb_strtoupper(mb_substr($this->auth->user->firstName, 0, 1) . mb_substr($this->auth->user->lastName, 0, 1)),
+            ]),
         ];
     }
 

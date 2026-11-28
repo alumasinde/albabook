@@ -150,6 +150,7 @@ return static function (Container $c, Config $config, string $basePath): void {
             $c->get(AssetVersions::class),
             $config,
             $c->get(CurrencyFormatter::class),
+            $c->get(AuthContext::class),
         ));
 
         return $twig;

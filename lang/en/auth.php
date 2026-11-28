@@ -27,7 +27,7 @@ return [
     'middle_name' => 'Middle name',
     'last_name' => 'Last name',
     'phone' => 'Phone number',
-    'phone_help' => 'Optional, in international format, e.g. +254712345678.',
+    'phone_help' => 'Optional, e.g. 0712 345 678.',
     'password_help' => 'At least 12 characters. A long phrase is easiest to remember.',
     'confirm_password' => 'Confirm password',
     'terms' => 'I agree to the terms of service and privacy policy.',
@@ -64,6 +64,7 @@ return [
     'code_help' => 'Six digits, or one of your saved recovery codes.',
     'verify_code' => 'Verify and continue',
     'sign_out' => 'Sign out',
+    'account_menu' => 'Account menu',
 
     'enroll_title' => 'Add two-step verification',
     'enroll_subtitle' => 'Scan the setup key with an authenticator app, then enter the six-digit code it shows.',

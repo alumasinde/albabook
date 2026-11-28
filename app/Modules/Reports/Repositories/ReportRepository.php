@@ -51,7 +51,7 @@ final class ReportRepository
         $appointments = $stmt->fetch() ?: [];
 
         $cust = $this->db->pdo()->prepare(
-            "SELECT COUNT(*) FROM customers WHERE tenant_id = ? AND created_at >= ? AND created_at < ?",
+            'SELECT COUNT(*) FROM customers WHERE tenant_id = ? AND created_at >= ? AND created_at < ?',
         );
         $cust->execute([$tenantId, $from, $to]);
 
@@ -95,9 +95,9 @@ final class ReportRepository
              JOIN appointments a
                ON a.tenant_id = i.tenant_id AND a.id = i.appointment_id
              WHERE i.tenant_id = ? AND a.start_at >= ? AND a.start_at < ?
-               AND a.status NOT IN ('cancelled','rejected','expired')" . $this->inBranch($branchIds, 'a.branch_id') . "
+               AND a.status NOT IN ('cancelled','rejected','expired')" . $this->inBranch($branchIds, 'a.branch_id') . '
              GROUP BY i.service_name_snapshot
-             ORDER BY bookings DESC, name LIMIT 5",
+             ORDER BY bookings DESC, name LIMIT 5',
         );
         $stmt->execute([$tenantId, $from, $to]);
 
@@ -118,8 +118,8 @@ final class ReportRepository
                     SUM(status = 'no_show') AS no_shows,
                     SUM(status IN ('pending','confirmed','checked_in','in_service')) AS active
              FROM appointments
-             WHERE tenant_id = ? AND start_at >= ? AND start_at < ?" . $this->inBranch($branchIds, 'branch_id') . "
-             GROUP BY DATE(start_at) ORDER BY day DESC",
+             WHERE tenant_id = ? AND start_at >= ? AND start_at < ?" . $this->inBranch($branchIds, 'branch_id') . '
+             GROUP BY DATE(start_at) ORDER BY day DESC',
         );
         $stmt->execute([$tenantId, $from, $to]);
 
@@ -145,9 +145,9 @@ final class ReportRepository
              JOIN appointments a
                ON a.tenant_id = i.tenant_id AND a.id = i.appointment_id
              WHERE i.tenant_id = ? AND a.start_at >= ? AND a.start_at < ?
-               AND a.status NOT IN ('cancelled','rejected','expired')" . $this->inBranch($branchIds, 'a.branch_id') . "
+               AND a.status NOT IN ('cancelled','rejected','expired')" . $this->inBranch($branchIds, 'a.branch_id') . '
              GROUP BY i.service_name_snapshot
-             ORDER BY bookings DESC, service",
+             ORDER BY bookings DESC, service',
         );
         $stmt->execute([$tenantId, $from, $to]);
 
@@ -167,8 +167,8 @@ final class ReportRepository
                     COALESCE(SUM(amount_minor), 0) AS gross_minor
              FROM payments
              WHERE tenant_id = ? AND status = 'succeeded'
-               AND received_at >= ? AND received_at < ?" . $this->inBranch($branchIds, 'branch_id') . "
-             GROUP BY DATE(received_at)",
+               AND received_at >= ? AND received_at < ?" . $this->inBranch($branchIds, 'branch_id') . '
+             GROUP BY DATE(received_at)',
         );
         $payments->execute([$tenantId, $from, $to]);
         foreach ($payments->fetchAll() as $row) {
@@ -185,8 +185,8 @@ final class ReportRepository
              WHERE tenant_id = ? AND status = 'succeeded'
                AND refunded_at >= ? AND refunded_at < ?
                AND EXISTS (SELECT 1 FROM payments p WHERE p.id = refunds.payment_id"
-               . $this->inBranch($branchIds, 'p.branch_id') . ")
-             GROUP BY DATE(refunded_at)",
+               . $this->inBranch($branchIds, 'p.branch_id') . ')
+             GROUP BY DATE(refunded_at)',
         );
         $refunds->execute([$tenantId, $from, $to]);
         foreach ($refunds->fetchAll() as $row) {
@@ -216,9 +216,9 @@ final class ReportRepository
              JOIN appointments a
                ON a.tenant_id = i.tenant_id AND a.id = i.appointment_id
              WHERE i.tenant_id = ? AND a.start_at >= ? AND a.start_at < ?
-               AND a.status IN ('completed','no_show','cancelled','checked_in','in_service')" . $this->inBranch($branchIds, 'a.branch_id') . "
+               AND a.status IN ('completed','no_show','cancelled','checked_in','in_service')" . $this->inBranch($branchIds, 'a.branch_id') . '
              GROUP BY i.service_name_snapshot
-             ORDER BY no_shows DESC, booked DESC",
+             ORDER BY no_shows DESC, booked DESC',
         );
         $stmt->execute([$tenantId, $from, $to]);
 
@@ -262,9 +262,9 @@ final class ReportRepository
              ) ap
              JOIN staff s ON s.tenant_id = ap.tenant_id AND s.id = ap.staff_id
              LEFT JOIN branches b ON b.tenant_id = ap.tenant_id AND b.id = ap.branch_id
-             WHERE 1=1" . $this->inBranch($branchIds, 'ap.branch_id') . "
+             WHERE 1=1" . $this->inBranch($branchIds, 'ap.branch_id') . '
              GROUP BY s.id, s.display_name, b.name
-             ORDER BY bookings DESC, staff",
+             ORDER BY bookings DESC, staff',
         );
         $stmt->execute([$tenantId, $from, $to]);
 
@@ -285,9 +285,9 @@ final class ReportRepository
                     SUM(cancelled_by = 'customer') AS by_customer
              FROM appointments
              WHERE tenant_id = ? AND start_at >= ? AND start_at < ?
-               AND status = 'cancelled'" . $this->inBranch($branchIds, 'branch_id') . "
-             GROUP BY COALESCE(cancellation_code, 'unspecified')
-             ORDER BY count DESC, code",
+               AND status = 'cancelled'" . $this->inBranch($branchIds, 'branch_id') . '
+             GROUP BY code
+             ORDER BY count DESC, code',
         );
         $stmt->execute([$tenantId, $from, $to]);
 
@@ -313,9 +313,9 @@ final class ReportRepository
              JOIN appointments a ON a.tenant_id = ar.tenant_id AND a.id = ai.appointment_id
              WHERE ar.tenant_id = ?
                AND ar.occupied_start_at < ? AND ar.occupied_end_at > ?
-               AND a.status NOT IN ('cancelled','rejected','expired','no_show')" . $this->inBranch($branchIds, 'b.id') . "
+               AND a.status NOT IN ('cancelled','rejected','expired','no_show')" . $this->inBranch($branchIds, 'b.id') . '
              GROUP BY r.id, r.name, rt.name, b.name
-             ORDER BY occupied_minutes DESC, resource",
+             ORDER BY occupied_minutes DESC, resource',
         );
         $stmt->execute([$tenantId, $to, $from]);
 
@@ -343,9 +343,9 @@ final class ReportRepository
              JOIN payments p
                ON p.tenant_id = a.tenant_id AND p.appointment_id = a.id
                   AND p.status = 'succeeded' AND p.received_at >= ? AND p.received_at < ?
-             WHERE s.tenant_id = ? AND s.commission_pct IS NOT NULL" . $this->inBranch($branchIds, 'a.branch_id') . "
+             WHERE s.tenant_id = ? AND s.commission_pct IS NOT NULL" . $this->inBranch($branchIds, 'a.branch_id') . '
              GROUP BY s.id, s.display_name, s.commission_pct
-             ORDER BY commission_minor DESC, staff",
+             ORDER BY commission_minor DESC, staff',
         );
         $stmt->execute([$from, $to, $tenantId]);
 
@@ -374,8 +374,8 @@ final class ReportRepository
             "SELECT method, COALESCE(SUM(amount_minor), 0) AS amount_minor, COUNT(*) AS count
              FROM payments
              WHERE tenant_id = ? AND status = 'succeeded'
-               AND received_at >= ? AND received_at < ?" . $this->inBranch($branchIds, 'branch_id') . "
-             GROUP BY method ORDER BY amount_minor DESC",
+               AND received_at >= ? AND received_at < ?" . $this->inBranch($branchIds, 'branch_id') . '
+             GROUP BY method ORDER BY amount_minor DESC',
         );
         $byMethod->execute([$tenantId, $from, $to]);
 

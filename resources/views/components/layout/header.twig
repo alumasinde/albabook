@@ -1,7 +1,9 @@
 {#
   Top bar (dashboard.md §2A). Params: title.
-  Branch selector, notifications and profile become live in Phase 2/5.
+  Account menu: native <details> (no JS, CSP-safe) with security,
+  workspace switch and sign out.
 #}
+{% set me = current_user() %}
 <header class="topbar">
   <div class="flex items-center gap-3">
     <button type="button" class="icon-button lg:hidden" data-drawer-toggle="sidebar" aria-controls="sidebar" aria-expanded="false">
@@ -10,9 +12,25 @@
     <h1 class="text-xl font-semibold text-ink sm:text-2xl" data-page-heading>{{ title }}</h1>
   </div>
   <div class="flex items-center gap-2">
-    <button type="button" class="icon-button" aria-label="{{ t('nav.notifications') }}">
+    <a href="/notifications" class="icon-button" aria-label="{{ t('nav.notifications') }}">
       <i class="fa-regular fa-bell" aria-hidden="true"></i>
-    </button>
-    <span class="avatar" aria-hidden="true">RB</span>
+    </a>
+    {% if me %}
+      <details class="account-menu" data-account-menu>
+        <summary class="avatar cursor-pointer" aria-label="{{ t('auth.account_menu') }}">{{ me.initials }}</summary>
+        <div class="account-menu-panel" role="menu">
+          <div class="border-b border-line px-4 py-3">
+            <p class="truncate text-sm font-semibold text-ink">{{ me.name }}</p>
+            <p class="truncate text-xs text-muted">{{ me.email }}</p>
+          </div>
+          <a href="/security" class="account-menu-item" role="menuitem"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> {{ t('auth.action_security') }}</a>
+          <a href="/workspaces" class="account-menu-item" role="menuitem"><i class="fa-solid fa-building" aria-hidden="true"></i> {{ t('auth.action_workspaces') }}</a>
+          <form method="post" action="/logout" class="border-t border-line">
+            {{ csrf_field() }}
+            <button type="submit" class="account-menu-item w-full text-left" role="menuitem"><i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i> {{ t('auth.sign_out') }}</button>
+          </form>
+        </div>
+      </details>
+    {% endif %}
   </div>
 </header>

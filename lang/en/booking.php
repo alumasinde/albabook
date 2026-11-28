@@ -8,7 +8,7 @@ return [
     'how_it_works' => 'How it works',
     'step_service' => 'Choose a service',
     'step_time' => 'Pick a date and time',
-    'step_confirm' => 'Confirm with your phone number',
+    'step_confirm' => 'Confirmed',
 
     // Public booking page (/{slug} on book.*)
     'page_title' => 'Book an appointment at :business',
@@ -17,6 +17,7 @@ return [
     'trust_secure' => 'Trusted & Secure',
     'trust_easy' => 'Easy Booking',
     'trust_instant' => 'Instant Confirmation',
+    'trust_quick' => 'Quick Confirmation',
     'trust_flexible' => 'Flexible Rescheduling',
     'trust_support' => 'Dedicated Support',
     'verified' => 'Verified business',

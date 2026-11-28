@@ -37,7 +37,7 @@
     <ul class="mt-4 flex flex-wrap items-center gap-4 text-sm text-muted">
       <li class="flex items-center gap-1.5"><i class="fa-solid fa-shield-halved text-success" aria-hidden="true"></i>{{ t('booking.trust_secure') }}</li>
       <li class="flex items-center gap-1.5"><i class="fa-regular fa-clock text-primary" aria-hidden="true"></i>{{ t('booking.trust_easy') }}</li>
-      <li class="flex items-center gap-1.5"><i class="fa-regular fa-calendar-check text-accent" aria-hidden="true"></i>{{ t('booking.trust_instant') }}</li>
+      <li class="flex items-center gap-1.5"><i class="fa-regular fa-calendar-check text-accent" aria-hidden="true"></i>{{ t(instant_confirm ? 'booking.trust_instant' : 'booking.trust_quick') }}</li>
     </ul>
   </section>
 {% endif %}
@@ -244,7 +244,7 @@
   <section class="mt-10 grid grid-cols-2 gap-4 border-t border-line pt-6 sm:grid-cols-4">
     {% for item in [
       { icon: 'fa-shield-halved', label: t('booking.trust_secure') },
-      { icon: 'fa-bolt', label: t('booking.trust_instant') },
+      { icon: 'fa-bolt', label: t(instant_confirm ? 'booking.trust_instant' : 'booking.trust_quick') },
       { icon: 'fa-calendar-check', label: t('booking.trust_flexible') },
       { icon: 'fa-headset', label: t('booking.trust_support') },
     ] %}

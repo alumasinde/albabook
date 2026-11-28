@@ -58,7 +58,7 @@ final class BookingVerificationService
     }
 
     /**
-     * @return array{ok: bool, code?: string, message?: string, field?: string}
+     * @return array{ok: true}|array{ok: false, code: string, message: string, field?: string}
      *         code is an error code (RATE_LIMITED, INVALID_PHONE, SEND_FAILED)
      */
     public function send(int $tenantId, string $businessName, ?int $branchId, string $rawPhone, string $ip): array

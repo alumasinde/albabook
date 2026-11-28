@@ -358,6 +358,17 @@
     @apply bg-primary-soft text-primary-strong;
   }
 
+  /* Top-bar account menu (native <details>) */
+  .account-menu { @apply relative; }
+  .account-menu > summary { @apply list-none; }
+  .account-menu > summary::-webkit-details-marker { display: none; }
+  .account-menu-panel {
+    @apply absolute right-0 z-40 mt-2 w-64 overflow-hidden rounded-xl border border-line bg-white shadow-lg;
+  }
+  .account-menu-item {
+    @apply flex items-center gap-2 px-4 py-2.5 text-sm text-ink hover:bg-surface;
+  }
+
   /* Booking rules: radio cards for auto / manual confirmation */
   .rule-option {
     @apply flex cursor-pointer gap-3 rounded-xl border border-line p-4 transition-colors hover:border-primary;

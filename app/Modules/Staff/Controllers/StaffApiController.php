@@ -320,7 +320,7 @@ final class StaffApiController
             'email' => $email !== '' ? $email : null,
             'phone_e164' => $phone !== '' ? $phone : null,
             'bio' => trim((string) ($body['bio'] ?? '')) ?: null,
-            'commission_pct' => $body['commission_pct'] !== null && $body['commission_pct'] !== ''
+            'commission_pct' => ($body['commission_pct'] ?? null) !== null && $body['commission_pct'] !== ''
                 ? min(100, max(0, (float) $body['commission_pct'])) : null,
             'booking_priority' => max(0, (int) ($body['booking_priority'] ?? 0)),
             'is_bookable_online' => !empty($body['is_bookable_online']) ? 1 : 0,
@@ -339,8 +339,22 @@ final class StaffApiController
         $staffId = (int) $member['id'];
         $branchIds = $this->staff->branchIds($tenantId, $staffId);
         $serviceIds = $this->staff->serviceIds($tenantId, $staffId);
+        // row()'s 'branches' comes from a list-only aggregate column; build
+        // the names here from the assignment ids so detail shows them too.
+        $branchNames = array_map(
+            'strval',
+            array_column(
+                array_filter(
+                    $this->staff->branches($tenantId),
+                    static fn(array $b): bool => in_array((int) $b['id'], $branchIds, true),
+                ),
+                'name',
+            ),
+        );
+        sort($branchNames);
 
         return array_merge($this->row($member), [
+            'branches' => implode(', ', $branchNames) ?: null,
             'first_name' => $member['first_name'],
             'last_name' => $member['last_name'],
             'bio' => $member['bio'],

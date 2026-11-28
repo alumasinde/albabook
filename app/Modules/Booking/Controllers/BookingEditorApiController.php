@@ -34,6 +34,7 @@ final class BookingEditorApiController
         private readonly UuidFactory $uuids,
         private readonly HostMap $hosts,
         private readonly SetupReadiness $readiness,
+        private readonly \App\Tenancy\TenantLifecycleService $lifecycle,
     ) {}
 
     /** Current settings, sections, FAQs, publish history + the live URL.
@@ -131,8 +132,16 @@ final class BookingEditorApiController
         }
 
         $this->editor->updateSettings($tenant->tenantId, $data);
+        // Going live (readiness already checked above) starts the free trial
+        // for a business still in setup.
+        $trialStarted = $data['is_enabled'] === 1
+            && $this->lifecycle->goLive($tenant->tenantId, $membership->userId, $request);
 
-        return ApiResponse::ok(['settings' => $this->shape($this->editor->settings($tenant->tenantId))]);
+        return ApiResponse::ok([
+            'settings' => $this->shape($this->editor->settings($tenant->tenantId)),
+            'trial_started' => $trialStarted,
+            'trial_days' => \App\Tenancy\TenantLifecycleService::TRIAL_DAYS,
+        ]);
     }
 
     /** Bulk enable/order of page sections.
@@ -269,8 +278,14 @@ final class BookingEditorApiController
             $this->editor->deactivateVersions($tenant->tenantId);
             $this->editor->insertVersion($tenant->tenantId, $uuid, $version, $snapshot, $membership->actorUserId());
         });
+        // Publishing a ready page while the page is switched on is going live too.
+        $settings = $this->editor->settings($tenant->tenantId);
+        $trialStarted = (bool) ($settings['is_enabled'] ?? false)
+            && $this->lifecycle->goLive($tenant->tenantId, $membership->userId, $request);
 
         return ApiResponse::ok([
+            'trial_started' => $trialStarted,
+            'trial_days' => \App\Tenancy\TenantLifecycleService::TRIAL_DAYS,
             'version' => $version,
             'versions' => $this->editor->versions($tenant->tenantId),
         ], 201);

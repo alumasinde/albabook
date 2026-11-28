@@ -30,7 +30,9 @@ spot-check the booking page on a phone over 3G.
 - **Guided setup** (`/setup`): location and hours → service → team or
   "I work alone" → working hours → booking rules → verify e-mail → go live.
   A dashboard checklist covers anything skipped, and the page cannot go live
-  until it can actually take a booking.
+  until it can actually take a booking. New businesses start as `pending`
+  (setup only); going live moves them to `trial` and starts the 14-day free
+  trial from that moment. No manual approval; AlbaBook can still suspend.
 - **Booking rules:** confirm online bookings automatically (default) or
   approve each one; unanswered requests expire. Notice, advance window, slot
   interval, cancel / reschedule cutoffs, phone confirmation.
@@ -60,7 +62,7 @@ spot-check the booking page on a phone over 3G.
 Each interface has its own host (D-005). `*.localhost` resolves to 127.0.0.1,
 so no hosts-file edits are needed.
 
-| Interface | Local URL (Docker) |
+| Interface | Local URL |
 | --- | --- |
 | Marketing site | http://albabook.localhost:8080 |
 | Business dashboard | http://app.albabook.localhost:8080 |
@@ -68,8 +70,8 @@ so no hosts-file edits are needed.
 | API and webhooks | http://api.albabook.localhost:8080 |
 | Platform admin | http://admin.albabook.localhost:8080 |
 
-Without Docker, `composer serve` uses port 8000 instead. Any other host
-answers `400 Unknown host`.
+Docker (`APP_PORT`) and `composer serve` both use port 8080, so run one or
+the other. Any other host answers `400 Unknown host`.
 
 ## Quick start (Docker)
 
@@ -130,7 +132,7 @@ Safaricom must reach your machine to deliver payment results. Tunnel to the
 **API host** and rewrite the Host header, because the app rejects unknown hosts:
 
 ```bash
-ngrok http 8080 --host-header=api.albabook.localhost   # 8000 without Docker
+ngrok http 8080 --host-header=api.albabook.localhost
 ```
 
 Put the forwarding address in `.env` and restart the app:

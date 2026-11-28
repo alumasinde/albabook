@@ -46,7 +46,36 @@ final class TenantLifecycleService
      */
     public function transition(int $tenantId, string $to, ?int $platformUserId, Request $request): bool
     {
-        return $this->db->transaction(function () use ($tenantId, $to, $platformUserId, $request): bool {
+        return $this->move($tenantId, $to, 'platform_user', $platformUserId, $request, null);
+    }
+
+    /** Free-trial length; the clock starts when the business goes live. */
+    public const TRIAL_DAYS = 14;
+
+    /**
+     * Self-serve go-live: a pending business whose booking page passed the
+     * readiness gate starts its free trial. The owner is the actor (audited),
+     * and the trial clock restarts so setup days are not lost. Returns true
+     * only when the status actually changed (already trial/active: false).
+     */
+    public function goLive(int $tenantId, ?int $userId, Request $request): bool
+    {
+        return $this->move($tenantId, 'trial', 'tenant_user', $userId, $request, function (\PDO $pdo) use ($tenantId): void {
+            $pdo->prepare(
+                "UPDATE tenant_subscriptions
+                    SET trial_ends_at = GREATEST(COALESCE(trial_ends_at, UTC_TIMESTAMP()), UTC_TIMESTAMP() + INTERVAL :d DAY),
+                        current_period_end = GREATEST(COALESCE(current_period_end, UTC_TIMESTAMP()), UTC_TIMESTAMP() + INTERVAL :d2 DAY)
+                  WHERE tenant_id = :t AND status = 'trialing'",
+            )->execute(['d' => self::TRIAL_DAYS, 'd2' => self::TRIAL_DAYS, 't' => $tenantId]);
+        }, fromOnly: 'pending');
+    }
+
+    /**
+     * @param (callable(\PDO): void)|null $alsoDo extra writes in the same transaction
+     */
+    private function move(int $tenantId, string $to, string $actorType, ?int $actorId, Request $request, ?callable $alsoDo, ?string $fromOnly = null): bool
+    {
+        return $this->db->transaction(function () use ($tenantId, $to, $actorType, $actorId, $request, $alsoDo, $fromOnly): bool {
             $pdo = $this->db->pdo();
             $stmt = $pdo->prepare('SELECT uuid, status FROM tenants WHERE id = :id FOR UPDATE');
             $stmt->execute(['id' => $tenantId]);
@@ -56,7 +85,7 @@ final class TenantLifecycleService
             }
 
             $from = (string) $row['status'];
-            if (!in_array($to, self::allowedFrom($from), true)) {
+            if (($fromOnly !== null && $from !== $fromOnly) || !in_array($to, self::allowedFrom($from), true)) {
                 return false;
             }
 
@@ -66,8 +95,8 @@ final class TenantLifecycleService
             $this->audit->record(new AuditEntry(
                 action: AuditAction::TENANT_STATUS_CHANGED,
                 tenantId: $tenantId,
-                actorType: 'platform_user',
-                actorId: $platformUserId,
+                actorType: $actorType,
+                actorId: $actorId,
                 targetType: 'tenant',
                 targetId: (string) $row['uuid'],
                 before: ['status' => $from],
@@ -88,6 +117,9 @@ final class TenantLifecycleService
                     'to' => $to,
                 ], JSON_THROW_ON_ERROR),
             ]);
+            if ($alsoDo !== null) {
+                $alsoDo($pdo);
+            }
 
             return true;
         });

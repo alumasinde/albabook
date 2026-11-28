@@ -174,7 +174,7 @@
         const text = el('span', 'min-w-0');
         const title = el('span', 'block text-sm font-medium ' + (item.done ? 'text-muted line-through' : 'text-ink'), item.label);
         text.append(title);
-        if (!item.done) text.append(el('span', 'block text-xs text-muted', item.hint + (item.blocking ? '' : ' (optional)')));
+        if (!item.done) text.append(el('span', 'block text-xs text-muted', item.hint + (item.blocking || item.key === 'live' ? '' : ' (optional)')));
         const sr = el('span', 'sr-only', item.done ? ' (done)' : ' (to do)');
         link.append(icon, text, sr);
         li.append(link);

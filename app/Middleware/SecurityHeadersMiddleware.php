@@ -39,12 +39,19 @@ final class SecurityHeadersMiddleware implements MiddlewareInterface
         $headers = [
             'Content-Security-Policy' => $this->contentSecurityPolicy($request, $nonce),
             'X-Content-Type-Options' => 'nosniff',
-            'X-Frame-Options' => 'DENY',
             'Referrer-Policy' => 'strict-origin-when-cross-origin',
             'Permissions-Policy' => 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
             'Cross-Origin-Opener-Policy' => 'same-origin',
             'Cross-Origin-Resource-Policy' => 'same-origin',
         ];
+
+        // X-Frame-Options cannot express an embed allowlist — when a route
+        // sets its own CSP with a frame-ancestors policy other than 'none'
+        // (the booking /embed), CSP is the sole authority and XFO is omitted.
+        $ownCsp = $response->header('Content-Security-Policy');
+        if (!is_string($ownCsp) || !preg_match("/frame-ancestors\s+(?!'none'|'self')/i", $ownCsp)) {
+            $headers['X-Frame-Options'] = 'DENY';
+        }
 
         if ($this->config->isProduction() && $request->isSecure()) {
             $headers['Strict-Transport-Security'] = 'max-age=' . $this->config->int('security.headers.hsts_max_age', 31536000) . '; includeSubDomains';

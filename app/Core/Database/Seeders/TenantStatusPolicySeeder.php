@@ -23,8 +23,11 @@ final class TenantStatusPolicySeeder
 
     /** @var array<string, list<string>> */
     private const ALLOWED = [
-        'pending' => ['dashboard.view', 'onboarding.manage'],
-        'trial' => ['dashboard.view', 'booking.create', 'business.manage'],
+        // Pending: finish setup (branches, services, staff, booking page) and
+        // see the plan while awaiting approval; no bookings yet.
+        'pending' => ['dashboard.view', 'onboarding.manage', 'business.manage', 'billing.view'],
+        // Trial: run the business, and choose a plan and pay before the trial ends.
+        'trial' => ['dashboard.view', 'booking.create', 'business.manage', 'billing.view', 'onboarding.manage'],
         'active' => ['dashboard.view', 'booking.create', 'business.manage', 'billing.view', 'data.export', 'onboarding.manage'],
         'suspended' => [],
         'cancelled' => ['dashboard.view', 'billing.view', 'data.export'],

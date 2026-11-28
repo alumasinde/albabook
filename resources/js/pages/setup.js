@@ -482,7 +482,7 @@
         li.append(el('i', 'fa-solid mt-0.5 ' + (item.done ? 'fa-circle-check text-success' : 'fa-circle text-line')));
         const text = el('div', 'min-w-0');
         text.append(el('p', 'text-sm font-medium ' + (item.done ? 'text-muted line-through' : 'text-ink'), item.label));
-        if (!item.done) text.append(el('p', 'text-xs text-muted', item.hint + (item.blocking ? '' : ' (optional)')));
+        if (!item.done) text.append(el('p', 'text-xs text-muted', item.hint + (item.blocking || item.key === 'live' ? '' : ' (optional)')));
         li.append(text);
         list.append(li);
       });
@@ -510,7 +510,12 @@
       urlRow.append(el('p', 'mt-1 break-all font-mono text-sm text-ink', data.booking_url));
       c.append(urlRow);
 
-      const goBtn = el('button', 'btn btn-primary btn-lg', 'Turn on my booking page');
+      // Self-serve: going live is what starts the free trial (no approval wait).
+      const startsTrial = data.tenant && data.tenant.status === 'pending';
+      if (startsTrial) {
+        c.append(el('p', 'mt-4 text-sm text-muted', 'Going live starts your free ' + data.trial_days + '-day trial. No payment needed now \u2014 choose a plan any time before it ends.'));
+      }
+      const goBtn = el('button', 'btn btn-primary btn-lg', startsTrial ? 'Go live & start free trial' : 'Turn on my booking page');
       goBtn.type = 'button';
       goBtn.disabled = missing.length > 0 || !(data.can.page && data.can.publish);
       if (!(data.can.page && data.can.publish)) {
@@ -521,9 +526,15 @@
         errBox.replaceChildren();
         ui.setBusy(goBtn, true, 'Switching on…');
         const settings = Object.assign({}, data.page, { is_enabled: true });
+        let trialStarted = false;
         api.patch('/api/booking-page', settings)
-          .then(() => api.post('/api/booking-page/publish', {}).catch(() => null))
-          .then(() => reload().then(() => render()))
+          .then((res) => { trialStarted = !!(res && res.trial_started); return api.post('/api/booking-page/publish', {}).catch(() => null); })
+          .then((pub) => {
+            if (trialStarted || (pub && pub.trial_started)) {
+              AlbaBook.toast('You\u2019re live! Your ' + data.trial_days + '-day free trial has started.');
+            }
+            return reload().then(() => render());
+          })
           .catch((error) => {
             ui.setBusy(goBtn, false);
             AlbaBook.toast(error.message, 'danger');

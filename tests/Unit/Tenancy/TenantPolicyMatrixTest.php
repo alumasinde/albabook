@@ -18,7 +18,8 @@ final class TenantPolicyMatrixTest extends TestCase
         self::assertFalse($matrix->allows('pending', 'booking.create'));
 
         self::assertTrue($matrix->allows('trial', 'booking.create'));
-        self::assertFalse($matrix->allows('trial', 'billing.view'));
+        self::assertTrue($matrix->allows('trial', 'billing.view'), 'trial tenants must see billing to pay before the trial ends');
+        self::assertFalse($matrix->allows('trial', 'data.export'));
 
         self::assertTrue($matrix->allows('active', 'anything.at.all'), 'active allows everything');
 

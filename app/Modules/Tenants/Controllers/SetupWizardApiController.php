@@ -145,7 +145,10 @@ final class SetupWizardApiController
                 'slug' => $tenant->slug,
                 'timezone' => $tenant->timezone,
                 'currency' => $tenant->currency,
+                // pending = still in setup; going live starts the free trial.
+                'status' => $tenant->status,
             ],
+            'trial_days' => \App\Tenancy\TenantLifecycleService::TRIAL_DAYS,
             'booking_url' => $this->urls->to(HostGroup::Booking, '/' . $tenant->slug, $request),
             'me' => [
                 'tenant_user_id' => $membership->tenantUserId,

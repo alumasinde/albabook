@@ -10,8 +10,8 @@ use App\Modules\Appointments\Repositories\AppointmentRepository;
 use App\Modules\Billing\Services\FeatureGate;
 use App\Modules\Booking\Repositories\BookingHoldRepository;
 use App\Modules\Booking\Repositories\BookingPageRepository;
-use App\Modules\Booking\Services\BookingHoldService;
 use App\Modules\Booking\Services\AvailabilityService;
+use App\Modules\Booking\Services\BookingHoldService;
 use App\Modules\Notifications\Services\AppointmentEventService;
 use App\Modules\Till\Repositories\TillRepository;
 use App\Shared\Support\UuidFactory;
@@ -150,17 +150,45 @@ final class ManualBookingService
             $startLocal = $start->setTimezone(new \DateTimeZone($branchTimezone));
             $startMinute = (int) $startLocal->format('H') * 60 + (int) $startLocal->format('i');
             if (!$this->availability->fitsWorkingWindow(
-                $tenantId, $branchId, $staffId, $localDate, $startMinute, $duration, $branchTimezone,
+                $tenantId,
+                $branchId,
+                $staffId,
+                $localDate,
+                $startMinute,
+                $duration,
+                $branchTimezone,
             )) {
                 throw new TransitionException('OUTSIDE_HOURS', 'That time is outside working hours or a break.', 422, ['time' => 'Pick a time inside working hours.']);
             }
         }
 
         return $this->db->transaction(function () use (
-            $tenantId, $branchId, $branchTimezone, $staffId, $service, $duration, $bufferBefore, $bufferAfter,
-            $price, $start, $end, $occupiedStart, $occupiedEnd, $localDate,
-            $customer, $source, $locale, $currency, $actorUserId, $actorType, $resourceId,
-            $idempotencyKey, $holdToken, $publicSource, $policy, $phoneVerified,
+            $tenantId,
+            $branchId,
+            $branchTimezone,
+            $staffId,
+            $service,
+            $duration,
+            $bufferBefore,
+            $bufferAfter,
+            $price,
+            $start,
+            $end,
+            $occupiedStart,
+            $occupiedEnd,
+            $localDate,
+            $customer,
+            $source,
+            $locale,
+            $currency,
+            $actorUserId,
+            $actorType,
+            $resourceId,
+            $idempotencyKey,
+            $holdToken,
+            $publicSource,
+            $policy,
+            $phoneVerified,
         ): array {
             // A finite monthly cap is counted under a lock on the tenant row,
             // so two simultaneous bookings at 499/500 cannot both pass. Taken
@@ -175,105 +203,109 @@ final class ManualBookingService
                 throw new TransitionException('BOOKING_LIMIT', 'This business has reached its monthly booking limit.', 422, ['date' => 'Monthly booking limit reached.']);
             }
             $staff = $this->appointments->lockStaff($tenantId, $staffId);
-                if ($staff === null || $staff['status'] !== 'active') {
-                    throw new TransitionException('STAFF_UNAVAILABLE', 'That staff member is not available.', 422, ['staff' => 'Choose available staff.']);
-                }
+            if ($staff === null || $staff['status'] !== 'active') {
+                throw new TransitionException('STAFF_UNAVAILABLE', 'That staff member is not available.', 422, ['staff' => 'Choose available staff.']);
+            }
 
-                // A presented hold must be converted in this same
-                // transaction: locked FOR UPDATE, still active and
-                // unexpired, and bound to exactly this slot by request_hash
-                // — otherwise the token reserves nothing.
-                $holdId = null;
-                if ($holdToken !== null) {
-                    $hold = $this->holds->lockByTokenHash(hash('sha256', $holdToken));
-                    if ($hold === null
-                        || (int) $hold['tenant_id'] !== $tenantId
-                        || $hold['status'] !== 'active'
-                        || (string) $hold['expires_at'] <= $this->dates->toDb($this->dates->now())) {
-                        throw new TransitionException('HOLD_EXPIRED', 'Your reservation expired — pick the time again.', 410, ['time' => 'Reservation expired. Pick the time again.']);
-                    }
-                    $expectedHash = BookingHoldService::requestHash(
-                        $tenantId, $branchId, $staffId, (int) $service['id'],
-                        $this->dates->toDb($start), $this->dates->toDb($end),
-                    );
-                    if (!hash_equals($expectedHash, (string) $hold['request_hash'])) {
-                        throw new TransitionException('VALIDATION_FAILED', 'That reservation does not match this booking.', 422, ['hold_token' => 'The reservation is for a different slot.']);
-                    }
-                    $holdId = (int) $hold['id'];
+            // A presented hold must be converted in this same
+            // transaction: locked FOR UPDATE, still active and
+            // unexpired, and bound to exactly this slot by request_hash
+            // — otherwise the token reserves nothing.
+            $holdId = null;
+            if ($holdToken !== null) {
+                $hold = $this->holds->lockByTokenHash(hash('sha256', $holdToken));
+                if ($hold === null
+                    || (int) $hold['tenant_id'] !== $tenantId
+                    || $hold['status'] !== 'active'
+                    || (string) $hold['expires_at'] <= $this->dates->toDb($this->dates->now())) {
+                    throw new TransitionException('HOLD_EXPIRED', 'Your reservation expired — pick the time again.', 410, ['time' => 'Reservation expired. Pick the time again.']);
                 }
-
-                $conflicts = $this->appointments->staffOccupied(
+                $expectedHash = BookingHoldService::requestHash(
                     $tenantId,
+                    $branchId,
                     $staffId,
+                    (int) $service['id'],
+                    $this->dates->toDb($start),
+                    $this->dates->toDb($end),
+                );
+                if (!hash_equals($expectedHash, (string) $hold['request_hash'])) {
+                    throw new TransitionException('VALIDATION_FAILED', 'That reservation does not match this booking.', 422, ['hold_token' => 'The reservation is for a different slot.']);
+                }
+                $holdId = (int) $hold['id'];
+            }
+
+            $conflicts = $this->appointments->staffOccupied(
+                $tenantId,
+                $staffId,
+                $this->dates->toDb($occupiedStart),
+                $this->dates->toDb($occupiedEnd),
+                null,
+                $holdId,
+            );
+            if ($conflicts > 0) {
+                throw new TransitionException('SLOT_UNAVAILABLE', 'That time is no longer available.', 409, ['time' => 'Pick another time.']);
+            }
+            if ($this->appointments->staffUnavailableConflict(
+                $tenantId,
+                $staffId,
+                $branchId,
+                $localDate,
+                $this->dates->toDb($occupiedStart),
+                $this->dates->toDb($occupiedEnd),
+            ) > 0) {
+                throw new TransitionException('STAFF_UNAVAILABLE', 'That staff member is not available at that time.', 409, ['time' => 'Pick another time.']);
+            }
+
+            $resourceAssignments = [];
+            $tz = new \DateTimeZone($branchTimezone);
+            $localStart = $occupiedStart->setTimezone($tz);
+            $localEnd = $occupiedEnd->setTimezone($tz);
+            // An explicit room pick (dashboard modal) is validated with
+            // the same freedom rules as auto-allocation — it only
+            // replaces which resource of the required type is chosen.
+            $explicitType = $resourceId !== null
+                ? $this->appointments->resourceTypeOf($tenantId, $resourceId)
+                : null;
+            if ($resourceId !== null && $explicitType === null) {
+                throw new TransitionException('RESOURCE_INVALID', 'That room is not available.', 422, ['resource_id' => 'Choose a valid room.']);
+            }
+            $explicitUsed = false;
+            foreach ($this->appointments->serviceRequirements($tenantId, (int) $service['id']) as $requirement) {
+                $resourceTypeId = (int) $requirement['resource_type_id'];
+                $quantity = (int) $requirement['quantity'];
+                $this->appointments->lockResourcesForType($tenantId, $branchId, $resourceTypeId);
+                $useExplicit = $explicitType === $resourceTypeId;
+                $allocatedId = $this->appointments->freeResourceForType(
+                    $tenantId,
+                    $branchId,
+                    $resourceTypeId,
                     $this->dates->toDb($occupiedStart),
                     $this->dates->toDb($occupiedEnd),
-                    null,
+                    (int) $localStart->format('N'),
+                    $localStart->format('H:i:s'),
+                    $localEnd->format('H:i:s'),
+                    $quantity,
+                    $localStart->format('Y-m-d'),
+                    $useExplicit ? $resourceId : null,
                     $holdId,
                 );
-                if ($conflicts > 0) {
-                    throw new TransitionException('SLOT_UNAVAILABLE', 'That time is no longer available.', 409, ['time' => 'Pick another time.']);
-                }
-                if ($this->appointments->staffUnavailableConflict(
-                    $tenantId,
-                    $staffId,
-                    $branchId,
-                    $localDate,
-                    $this->dates->toDb($occupiedStart),
-                    $this->dates->toDb($occupiedEnd),
-                ) > 0) {
-                    throw new TransitionException('STAFF_UNAVAILABLE', 'That staff member is not available at that time.', 409, ['time' => 'Pick another time.']);
-                }
-
-                $resourceAssignments = [];
-                $tz = new \DateTimeZone($branchTimezone);
-                $localStart = $occupiedStart->setTimezone($tz);
-                $localEnd = $occupiedEnd->setTimezone($tz);
-                // An explicit room pick (dashboard modal) is validated with
-                // the same freedom rules as auto-allocation — it only
-                // replaces which resource of the required type is chosen.
-                $explicitType = $resourceId !== null
-                    ? $this->appointments->resourceTypeOf($tenantId, $resourceId)
-                    : null;
-                if ($resourceId !== null && $explicitType === null) {
-                    throw new TransitionException('RESOURCE_INVALID', 'That room is not available.', 422, ['resource_id' => 'Choose a valid room.']);
-                }
-                $explicitUsed = false;
-                foreach ($this->appointments->serviceRequirements($tenantId, (int) $service['id']) as $requirement) {
-                    $resourceTypeId = (int) $requirement['resource_type_id'];
-                    $quantity = (int) $requirement['quantity'];
-                    $this->appointments->lockResourcesForType($tenantId, $branchId, $resourceTypeId);
-                    $useExplicit = $explicitType === $resourceTypeId;
-                    $allocatedId = $this->appointments->freeResourceForType(
-                        $tenantId,
-                        $branchId,
-                        $resourceTypeId,
-                        $this->dates->toDb($occupiedStart),
-                        $this->dates->toDb($occupiedEnd),
-                        (int) $localStart->format('N'),
-                        $localStart->format('H:i:s'),
-                        $localEnd->format('H:i:s'),
-                        $quantity,
-                        $localStart->format('Y-m-d'),
-                        $useExplicit ? $resourceId : null,
-                        $holdId,
+                if ($allocatedId === null) {
+                    throw new TransitionException(
+                        'RESOURCE_UNAVAILABLE',
+                        $useExplicit ? 'That room is not free at that time.' : 'No room or equipment is free at that time.',
+                        409,
+                        $useExplicit ? ['resource_id' => 'Pick another room or time.'] : ['time' => 'Pick another time.'],
                     );
-                    if ($allocatedId === null) {
-                        throw new TransitionException(
-                            'RESOURCE_UNAVAILABLE',
-                            $useExplicit ? 'That room is not free at that time.' : 'No room or equipment is free at that time.',
-                            409,
-                            $useExplicit ? ['resource_id' => 'Pick another room or time.'] : ['time' => 'Pick another time.'],
-                        );
-                    }
-                    $explicitUsed = $explicitUsed || $useExplicit;
-                    $resourceAssignments[] = [
-                        'resource_id' => $allocatedId,
-                        'quantity' => $quantity,
-                    ];
                 }
-                if ($resourceId !== null && !$explicitUsed) {
-                    throw new TransitionException('RESOURCE_INVALID', 'That room is not required for this service.', 422, ['resource_id' => 'Choose a room this service uses.']);
-                }
+                $explicitUsed = $explicitUsed || $useExplicit;
+                $resourceAssignments[] = [
+                    'resource_id' => $allocatedId,
+                    'quantity' => $quantity,
+                ];
+            }
+            if ($resourceId !== null && !$explicitUsed) {
+                throw new TransitionException('RESOURCE_INVALID', 'That room is not required for this service.', 422, ['resource_id' => 'Choose a room this service uses.']);
+            }
 
             $customerId = $this->upsertCustomer($tenantId, $customer, $actorType, $phoneVerified);
             // A customer cannot hold two overlapping live bookings; staff
@@ -308,35 +340,35 @@ final class ManualBookingService
 
             try {
                 $appointmentId = $this->appointments->insertAppointment([
-                'uuid' => $uuid,
-                'tenant_id' => $tenantId,
-                'branch_id' => $branchId,
-                'customer_id' => $customerId,
-                'reference' => $reference,
-                'manage_token_hash' => hash('sha256', $manageToken),
-                'idempotency_key' => $idempotencyKey,
-                'status' => $status,
-                'confirmed_at' => $status === 'confirmed' ? $this->dates->toDb($this->dates->now()) : null,
-                'payment_status' => $paymentStatus,
-                'booking_source' => $source,
-                'start_at' => $this->dates->toDb($start),
-                'end_at' => $this->dates->toDb($end),
-                'staff_id' => $staffId,
-                'customer_name_snapshot' => $customer['name'],
-                'customer_phone_snapshot' => $customer['phone'],
-                'customer_email_snapshot' => $customer['email'],
-                'locale' => $locale,
-                'total_amount_minor' => $price,
-                'deposit_amount_minor' => 0,
-                'currency' => $currency,
-                'policy_version' => $policyVersion,
-                'version' => 1,
-                'notes' => $customer['notes'],
-                // FK to users(id): only a tenant user is a user. API
-                // credentials, customers and the system are recorded on the
-                // status.created event (actor_type + actor_id) instead.
-                'created_by_user_id' => $actorType === 'tenant_user' ? $actorUserId : null,
-            ]);
+                    'uuid' => $uuid,
+                    'tenant_id' => $tenantId,
+                    'branch_id' => $branchId,
+                    'customer_id' => $customerId,
+                    'reference' => $reference,
+                    'manage_token_hash' => hash('sha256', $manageToken),
+                    'idempotency_key' => $idempotencyKey,
+                    'status' => $status,
+                    'confirmed_at' => $status === 'confirmed' ? $this->dates->toDb($this->dates->now()) : null,
+                    'payment_status' => $paymentStatus,
+                    'booking_source' => $source,
+                    'start_at' => $this->dates->toDb($start),
+                    'end_at' => $this->dates->toDb($end),
+                    'staff_id' => $staffId,
+                    'customer_name_snapshot' => $customer['name'],
+                    'customer_phone_snapshot' => $customer['phone'],
+                    'customer_email_snapshot' => $customer['email'],
+                    'locale' => $locale,
+                    'total_amount_minor' => $price,
+                    'deposit_amount_minor' => 0,
+                    'currency' => $currency,
+                    'policy_version' => $policyVersion,
+                    'version' => 1,
+                    'notes' => $customer['notes'],
+                    // FK to users(id): only a tenant user is a user. API
+                    // credentials, customers and the system are recorded on the
+                    // status.created event (actor_type + actor_id) instead.
+                    'created_by_user_id' => $actorType === 'tenant_user' ? $actorUserId : null,
+                ]);
             } catch (\PDOException $e) {
                 // Parallel retry with the same key won the race (unique
                 // index on (tenant_id, idempotency_key)) — return theirs.
@@ -401,6 +433,31 @@ final class ManualBookingService
                 'existing' => false,
             ];
         }, IsolationLevel::ReadCommitted);
+    }
+
+    /**
+     * Idempotent replay for callers that validate the slot before create()
+     * (the public booking controller): a legitimate retry would fail the
+     * pre-check on its own booking, so they peek here first. The manage
+     * token stays null on replay — only the hash is stored.
+     *
+     * @return array{uuid: string, reference: string, start_at: string, end_at: string, status: string, manage_token: ?string, existing: bool, staff_name: ?string, service_name: ?string}|null
+     */
+    public function existing(int $tenantId, ?string $idempotencyKey): ?array
+    {
+        if ($idempotencyKey === null) {
+            return null;
+        }
+        $row = $this->appointments->findByIdempotencyKey($tenantId, $idempotencyKey);
+        if ($row === null) {
+            return null;
+        }
+        $item = $this->appointments->itemsFor($tenantId, (int) $row['id'])[0] ?? null;
+
+        return $this->result($row, null, true) + [
+            'staff_name' => $item !== null && $item['staff_name'] !== null ? (string) $item['staff_name'] : null,
+            'service_name' => $item !== null ? (string) $item['service_name_snapshot'] : null,
+        ];
     }
 
     /**
@@ -517,7 +574,13 @@ final class ManualBookingService
             $startLocal = $start->setTimezone(new \DateTimeZone($branchTimezone));
             $startMinute = (int) $startLocal->format('H') * 60 + (int) $startLocal->format('i');
             if (!$this->availability->fitsWorkingWindow(
-                $tenantId, $branchId, $targetStaffId, $localDate, $startMinute, $duration, $branchTimezone,
+                $tenantId,
+                $branchId,
+                $targetStaffId,
+                $localDate,
+                $startMinute,
+                $duration,
+                $branchTimezone,
             )) {
                 throw new TransitionException('OUTSIDE_HOURS', 'That time is outside working hours or a break.', 422, ['time' => 'Pick a time inside working hours.']);
             }
@@ -528,10 +591,23 @@ final class ManualBookingService
         $occupiedEnd = $end->modify('+' . $bufferAfter . ' minutes');
 
         return $this->db->transaction(function () use (
-            $tenantId, $branchTimezone, $targetStaffId, $serviceId, $item, $appointment,
+            $tenantId,
+            $branchTimezone,
+            $targetStaffId,
+            $serviceId,
+            $item,
+            $appointment,
             $isCustomer,
-            $start, $end, $occupiedStart, $occupiedEnd, $localDate,
-            $expectedVersion, $actorUserId, $actorType, $resourceId, $policy,
+            $start,
+            $end,
+            $occupiedStart,
+            $occupiedEnd,
+            $localDate,
+            $expectedVersion,
+            $actorUserId,
+            $actorType,
+            $resourceId,
+            $policy,
         ): array {
             $locked = $this->appointments->lockForUpdate($tenantId, (string) $appointment['uuid']);
             if ($locked === null) {
